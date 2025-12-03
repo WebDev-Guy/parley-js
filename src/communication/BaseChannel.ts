@@ -116,12 +116,16 @@ export abstract class BaseChannel {
             return;
         }
 
+        // Handle 'null' origin (file:// protocol) by using '*'
+        // This is necessary because postMessage does not accept 'null' as a target origin
+        const effectiveOrigin = targetOrigin === 'null' ? '*' : targetOrigin;
+
         try {
-            targetWindow.postMessage(message, targetOrigin);
+            targetWindow.postMessage(message, effectiveOrigin);
             this._logger.debug('Message sent', {
                 type: '_type' in message ? message._type : 'response',
                 id: message._id,
-                targetOrigin,
+                targetOrigin: effectiveOrigin,
             });
         } catch (error) {
             this._logger.error('Failed to send message', error);

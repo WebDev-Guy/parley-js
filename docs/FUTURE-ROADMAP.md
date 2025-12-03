@@ -4,7 +4,7 @@ This document outlines planned features and improvements for Parley-js.
 
 ## Version 1.x (Current)
 
-### 1.0.0 - Initial Release ✅
+### 1.0.0 - Initial Release (Complete)
 
 - Core postMessage wrapper
 - Type-safe message handling

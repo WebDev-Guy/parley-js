@@ -27,7 +27,7 @@ configuration is essential.
 
 ```typescript
 const parley = Parley.create({
-    // ✅ Good: Explicit allowlist
+    // Good: Explicit allowlist
     allowedOrigins: ['https://app.example.com', 'https://admin.example.com'],
 });
 ```
@@ -35,13 +35,13 @@ const parley = Parley.create({
 **Never use wildcards in production:**
 
 ```typescript
-// ❌ DANGEROUS: Allows any origin
+// DANGEROUS: Allows any origin
 allowedOrigins: ['*'];
 
-// ❌ DANGEROUS: Too broad
+// DANGEROUS: Too broad
 allowedOrigins: ['*.com'];
 
-// ⚠️ CAREFUL: Only if you trust all subdomains
+// CAREFUL: Only if you trust all subdomains
 allowedOrigins: ['*.example.com'];
 ```
 
@@ -99,10 +99,10 @@ parley.register('sensitive-action', handler, {
 ### 1. Always Use HTTPS
 
 ```typescript
-// ✅ Always use https:// in production
+// Always use https:// in production
 allowedOrigins: ['https://secure.example.com'];
 
-// ❌ Never use http:// in production
+// Never use http:// in production
 allowedOrigins: ['http://insecure.example.com'];
 ```
 
@@ -111,10 +111,10 @@ allowedOrigins: ['http://insecure.example.com'];
 Only allow origins that absolutely need to communicate:
 
 ```typescript
-// ✅ Minimal, explicit list
+// Good: Minimal, explicit list
 allowedOrigins: ['https://app.mycompany.com', 'https://widget.mycompany.com'];
 
-// ❌ Overly permissive
+// Bad: Overly permissive
 allowedOrigins: [
     'https://app.mycompany.com',
     'https://widget.mycompany.com',
@@ -131,15 +131,15 @@ Never trust incoming payloads:
 
 ```typescript
 parley.register('update-user', async (payload, metadata) => {
-    // ✅ Always validate
+    // Always validate
     if (!isValidUserId(payload.userId)) {
         throw new ValidationError('Invalid user ID');
     }
 
-    // ✅ Sanitize input
+    // Sanitize input
     const sanitizedName = sanitizeString(payload.name);
 
-    // ✅ Check permissions
+    // Check permissions
     if (!canUserUpdate(metadata.origin, payload.userId)) {
         throw new SecurityError('Unauthorized');
     }
@@ -154,12 +154,12 @@ parley.register('update-user', async (payload, metadata) => {
 Don't expose dangerous operations via postMessage:
 
 ```typescript
-// ❌ DANGEROUS: Direct database access
+// DANGEROUS: Direct database access
 parley.register('execute-query', (payload) => {
     return db.query(payload.sql); // SQL injection risk!
 });
 
-// ✅ SAFE: Predefined operations only
+// SAFE: Predefined operations only
 parley.register('get-user', (payload) => {
     return db.users.findById(payload.userId);
 });
@@ -319,14 +319,14 @@ const parley = Parley.create({
 ### 1. Prototype Pollution
 
 ```typescript
-// ❌ Vulnerable: Direct property access
+// Vulnerable: Direct property access
 function processPayload(payload: any) {
     for (const key in payload) {
         this.config[key] = payload[key]; // Prototype pollution!
     }
 }
 
-// ✅ Safe: Validate properties
+// Safe: Validate properties
 function processPayload(payload: unknown) {
     if (!isPlainObject(payload)) return;
 
@@ -342,12 +342,12 @@ function processPayload(payload: unknown) {
 ### 2. eval() and Function()
 
 ```typescript
-// ❌ NEVER: Execute code from messages
+// NEVER: Execute code from messages
 parley.register('execute', (payload) => {
     eval(payload.code); // Remote code execution!
 });
 
-// ❌ NEVER: Dynamic function creation
+// NEVER: Dynamic function creation
 parley.register('run', (payload) => {
     new Function(payload.body)(); // Remote code execution!
 });
@@ -356,17 +356,17 @@ parley.register('run', (payload) => {
 ### 3. innerHTML
 
 ```typescript
-// ❌ Vulnerable: XSS
+// Vulnerable: XSS
 parley.register('update-ui', (payload) => {
     document.getElementById('output').innerHTML = payload.html;
 });
 
-// ✅ Safe: Use textContent or sanitize
+// Safe: Use textContent or sanitize
 parley.register('update-ui', (payload) => {
     document.getElementById('output').textContent = payload.text;
 });
 
-// ✅ Safe: Sanitize HTML
+// Safe: Sanitize HTML
 parley.register('update-ui', (payload) => {
     const sanitized = DOMPurify.sanitize(payload.html);
     document.getElementById('output').innerHTML = sanitized;

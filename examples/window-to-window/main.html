@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parley.js - Main Window</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        h2 {
+            color: #333;
+            margin-top: 0;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover:not(:disabled) {
+            background: #5a6fd6;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        button.danger {
+            background: #e74c3c;
+        }
+
+        button.danger:hover:not(:disabled) {
+            background: #c0392b;
+            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+        }
+
+        button.success {
+            background: #27ae60;
+        }
+
+        button.success:hover:not(:disabled) {
+            background: #219a52;
+            box-shadow: 0 4px 12px rgba(39, 174, 96, 0.4);
+        }
+
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', 'Fira Code', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+
+        .log-entry {
+            margin-bottom: 6px;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .log-entry.success {
+            color: #4ec9b0;
+            background: rgba(78, 201, 176, 0.1);
+        }
+
+        .log-entry.error {
+            color: #f14c4c;
+            background: rgba(241, 76, 76, 0.1);
+        }
+
+        .log-entry.info {
+            color: #9cdcfe;
+        }
+
+        .log-entry.warn {
+            color: #dcdcaa;
+            background: rgba(220, 220, 170, 0.1);
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.connected::before {
+            background: #28a745;
+            box-shadow: 0 0 8px #28a745;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.disconnected::before {
+            background: #dc3545;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status.connecting::before {
+            background: #ffc107;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 20px;
+        }
+
+        .info-box p {
+            margin: 0;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .response-area {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .response-area h4 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+
+        .response-content {
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #333;
+            word-break: break-word;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Parley.js - Window-to-Window Communication</h1>
+
+    <div class="info-box">
+        <p>
+            <strong>Main Window:</strong> This example demonstrates bidirectional communication
+            between separate browser windows. Click "Open Popup" to create a new window and
+            establish a communication channel using Parley.js.
+        </p>
+    </div>
+
+    <div class="container">
+        <h2>Connection Status</h2>
+        <span id="status" class="status disconnected">Disconnected</span>
+    </div>
+
+    <div class="container">
+        <h2>Window Controls</h2>
+        <div class="controls">
+            <button id="btn-open" onclick="openPopup()" class="success">
+                Open Popup
+            </button>
+            <button id="btn-close" onclick="closePopup()" class="danger" disabled>
+                Close Popup
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Send Messages</h2>
+        <div class="input-group">
+            <input type="text" id="message-input" placeholder="Enter a message to send..." value="Hello from Main Window!">
+            <button id="btn-send" onclick="sendMessage()" disabled>
+                Send Message
+            </button>
+        </div>
+        <div class="controls">
+            <button id="btn-ping" onclick="sendPing()" disabled>
+                Send Ping
+            </button>
+            <button id="btn-request-time" onclick="requestTime()" disabled>
+                Request Time
+            </button>
+            <button id="btn-broadcast" onclick="broadcast()" disabled>
+                Broadcast
+            </button>
+        </div>
+
+        <div class="response-area">
+            <h4>Last Response:</h4>
+            <div id="response-content" class="response-content">No response yet</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Event Log</h2>
+        <div id="log" class="log"></div>
+        <div class="controls" style="margin-top: 15px;">
+            <button onclick="clearLog()" style="background: #6c757d;">
+                Clear Log
+            </button>
+        </div>
+    </div>
+
+    <!-- Load Parley.js from dist -->
+    <script src="../../dist/index.global.js"></script>
+    <script>
+        // Global state
+        let parley = null;
+        let popupWindow = null;
+        let isConnected = false;
+        let windowCheckInterval = null;
+
+        // DOM Elements
+        const statusEl = document.getElementById('status');
+        const logEl = document.getElementById('log');
+        const responseEl = document.getElementById('response-content');
+        const messageInput = document.getElementById('message-input');
+        const btnOpen = document.getElementById('btn-open');
+        const btnClose = document.getElementById('btn-close');
+        const btnSend = document.getElementById('btn-send');
+        const btnPing = document.getElementById('btn-ping');
+        const btnRequestTime = document.getElementById('btn-request-time');
+        const btnBroadcast = document.getElementById('btn-broadcast');
+
+        // Logging helper
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString('en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                fractionalSecondDigits: 3
+            });
+            entry.textContent = `[${timestamp}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[Main] ${message}`);
+        }
+
+        function clearLog() {
+            logEl.innerHTML = '';
+            log('Log cleared', 'info');
+        }
+
+        // Update UI state
+        function updateUI() {
+            const popupExists = popupWindow && !popupWindow.closed;
+
+            if (isConnected && popupExists) {
+                statusEl.textContent = 'Connected to Popup';
+                statusEl.className = 'status connected';
+                btnOpen.disabled = true;
+                btnClose.disabled = false;
+                btnSend.disabled = false;
+                btnPing.disabled = false;
+                btnRequestTime.disabled = false;
+                btnBroadcast.disabled = false;
+            } else if (popupExists) {
+                statusEl.textContent = 'Connecting...';
+                statusEl.className = 'status connecting';
+                btnOpen.disabled = true;
+                btnClose.disabled = false;
+                btnSend.disabled = true;
+                btnPing.disabled = true;
+                btnRequestTime.disabled = true;
+                btnBroadcast.disabled = true;
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+                btnOpen.disabled = false;
+                btnClose.disabled = true;
+                btnSend.disabled = true;
+                btnPing.disabled = true;
+                btnRequestTime.disabled = true;
+                btnBroadcast.disabled = true;
+            }
+        }
+
+        // Show response in UI
+        function showResponse(response) {
+            responseEl.textContent = JSON.stringify(response, null, 2);
+        }
+
+        // Initialize Parley
+        function initParley() {
+            if (parley) {
+                return;
+            }
+
+            const currentOrigin = window.location.origin;
+
+            parley = Parley.create({
+                targetType: 'window',
+                allowedOrigins: [currentOrigin, 'null'], // 'null' for file:// protocol
+                logLevel: 'debug',
+                timeout: 10000,
+                heartbeat: {
+                    enabled: true,
+                    interval: 3000,
+                    timeout: 2000,
+                    maxMissed: 3,
+                },
+            });
+
+            log('Parley instance created', 'success');
+
+            // Register message handlers for incoming messages from popup
+            parley.on('popup:notification', (payload, respond, metadata) => {
+                log(`Notification from popup: ${payload.message}`, 'info');
+            });
+
+            parley.on('popup:pong', (payload, respond, metadata) => {
+                const roundTrip = Date.now() - payload.originalTimestamp;
+                log(`Pong received! Round-trip: ${roundTrip}ms`, 'success');
+                showResponse({ pong: true, roundTripMs: roundTrip });
+            });
+
+            // Use SYSTEM_EVENTS constant for type safety
+            const { SYSTEM_EVENTS } = Parley;
+
+            // Listen for system events
+            parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
+                log(`Connected to target: ${event.targetId}`, 'success');
+                isConnected = true;
+                updateUI();
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+                log(`Disconnected from target: ${event.targetId} (${event.reason})`, 'error');
+                isConnected = false;
+                updateUI();
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
+                log(`Connection lost to ${event.targetId}: ${event.reason}`, 'error');
+                isConnected = false;
+                updateUI();
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, (event) => {
+                log(`Connection state: ${event.previousState} -> ${event.currentState}`, 'info');
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
+                log(`Heartbeat missed for ${event.targetId} (${event.consecutiveMissed} times)`, 'warn');
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
+                log(`Message sent: ${event.messageType}`, 'info');
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
+                log(`Message received: ${event.messageType}`, 'info');
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
+                log(`Message timed out: ${event.messageType}`, 'error');
+            });
+        }
+
+        // Open popup window
+        async function openPopup() {
+            initParley();
+
+            // Calculate center position for popup
+            const width = 600;
+            const height = 500;
+            const left = window.screenX + (window.outerWidth - width) / 2;
+            const top = window.screenY + (window.outerHeight - height) / 2;
+
+            log('Opening popup window...', 'info');
+
+            popupWindow = window.open(
+                'popup.html',
+                'parley-popup',
+                `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+            );
+
+            if (!popupWindow) {
+                log('Popup was blocked! Please allow popups for this site.', 'error');
+                return;
+            }
+
+            updateUI();
+            log('Popup window opened, waiting for connection...', 'info');
+
+            // Start checking if popup is closed
+            startWindowCheck();
+
+            // Wait for popup to load, then connect
+            // The popup will initiate the connection back to us
+            try {
+                await parley.connect(popupWindow, 'popup');
+                log('Connected to popup window!', 'success');
+            } catch (error) {
+                log(`Connection failed: ${error.message}`, 'error');
+                updateUI();
+            }
+        }
+
+        // Start checking if popup window is closed
+        function startWindowCheck() {
+            if (windowCheckInterval) {
+                clearInterval(windowCheckInterval);
+            }
+
+            windowCheckInterval = setInterval(() => {
+                if (popupWindow && popupWindow.closed) {
+                    log('Popup window was closed', 'warn');
+                    handlePopupClosed();
+                }
+            }, 500);
+        }
+
+        // Handle popup being closed
+        function handlePopupClosed() {
+            if (windowCheckInterval) {
+                clearInterval(windowCheckInterval);
+                windowCheckInterval = null;
+            }
+
+            if (parley && isConnected) {
+                parley.disconnect('popup').catch(() => { });
+            }
+
+            popupWindow = null;
+            isConnected = false;
+            updateUI();
+        }
+
+        // Close popup window
+        async function closePopup() {
+            if (popupWindow && !popupWindow.closed) {
+                log('Closing popup window...', 'info');
+
+                // Send a close message first (optional graceful shutdown)
+                try {
+                    await parley.send('close', {}, {
+                        targetId: 'popup',
+                        expectsResponse: false
+                    });
+                } catch (e) {
+                    // Ignore errors - popup might already be closing
+                }
+
+                popupWindow.close();
+            }
+
+            handlePopupClosed();
+        }
+
+        // Send custom message to popup
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) {
+                log('Please enter a message', 'warn');
+                return;
+            }
+
+            try {
+                log(`Sending message: "${message}"`, 'info');
+                const response = await parley.send('custom-message', {
+                    text: message,
+                    timestamp: Date.now(),
+                    sender: 'main-window'
+                }, { targetId: 'popup' });
+
+                log(`Response: ${JSON.stringify(response)}`, 'success');
+                showResponse(response);
+            } catch (error) {
+                log(`Send failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Send ping to popup
+        async function sendPing() {
+            try {
+                log('Sending ping...', 'info');
+                await parley.send('ping', {
+                    timestamp: Date.now()
+                }, {
+                    targetId: 'popup',
+                    expectsResponse: false
+                });
+            } catch (error) {
+                log(`Ping failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Request current time from popup
+        async function requestTime() {
+            try {
+                log('Requesting time from popup...', 'info');
+                const response = await parley.send('get-time', {
+                    format: 'full'
+                }, { targetId: 'popup' });
+
+                log(`Popup time: ${response.time}`, 'success');
+                showResponse(response);
+            } catch (error) {
+                log(`Request failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Broadcast to all connected windows
+        async function broadcast() {
+            try {
+                log('Broadcasting announcement...', 'info');
+                await parley.broadcast('announcement', {
+                    message: 'Broadcast from Main Window!',
+                    timestamp: Date.now(),
+                });
+                log('Broadcast sent', 'success');
+            } catch (error) {
+                log(`Broadcast failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Allow Enter key to send message
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !btnSend.disabled) {
+                sendMessage();
+            }
+        });
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            log('Main window loaded', 'info');
+            initParley();
+            updateUI();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (parley) {
+                parley.destroy();
+            }
+        });
+    </script>
+</body>
+
+</html>

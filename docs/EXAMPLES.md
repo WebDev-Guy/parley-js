@@ -955,7 +955,8 @@ const analytics = new ParleyAnalytics(parley, {
 
 For complete working examples, see the `/examples` directory:
 
-- `examples/basic/` - Simple parent-child communication
+- `examples/basic/` - Simple parent-child iframe communication
+- `examples/window-to-window/` - Communication between separate browser windows
 - `examples/react-widget/` - React integration
 - `examples/vue-widget/` - Vue integration
 - `examples/oauth-popup/` - OAuth flow

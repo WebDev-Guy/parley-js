@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parley.js - Popup Window</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            min-height: 100vh;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            margin-top: 0;
+            font-size: 24px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        h2 {
+            color: #333;
+            margin-top: 0;
+            font-size: 16px;
+            border-bottom: 2px solid #11998e;
+            padding-bottom: 8px;
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .status::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.connected::before {
+            background: #28a745;
+            box-shadow: 0 0 8px #28a745;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.disconnected::before {
+            background: #dc3545;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status.connecting::before {
+            background: #ffc107;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', 'Fira Code', monospace;
+            font-size: 12px;
+            max-height: 180px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 3px 6px;
+            border-radius: 3px;
+        }
+
+        .log-entry.success {
+            color: #4ec9b0;
+            background: rgba(78, 201, 176, 0.1);
+        }
+
+        .log-entry.error {
+            color: #f14c4c;
+            background: rgba(241, 76, 76, 0.1);
+        }
+
+        .log-entry.info {
+            color: #9cdcfe;
+        }
+
+        .log-entry.warn {
+            color: #dcdcaa;
+            background: rgba(220, 220, 170, 0.1);
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        button {
+            background: #11998e;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        button:hover:not(:disabled) {
+            background: #0d7d74;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .received-messages {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .received-message {
+            padding: 8px 12px;
+            background: white;
+            border-left: 3px solid #11998e;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .received-message:last-child {
+            margin-bottom: 0;
+        }
+
+        .received-message .sender {
+            font-weight: 600;
+            color: #11998e;
+        }
+
+        .received-message .time {
+            color: #6c757d;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+
+        .received-message .text {
+            margin-top: 4px;
+            color: #333;
+        }
+
+        .info-box {
+            background: rgba(255, 255, 255, 0.9);
+            border-left: 4px solid #11998e;
+            padding: 12px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 16px;
+        }
+
+        .info-box p {
+            margin: 0;
+            color: #333;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Parley.js - Popup Window</h1>
+
+    <div class="info-box">
+        <p>
+            This popup window automatically connects to the main window using <code>window.opener</code>.
+            It can send and receive messages bidirectionally.
+        </p>
+    </div>
+
+    <div class="container">
+        <h2>Connection Status</h2>
+        <span id="status" class="status disconnected">Disconnected</span>
+    </div>
+
+    <div class="container">
+        <h2>Send to Main Window</h2>
+        <div class="controls">
+            <button id="btn-notify" onclick="sendNotification()" disabled>
+                Send Notification
+            </button>
+            <button id="btn-counter" onclick="sendCounter()" disabled>
+                Send Counter
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Received Messages</h2>
+        <div id="received-messages" class="received-messages">
+            <div style="color: #6c757d; font-style: italic;">No messages received yet</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Event Log</h2>
+        <div id="log" class="log"></div>
+    </div>
+
+    <!-- Load Parley.js from dist -->
+    <script src="../../dist/index.global.js"></script>
+    <script>
+        // Global state
+        let parley = null;
+        let isConnected = false;
+        let messageCounter = 0;
+
+        // DOM Elements
+        const statusEl = document.getElementById('status');
+        const logEl = document.getElementById('log');
+        const receivedMessagesEl = document.getElementById('received-messages');
+        const btnNotify = document.getElementById('btn-notify');
+        const btnCounter = document.getElementById('btn-counter');
+
+        // Logging helper
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString('en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                fractionalSecondDigits: 3
+            });
+            entry.textContent = `[${timestamp}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[Popup] ${message}`);
+        }
+
+        // Display received message in UI
+        function displayReceivedMessage(sender, text) {
+            // Clear "no messages" placeholder if present
+            if (receivedMessagesEl.querySelector('div[style]')) {
+                receivedMessagesEl.innerHTML = '';
+            }
+
+            const messageEl = document.createElement('div');
+            messageEl.className = 'received-message';
+            messageEl.innerHTML = `
+                <span class="sender">${sender}</span>
+                <span class="time">${new Date().toLocaleTimeString()}</span>
+                <div class="text">${text}</div>
+            `;
+            receivedMessagesEl.appendChild(messageEl);
+            receivedMessagesEl.scrollTop = receivedMessagesEl.scrollHeight;
+        }
+
+        // Update UI state
+        function updateUI() {
+            if (isConnected) {
+                statusEl.textContent = 'Connected to Main Window';
+                statusEl.className = 'status connected';
+                btnNotify.disabled = false;
+                btnCounter.disabled = false;
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+                btnNotify.disabled = true;
+                btnCounter.disabled = true;
+            }
+        }
+
+        // Initialize Parley and connect to opener
+        async function initParley() {
+            // Check if we have an opener
+            if (!window.opener) {
+                log('No opener window found - this page should be opened via window.open()', 'error');
+                statusEl.textContent = 'No Opener Found';
+                statusEl.className = 'status disconnected';
+                return;
+            }
+
+            // Determine the opener's origin
+            const openerOrigin = window.location.origin;
+
+            parley = Parley.create({
+                targetType: 'window',
+                allowedOrigins: [openerOrigin, 'null'], // 'null' for file:// protocol
+                logLevel: 'debug',
+                timeout: 10000,
+                heartbeat: {
+                    enabled: true,
+                    interval: 3000,
+                    timeout: 2000,
+                    maxMissed: 3,
+                },
+            });
+
+            log('Parley instance created', 'success');
+
+            // Register message handlers for incoming messages from main window
+            parley.on('custom-message', (payload, respond, metadata) => {
+                log(`Received message: "${payload.text}"`, 'info');
+                displayReceivedMessage(payload.sender, payload.text);
+
+                // Send response back
+                respond({
+                    received: true,
+                    echo: payload.text,
+                    processedAt: Date.now(),
+                    popup: 'acknowledged'
+                });
+            });
+
+            parley.on('ping', (payload, respond, metadata) => {
+                log('Received ping, sending pong...', 'info');
+                displayReceivedMessage('system', 'Ping received');
+
+                // Send pong back (fire-and-forget)
+                parley.send('popup:pong', {
+                    originalTimestamp: payload.timestamp,
+                    pongTimestamp: Date.now()
+                }, {
+                    targetId: 'opener',
+                    expectsResponse: false
+                });
+            });
+
+            parley.on('get-time', (payload, respond, metadata) => {
+                log('Time requested', 'info');
+                displayReceivedMessage('system', 'Time requested');
+
+                const now = new Date();
+                let timeStr;
+
+                if (payload.format === 'full') {
+                    timeStr = now.toLocaleString();
+                } else {
+                    timeStr = now.toLocaleTimeString();
+                }
+
+                respond({
+                    time: timeStr,
+                    timestamp: now.getTime(),
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                });
+            });
+
+            parley.on('announcement', (payload, respond, metadata) => {
+                log(`Announcement: ${payload.message}`, 'info');
+                displayReceivedMessage('broadcast', payload.message);
+            });
+
+            parley.on('close', (payload, respond, metadata) => {
+                log('Close request received, shutting down...', 'warn');
+                // The main window will close us, but we can do cleanup here
+            });
+
+            // Use SYSTEM_EVENTS constant for type safety
+            const { SYSTEM_EVENTS } = Parley;
+
+            // Listen for system events
+            parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
+                log(`Connected to: ${event.targetId}`, 'success');
+                isConnected = true;
+                updateUI();
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+                log(`Disconnected from: ${event.targetId} (${event.reason})`, 'error');
+                isConnected = false;
+                updateUI();
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
+                log(`Connection lost to ${event.targetId}: ${event.reason}`, 'error');
+                isConnected = false;
+                updateUI();
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, (event) => {
+                log(`Connection state: ${event.previousState} -> ${event.currentState}`, 'info');
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
+                log(`Heartbeat missed for ${event.targetId} (${event.consecutiveMissed} times)`, 'warn');
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
+                log(`Message received: ${event.messageType}`, 'info');
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
+                log(`Message sent: ${event.messageType}`, 'info');
+            });
+
+            // Connect to opener window
+            try {
+                statusEl.textContent = 'Connecting...';
+                statusEl.className = 'status connecting';
+
+                log('Connecting to opener window...', 'info');
+                await parley.connect(window.opener, 'opener');
+                log('Connected to opener!', 'success');
+            } catch (error) {
+                log(`Connection failed: ${error.message}`, 'error');
+                statusEl.textContent = 'Connection Failed';
+                statusEl.className = 'status disconnected';
+            }
+        }
+
+        // Send notification to main window
+        async function sendNotification() {
+            try {
+                log('Sending notification to main window...', 'info');
+                await parley.send('popup:notification', {
+                    message: `Hello from popup! (Message #${++messageCounter})`,
+                    timestamp: Date.now(),
+                }, {
+                    targetId: 'opener',
+                    expectsResponse: false,
+                });
+                log('Notification sent', 'success');
+            } catch (error) {
+                log(`Send failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Send counter value
+        async function sendCounter() {
+            try {
+                const count = ++messageCounter;
+                log(`Sending counter: ${count}`, 'info');
+                await parley.send('popup:notification', {
+                    message: `Counter value: ${count}`,
+                    timestamp: Date.now(),
+                    type: 'counter'
+                }, {
+                    targetId: 'opener',
+                    expectsResponse: false,
+                });
+                log('Counter sent', 'success');
+            } catch (error) {
+                log(`Send failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            log('Popup window loaded', 'info');
+            updateUI();
+
+            // Small delay to ensure opener is ready
+            setTimeout(() => {
+                initParley();
+            }, 300);
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (parley) {
+                parley.destroy();
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -20,18 +20,18 @@
 
 ## Features
 
-- 🔒 **Security-First Design** - Origin validation, message integrity,
+- **Security-First Design** - Origin validation, message integrity,
   configurable security policies
-- 📦 **Zero Runtime Dependencies** - Lightweight and minimal footprint
-- 🎯 **Type-Safe** - Full TypeScript support with strict typing and generics
-- 🔄 **Request/Response Pattern** - Built-in timeout handling, retries, and
+- **Zero Runtime Dependencies** - Lightweight and minimal footprint
+- **Type-Safe** - Full TypeScript support with strict typing and generics
+- **Request/Response Pattern** - Built-in timeout handling, retries, and
   response correlation
-- 📊 **Analytics Ready** - Hooks for monitoring, debugging, and performance
+- **Analytics Ready** - Hooks for monitoring, debugging, and performance
   tracking
-- 🎨 **Framework Agnostic** - Works with React, Vue, Angular, or vanilla JS
-- 🛡️ **Schema Validation** - Optional JSON Schema validation for message
+- **Framework Agnostic** - Works with React, Vue, Angular, or vanilla JS
+- **Schema Validation** - Optional JSON Schema validation for message
   payloads
-- 📡 **Multiple Targets** - Communicate with iframes, popups, and other windows
+- **Multiple Targets** - Communicate with iframes, popups, and other windows
 
 ## Installation
 
@@ -334,7 +334,7 @@ MIT © Drew
 
 <div align="center">
 
-**Made with ❤️ for the JavaScript community**
+**Made with care for the JavaScript community**
 
 [Report Bug](https://github.com/WebDev-Guy/parley-js/issues) •
 [Request Feature](https://github.com/WebDev-Guy/parley-js/issues)

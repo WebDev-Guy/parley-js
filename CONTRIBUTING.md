@@ -208,23 +208,23 @@ Then create a Pull Request on GitHub.
 ### TypeScript
 
 ```typescript
-// ✅ DO: Use explicit types
+// DO: Use explicit types
 function processMessage(message: MessageProtocol): void {
     // ...
 }
 
-// ❌ DON'T: Use any
+// DON'T: Use any
 function processMessage(message: any): any {
     // ...
 }
 
-// ✅ DO: Use readonly for immutable data
+// DO: Use readonly for immutable data
 interface Config {
     readonly timeout: number;
     readonly allowedOrigins: readonly string[];
 }
 
-// ✅ DO: Use type guards
+// DO: Use type guards
 function isValidMessage(data: unknown): data is MessageProtocol {
     return typeof data === 'object' && data !== null && '_v' in data;
 }
@@ -258,8 +258,8 @@ class Example {
 }
 
 // Interfaces: PascalCase (no I prefix)
-interface ChannelOptions { }  // ✅
-interface IChannelOptions { } // ❌
+interface ChannelOptions { }  // Good
+interface IChannelOptions { } // Bad
 
 // Types: PascalCase
 type MessageHandler<T> = (payload: T) => void;
@@ -464,7 +464,7 @@ Describe how to test the changes.
 
 - Delete your branch
 - Pull latest main
-- Celebrate! 🎉
+- Celebrate!
 
 ## Questions?
 
@@ -472,4 +472,4 @@ Describe how to test the changes.
 - Join our Discord for community chat
 - Check existing issues for similar problems
 
-Thank you for contributing! 🙏
+Thank you for contributing!
