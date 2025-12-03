@@ -1,0 +1,48 @@
+{
+    "name": "parley-js",
+    "version": "1.0.0",
+    "description": "Type-safe, robust framework for window, tab, and iframe communication",
+    "main": "./dist/index.js",
+    "module": "./dist/index.mjs",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "require": "./dist/index.js",
+            "import": "./dist/index.mjs"
+        }
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "build:dev": "set NODE_ENV=development && tsup",
+        "build:prod": "set NODE_ENV=production && tsup",
+        "dev": "tsup --watch",
+        "typecheck": "tsc --noEmit",
+        "format": "prettier --write \"src/**/*.{ts,js,json,md}\" \"docs/**/*.md\" \"*.{json,md}\"",
+        "format:check": "prettier --check \"src/**/*.{ts,js,json,md}\" \"docs/**/*.md\" \"*.{json,md}\"",
+        "lint": "npm run format:check && npm run typecheck"
+    },
+    "keywords": [
+        "postmessage",
+        "iframe",
+        "window",
+        "communication",
+        "typescript",
+        "cross-window"
+    ],
+    "author": "Drew",
+    "license": "MIT",
+    "devDependencies": {
+        "prettier": "^3.7.3",
+        "tsup": "^8.0.0",
+        "typescript": "^5.3.0"
+    },
+    "engines": {
+        "node": ">=16"
+    }
+}

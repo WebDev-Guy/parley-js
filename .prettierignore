@@ -1,0 +1,25 @@
+# Build outputs
+dist/
+build/
+*.min.js
+
+# Dependencies
+node_modules/
+
+# Coverage
+coverage/
+
+# Misc
+*.log
+.DS_Store
+.env
+.env.local
+
+# Generated files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Cache
+.cache/
+.parcel-cache/

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parley.js - Child Iframe</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 15px;
+            background: #e8f4f8;
+            margin: 0;
+        }
+        h2 {
+            color: #333;
+            margin-top: 0;
+            font-size: 18px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        .status.connecting { background: #fff3cd; color: #856404; }
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin-bottom: 4px;
+        }
+        .log-entry.success { color: #4ec9b0; }
+        .log-entry.error { color: #f14c4c; }
+        .log-entry.info { color: #9cdcfe; }
+        .controls {
+            margin: 10px 0;
+        }
+        button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+        button:hover {
+            background: #218838;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h2>📦 Child Iframe <span id="status" class="status disconnected">Disconnected</span></h2>
+    
+    <div class="controls">
+        <button id="btn-notify" onclick="sendNotification()" disabled>Send Notification</button>
+    </div>
+    
+    <div id="log" class="log"></div>
+
+    <!-- Load Parley.js from dist -->
+    <script src="../../dist/index.global.js"></script>
+    <script>
+        // Global state
+        let parley = null;
+        let isConnected = false;
+
+        // DOM Elements
+        const statusEl = document.getElementById('status');
+        const logEl = document.getElementById('log');
+        const btnNotify = document.getElementById('btn-notify');
+
+        // Logging helper
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[Child] ${message}`);
+        }
+
+        // Update UI state
+        function updateUI() {
+            if (isConnected) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'status connected';
+                btnNotify.disabled = false;
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+                btnNotify.disabled = true;
+            }
+        }
+
+        // Initialize Parley and connect to parent
+        async function initParley() {
+            // Get the parent origin
+            const parentOrigin = window.parent !== window 
+                ? (document.referrer ? new URL(document.referrer).origin : window.location.origin)
+                : window.location.origin;
+            
+            parley = Parley.create({
+                targetType: 'iframe',
+                allowedOrigins: [parentOrigin, window.location.origin, 'null'],
+                logLevel: 'debug',
+                timeout: 5000,
+                heartbeat: {
+                    enabled: true,
+                    interval: 3000,  // 3 seconds for demo
+                    timeout: 2000,
+                    maxMissed: 3,
+                },
+            });
+
+            log('Parley instance created', 'success');
+
+            // Register message handlers
+            parley.on('hello', (payload, respond, metadata) => {
+                log(`Received hello: ${JSON.stringify(payload)}`, 'info');
+                respond({
+                    greeting: `Hello, ${payload.name}!`,
+                    receivedAt: Date.now(),
+                });
+            });
+
+            parley.on('announcement', (payload, respond, metadata) => {
+                log(`Received announcement: ${payload.message}`, 'info');
+            });
+
+            // Use SYSTEM_EVENTS constant for type safety
+            const { SYSTEM_EVENTS } = Parley;
+
+            // Listen for system events
+            parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
+                log(`Connected to: ${event.targetId}`, 'success');
+                isConnected = true;
+                updateUI();
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+                log(`Disconnected from: ${event.targetId} (${event.reason})`, 'error');
+                isConnected = false;
+                updateUI();
+            });
+
+            // Listen for connection lost (detected via heartbeat)
+            parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
+                log(`Connection lost to ${event.targetId}: ${event.reason}`, 'error');
+                isConnected = false;
+                updateUI();
+            });
+
+            // Listen for connection state changes
+            parley.onSystem(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, (event) => {
+                log(`Connection state: ${event.previousState} -> ${event.currentState}`, 'info');
+            });
+
+            // Listen for heartbeat misses
+            parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
+                log(`Heartbeat missed for ${event.targetId} (${event.consecutiveMissed} times)`, 'error');
+            });
+
+            parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
+                log(`Message received: ${event.messageType}`, 'info');
+            });
+
+            // Connect to parent window
+            try {
+                statusEl.textContent = 'Connecting...';
+                statusEl.className = 'status connecting';
+                
+                log('Connecting to parent...', 'info');
+                await parley.connect(window.parent, 'parent');
+                log('Connected to parent!', 'success');
+            } catch (error) {
+                log(`Connection failed: ${error.message}`, 'error');
+                statusEl.textContent = 'Connection Failed';
+                statusEl.className = 'status disconnected';
+            }
+        }
+
+        // Send notification to parent
+        async function sendNotification() {
+            try {
+                log('Sending notification to parent...', 'info');
+                await parley.send('notification', {
+                    message: 'Hello from the child iframe!',
+                    timestamp: Date.now(),
+                }, {
+                    targetId: 'parent',
+                    expectsResponse: false,
+                });
+                log('Notification sent', 'success');
+            } catch (error) {
+                log(`Send failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            log('Child iframe loaded', 'info');
+            updateUI();
+            
+            // Delay to ensure parent has connected first
+            setTimeout(() => {
+                initParley();
+            }, 500);
+        });
+    </script>
+</body>
+</html>
