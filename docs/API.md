@@ -49,38 +49,25 @@ const parley = Parley.create({
 
 ### Instance Methods
 
-#### `register<T, R>(type: string, handler: MessageHandler<T, R>, options?: MessageRegistrationOptions): void`
+#### `register(type: string, options?: MessageRegistrationOptions): void`
 
-Register a handler for a message type.
+Register a message type with optional schema validation.
 
 ```typescript
-// Basic handler
-parley.register<{ name: string }, { greeting: string }>('greet', (payload) => {
-    return { greeting: `Hello, ${payload.name}!` };
-});
-
-// Async handler
-parley.register('fetch-data', async (payload, metadata) => {
-    const data = await fetchFromAPI(payload.id);
-    return data;
-});
-
-// With schema validation
-parley.register('validated', handler, {
-    requestSchema: {
+// Register with schema validation
+parley.register('validated-message', {
+    schema: {
         type: 'object',
         properties: {
             email: { type: 'string', format: 'email' },
         },
         required: ['email'],
     },
-    responseSchema: {
-        type: 'object',
-        properties: {
-            success: { type: 'boolean' },
-        },
-    },
+    timeout: 10000,
 });
+
+// Simple registration (no schema)
+parley.register('simple-message');
 ```
 
 **Parameters:**
@@ -88,15 +75,49 @@ parley.register('validated', handler, {
 | Parameter | Type                         | Required | Description             |
 | --------- | ---------------------------- | -------- | ----------------------- |
 | `type`    | `string`                     | Yes      | Message type identifier |
-| `handler` | `MessageHandler<T, R>`       | Yes      | Handler function        |
 | `options` | `MessageRegistrationOptions` | No       | Registration options    |
 
-**Type Parameters:**
+---
 
-| Type | Description   |
-| ---- | ------------- |
-| `T`  | Payload type  |
-| `R`  | Response type |
+#### `on<T>(type: string, handler: MessageHandler<T>): () => void`
+
+Register a handler for incoming messages of a specific type.
+
+```typescript
+// Basic handler
+parley.on<{ name: string }>('greet', (payload, respond, metadata) => {
+    respond({ greeting: `Hello, ${payload.name}!` });
+});
+
+// Async handler
+parley.on('fetch-data', async (payload, respond, metadata) => {
+    const data = await fetchFromAPI(payload.id);
+    respond(data);
+});
+
+// With registered schema (register first, then add handler)
+parley.register('validated', {
+    schema: {
+        type: 'object',
+        properties: {
+            email: { type: 'string', format: 'email' },
+        },
+        required: ['email'],
+    },
+});
+parley.on('validated', (payload, respond) => {
+    respond({ success: true });
+});
+```
+
+**Parameters:**
+
+| Parameter | Type                   | Required | Description             |
+| --------- | ---------------------- | -------- | ----------------------- |
+| `type`    | `string`               | Yes      | Message type identifier |
+| `handler` | `MessageHandler<T>`    | Yes      | Handler function        |
+
+**Returns:** Unsubscribe function
 
 ---
 
@@ -113,43 +134,47 @@ console.log(removed); // true if handler existed
 
 ---
 
-#### `send<T, R>(targetId: string, type: string, payload: T, options?: SendOptions): Promise<R>`
+#### `send<T, R>(type: string, payload: T, options?: SendOptions): Promise<R>`
 
-Send a message to a specific target and wait for response.
+Send a message and wait for response.
 
 ```typescript
-// Basic send
+// Basic send (to first/only connected target)
 const response = await parley.send<{ id: number }, { name: string }>(
-    'child-iframe',
     'get-user',
     { id: 123 }
 );
 
-// With custom timeout
-const response = await parley.send('child', 'slow-operation', data, {
+// Send to specific target with custom timeout
+const response = await parley.send('slow-operation', data, {
+    targetId: 'child',
     timeout: 30000,
     retries: 3,
 });
 
 // Fire-and-forget
-await parley.send(
-    'child',
-    'notification',
-    { message: 'Hello' },
-    {
-        expectsResponse: false,
-    }
-);
+await parley.send('notification', { message: 'Hello' }, {
+    targetId: 'child',
+    expectsResponse: false,
+});
 ```
 
 **Parameters:**
 
-| Parameter  | Type          | Required | Description       |
-| ---------- | ------------- | -------- | ----------------- |
-| `targetId` | `string`      | Yes      | Target identifier |
-| `type`     | `string`      | Yes      | Message type      |
-| `payload`  | `T`           | Yes      | Message payload   |
-| `options`  | `SendOptions` | No       | Send options      |
+| Parameter | Type          | Required | Description       |
+| --------- | ------------- | -------- | ----------------- |
+| `type`    | `string`      | Yes      | Message type      |
+| `payload` | `T`           | Yes      | Message payload   |
+| `options` | `SendOptions` | No       | Send options      |
+
+**SendOptions:**
+
+| Property          | Type      | Default | Description                    |
+| ----------------- | --------- | ------- | ------------------------------ |
+| `targetId`        | `string`  | -       | Target to send to              |
+| `timeout`         | `number`  | 5000    | Timeout in milliseconds        |
+| `retries`         | `number`  | 0       | Number of retry attempts       |
+| `expectsResponse` | `boolean` | true    | Whether to wait for response   |
 
 **Returns:** `Promise<R>` - Response from target
 
@@ -278,66 +303,34 @@ Each system event includes a typed payload:
 
 ---
 
-#### `connectIframe(id: string, iframe: HTMLIFrameElement, options: ChannelOptions): Promise<void>`
+#### `connect(target: HTMLIFrameElement | Window, targetId?: string): Promise<void>`
 
-Connect to an iframe.
+Connect to an iframe or window.
 
 ```typescript
+// Connect to iframe
 const iframe = document.querySelector<HTMLIFrameElement>('#child');
+await parley.connect(iframe, 'child');
 
-await parley.connectIframe('child', iframe, {
-    origin: 'https://child.example.com',
-    handshakeTimeout: 10000,
-});
+// Connect to popup window
+const popup = window.open('https://popup.example.com', '_blank');
+await parley.connect(popup, 'popup');
+
+// Connect to parent (from within iframe)
+await parley.connect(window.parent, 'parent');
+
+// Connect to opener (from within popup)
+await parley.connect(window.opener, 'opener');
 ```
 
 **Parameters:**
 
-| Parameter | Type                | Required | Description                           |
-| --------- | ------------------- | -------- | ------------------------------------- |
-| `id`      | `string`            | Yes      | Unique identifier for this connection |
-| `iframe`  | `HTMLIFrameElement` | Yes      | Iframe element                        |
-| `options` | `ChannelOptions`    | Yes      | Connection options                    |
+| Parameter  | Type                          | Required | Description                           |
+| ---------- | ----------------------------- | -------- | ------------------------------------- |
+| `target`   | `HTMLIFrameElement \| Window` | Yes      | Iframe element or Window reference    |
+| `targetId` | `string`                      | No       | Unique identifier for this connection |
 
 **Throws:** `ConnectionError` if handshake fails
-
----
-
-#### `connectWindow(id: string, windowRef: Window, options: ChannelOptions): Promise<void>`
-
-Connect to a popup or opened window.
-
-```typescript
-const popup = window.open('https://popup.example.com', '_blank');
-
-await parley.connectWindow('popup', popup, {
-    origin: 'https://popup.example.com',
-});
-```
-
----
-
-#### `connectParent(id: string, options: ChannelOptions): Promise<void>`
-
-Connect to parent window (from within an iframe).
-
-```typescript
-await parley.connectParent('parent', {
-    origin: 'https://parent.example.com',
-});
-```
-
----
-
-#### `connectOpener(id: string, options: ChannelOptions): Promise<void>`
-
-Connect to opener window (from within a popup).
-
-```typescript
-await parley.connectOpener('opener', {
-    origin: 'https://opener.example.com',
-});
-```
 
 ---
 
@@ -775,7 +768,7 @@ Thrown when a message times out.
 
 ```typescript
 try {
-    await parley.send('target', 'message', payload);
+    await parley.send('message', payload, { targetId: 'target' });
 } catch (error) {
     if (error instanceof TimeoutError) {
         console.log('Timeout after', error.details?.timeout, 'ms');

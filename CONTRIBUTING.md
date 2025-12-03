@@ -372,12 +372,10 @@ describe('Parley', () => {
         it('should send message to target', async () => {
             // Arrange
             const mockTarget = createMockTarget();
-            await parley.connectWindow('test', mockTarget.window, {
-                origin: 'https://test.com',
-            });
+            await parley.connect(mockTarget.window, 'test');
 
             // Act
-            const result = await parley.send('test', 'message', { data: 1 });
+            const result = await parley.send('message', { data: 1 }, { targetId: 'test' });
 
             // Assert
             expect(result).toEqual({ response: true });

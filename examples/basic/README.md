@@ -29,11 +29,11 @@ npx serve .
 
 ## What This Example Demonstrates
 
-1. **Connection Setup** - Parent connects to iframe using `connectIframe()`
-2. **Message Registration** - Both sides register handlers for message types
+1. **Connection Setup** - Parent connects to iframe using `connect()`
+2. **Message Registration** - Both sides register handlers for message types with `on()`
 3. **Request/Response** - Parent sends request, child responds
 4. **Fire-and-Forget** - Child sends notifications without expecting response
-5. **System Events** - Both sides listen for connection events
+5. **System Events** - Both sides listen for connection events using `onSystem()`
 6. **Error Handling** - Proper error handling with try/catch
 
 ## Expected Output

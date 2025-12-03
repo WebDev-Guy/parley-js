@@ -35,7 +35,7 @@ async function fetchUserData(userId: string) {
     const response = await parley.send<
         { userId: string },
         { name: string; email: string }
-    >('child', 'get-user', { userId });
+    >('get-user', { userId }, { targetId: 'child' });
 
     console.log('User:', response.name, response.email);
     return response;
@@ -51,39 +51,30 @@ const parley = Parley.create({
     allowedOrigins: ['https://parent.example.com'],
 });
 
-// Register handler
-parley.register<{ userId: string }, { name: string; email: string }>(
-    'get-user',
-    async (payload) => {
-        const user = await userService.getUser(payload.userId);
-        return {
-            name: user.name,
-            email: user.email,
-        };
-    }
-);
+// Register handler using on()
+parley.on<{ userId: string }>('get-user', async (payload, respond) => {
+    const user = await userService.getUser(payload.userId);
+    respond({
+        name: user.name,
+        email: user.email,
+    });
+});
 
 // Connect to parent
-await parley.connectParent('parent', {
-    origin: 'https://parent.example.com',
-});
+await parley.connect(window.parent, 'parent');
 ```
 
 ### Fire-and-Forget
 
 ```typescript
 // Send notification without waiting for response
-await parley.send(
-    'child',
-    'notify',
-    {
-        message: 'Operation completed',
-        level: 'info',
-    },
-    {
-        expectsResponse: false,
-    }
-);
+await parley.send('notify', {
+    message: 'Operation completed',
+    level: 'info',
+}, {
+    targetId: 'child',
+    expectsResponse: false,
+});
 ```
 
 ### Broadcasting
@@ -124,22 +115,20 @@ await parley.broadcast('config-update', {
 
             // Connect to iframe
             const iframe = document.getElementById('widget');
-            await parley.connectIframe('widget', iframe, {
-                origin: 'https://widget.example.com',
-            });
+            await parley.connect(iframe, 'widget');
 
             // Listen for events from widget
-            parley.on('widget:selection', (payload) => {
+            parley.on('widget:selection', (payload, respond) => {
                 console.log('User selected:', payload.item);
                 document.getElementById('selected').textContent =
                     payload.item.name;
             });
 
             // Send configuration
-            await parley.send('widget', 'configure', {
+            await parley.send('configure', {
                 theme: 'dark',
                 userId: currentUser.id,
-            });
+            }, { targetId: 'widget' });
         </script>
     </body>
 </html>
@@ -155,29 +144,20 @@ const parley = Parley.create({
 });
 
 // Handle configuration
-parley.register<{ theme: string; userId: string }, void>(
-    'configure',
-    (payload) => {
-        applyTheme(payload.theme);
-        setUser(payload.userId);
-    }
-);
+parley.on<{ theme: string; userId: string }>('configure', (payload, respond) => {
+    applyTheme(payload.theme);
+    setUser(payload.userId);
+});
 
 // Connect to parent
-await parley.connectParent('parent', {
-    origin: 'https://parent.example.com',
-});
+await parley.connect(window.parent, 'parent');
 
 // Notify parent of selection
 function onItemSelect(item: Item) {
-    parley.send(
-        'parent',
-        'widget:selection',
-        { item },
-        {
-            expectsResponse: false,
-        }
-    );
+    parley.send('widget:selection', { item }, {
+        targetId: 'parent',
+        expectsResponse: false,
+    });
 }
 ```
 
@@ -214,19 +194,16 @@ async function loginWithOAuth(provider: string): Promise<AuthToken> {
     }
 
     // Connect to popup
-    await parley.connectWindow('oauth-popup', popup, {
-        origin: 'https://auth.example.com',
-        handshakeTimeout: 30000, // OAuth can be slow
-    });
+    await parley.connect(popup, 'oauth-popup');
 
     // Wait for token
     return new Promise((resolve, reject) => {
-        parley.on<{ token: AuthToken }>('oauth:success', (payload) => {
+        parley.on<{ token: AuthToken }>('oauth:success', (payload, respond) => {
             resolve(payload.token);
             parley.disconnect('oauth-popup');
         });
 
-        parley.on<{ error: string }>('oauth:error', (payload) => {
+        parley.on<{ error: string }>('oauth:error', (payload, respond) => {
             reject(new Error(payload.error));
             parley.disconnect('oauth-popup');
         });
@@ -251,32 +228,22 @@ const parley = Parley.create({
     allowedOrigins: ['https://app.example.com'],
 });
 
-await parley.connectOpener('opener', {
-    origin: 'https://app.example.com',
-});
+await parley.connect(window.opener, 'opener');
 
 // After OAuth completes
 function onOAuthComplete(token: AuthToken) {
-    parley.send(
-        'opener',
-        'oauth:success',
-        { token },
-        {
-            expectsResponse: false,
-        }
-    );
+    parley.send('oauth:success', { token }, {
+        targetId: 'opener',
+        expectsResponse: false,
+    });
     window.close();
 }
 
 function onOAuthError(error: string) {
-    parley.send(
-        'opener',
-        'oauth:error',
-        { error },
-        {
-            expectsResponse: false,
-        }
-    );
+    parley.send('oauth:error', { error }, {
+        targetId: 'opener',
+        expectsResponse: false,
+    });
     window.close();
 }
 ```
@@ -354,7 +321,7 @@ export function IframeWidget({ src, origin, onData }: WidgetProps) {
         if (!parley || !iframeRef.current) return;
 
         parley
-            .connectIframe('widget', iframeRef.current, { origin })
+            .connect(iframeRef.current, 'widget')
             .then(() => setIsReady(true))
             .catch(console.error);
 
@@ -408,14 +375,14 @@ export function useParley(config: ParleyConfig) {
     });
 
     async function send<T, R>(
-        targetId: string,
         type: string,
-        payload: T
+        payload: T,
+        targetId?: string
     ): Promise<R> {
         if (!parley.value) {
             throw new Error('Parley not initialized');
         }
-        return parley.value.send<T, R>(targetId, type, payload);
+        return parley.value.send<T, R>(type, payload, { targetId });
     }
 
     return {
@@ -464,13 +431,11 @@ const { parley, isConnected } = useParley({
 onMounted(async () => {
     if (!parley.value || !iframeEl.value) return;
 
-    await parley.value.connectIframe('widget', iframeEl.value, {
-        origin: props.origin,
-    });
+    await parley.value.connect(iframeEl.value, 'widget');
 
     isReady.value = true;
 
-    parley.value.on('widget:data', (payload) => {
+    parley.value.on('widget:data', (payload, respond) => {
         emit('data', payload);
     });
 });
@@ -489,23 +454,21 @@ const parley = Parley.create({
     allowedOrigins: ['https://widget.example.com'],
 });
 
-parley.register('get-session', () => {
-    return {
+parley.on('get-session', (payload, respond) => {
+    respond({
         token: authService.getToken(),
         user: authService.getUser(),
         expiresAt: authService.getExpiration(),
-    };
+    });
 });
 
 // Widget: Request session from parent
-await parley.connectParent('parent', {
-    origin: 'https://app.example.com',
-});
+await parley.connect(window.parent, 'parent');
 
 const session = await parley.send<void, SessionData>(
-    'parent',
     'get-session',
-    undefined
+    undefined,
+    { targetId: 'parent' }
 );
 authService.setSession(session);
 ```
@@ -514,7 +477,7 @@ authService.setSession(session);
 
 ```typescript
 // Widget: Listen for token refresh
-parley.on<{ token: string }>('session:refresh', (payload) => {
+parley.on<{ token: string }>('session:refresh', (payload, respond) => {
     authService.updateToken(payload.token);
 });
 
@@ -546,21 +509,23 @@ store.subscribe(() => {
 });
 
 // Handle state requests
-parley.register('state:get', () => store.getState());
+parley.on('state:get', (payload, respond) => {
+    respond(store.getState());
+});
 
 // Widget: State consumer
-await parley.connectParent('parent', { origin });
+await parley.connect(window.parent, 'parent');
 
 // Get initial state
 const initialState = await parley.send<void, AppState>(
-    'parent',
     'state:get',
-    undefined
+    undefined,
+    { targetId: 'parent' }
 );
 localStore.setState(initialState);
 
 // Listen for updates
-parley.on<AppState>('state:update', (state) => {
+parley.on<AppState>('state:update', (state, respond) => {
     localStore.setState(state);
 });
 ```
@@ -623,9 +588,7 @@ parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
 
 // Connect to iframe
 const iframe = document.getElementById('child');
-await parley.connectIframe('child', iframe, {
-    origin: 'https://child.example.com',
-});
+await parley.connect(iframe, 'child');
 
 // Later: graceful disconnect
 async function disconnectFromChild() {
@@ -664,9 +627,7 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
     handleDisconnection();
 });
 
-await parley.connectParent('parent', {
-    origin: 'https://parent.example.com',
-});
+await parley.connect(window.parent, 'parent');
 ```
 
 ### Reconnection Logic
@@ -723,9 +684,7 @@ class ReconnectingParley {
         // This is a simplified example
         const iframe = document.getElementById(targetId) as HTMLIFrameElement;
         if (iframe) {
-            await this.parley.connectIframe(targetId, iframe, {
-                origin: iframe.src.split('/').slice(0, 3).join('/'),
-            });
+            await this.parley.connect(iframe, targetId);
         }
     }
 
@@ -839,7 +798,7 @@ async function safeSend<T, R>(
     payload: T
 ): Promise<{ success: true; data: R } | { success: false; error: Error }> {
     try {
-        const data = await parley.send<T, R>(targetId, type, payload);
+        const data = await parley.send<T, R>(type, payload, { targetId });
         return { success: true, data };
     } catch (error) {
         if (error instanceof TimeoutError) {
@@ -893,7 +852,8 @@ async function sendWithRetry<T, R>(
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            return await parley.send<T, R>(targetId, type, payload, {
+            return await parley.send<T, R>(type, payload, {
+                targetId,
                 timeout: 5000 * (attempt + 1), // Increase timeout each retry
             });
         } catch (error) {

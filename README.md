@@ -63,7 +63,7 @@ pnpm add parley-js
 ### Parent Window
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'parley-js';
 
 // Create instance
 const parley = Parley.create({
@@ -71,28 +71,21 @@ const parley = Parley.create({
     timeout: 5000,
 });
 
-// Register message handlers
-parley.register<{ user: string }, { greeting: string }>(
-    'hello',
-    async (payload, metadata) => {
-        console.log(`Hello from ${payload.user}!`);
-        return { greeting: `Welcome, ${payload.user}!` };
-    }
-);
+// Register message handler using on()
+parley.on<{ user: string }>('hello', (payload, respond, metadata) => {
+    console.log(`Hello from ${payload.user}!`);
+    respond({ greeting: `Welcome, ${payload.user}!` });
+});
 
 // Connect to an iframe
 const iframe = document.querySelector<HTMLIFrameElement>('#child-iframe');
-await parley.connectIframe('child', iframe, {
-    origin: 'https://child.example.com',
-});
+await parley.connect(iframe, 'child');
 
 // Send a message and wait for response
 const response = await parley.send<{ data: number[] }, { result: number }>(
-    'child',
     'calculate',
-    {
-        data: [1, 2, 3, 4, 5],
-    }
+    { data: [1, 2, 3, 4, 5] },
+    { targetId: 'child' }
 );
 
 console.log('Sum:', response.result);
@@ -101,29 +94,24 @@ console.log('Sum:', response.result);
 ### Child Window (Iframe)
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'parley-js';
 
 // Create instance
 const parley = Parley.create({
     allowedOrigins: ['https://parent.example.com'],
 });
 
-// Register handlers
-parley.register<{ data: number[] }, { result: number }>(
-    'calculate',
-    (payload) => {
-        const sum = payload.data.reduce((a, b) => a + b, 0);
-        return { result: sum };
-    }
-);
-
-// Connect to parent
-await parley.connectParent('parent', {
-    origin: 'https://parent.example.com',
+// Register handler using on()
+parley.on<{ data: number[] }>('calculate', (payload, respond) => {
+    const sum = payload.data.reduce((a, b) => a + b, 0);
+    respond({ result: sum });
 });
 
+// Connect to parent
+await parley.connect(window.parent, 'parent');
+
 // Listen for connection events
-parley.onSystem('target:connected', (event) => {
+parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
     console.log('Connected to:', event.targetId);
 });
 ```
@@ -132,21 +120,18 @@ parley.onSystem('target:connected', (event) => {
 
 ### Message Types
 
-Register typed message handlers with optional schema validation:
+Register message handlers with `on()`, optionally with schema validation via `register()`:
 
 ```typescript
-// Simple handler
-parley.register<InputType, OutputType>(
-    'message-type',
-    async (payload, metadata) => {
-        // Process message
-        return result;
-    }
-);
+// Simple handler using on()
+parley.on<InputType>('message-type', (payload, respond, metadata) => {
+    // Process message
+    respond(result);
+});
 
-// With JSON Schema validation
-parley.register('validated-message', handler, {
-    requestSchema: {
+// With JSON Schema validation (register type first, then add handler)
+parley.register('validated-message', {
+    schema: {
         type: 'object',
         properties: {
             name: { type: 'string' },
@@ -155,41 +140,41 @@ parley.register('validated-message', handler, {
         required: ['name'],
     },
 });
+parley.on('validated-message', (payload, respond) => {
+    // Handler for validated message
+    respond({ success: true });
+});
 ```
 
 ### Connection Types
 
 ```typescript
 // Connect to iframe
-await parley.connectIframe('iframe-id', iframeElement, {
-    origin: 'https://...',
-});
+const iframe = document.getElementById('my-iframe') as HTMLIFrameElement;
+await parley.connect(iframe, 'iframe-id');
 
 // Connect to popup/new window
-await parley.connectWindow('popup-id', windowRef, { origin: 'https://...' });
+const popup = window.open('https://example.com/popup', '_blank');
+await parley.connect(popup, 'popup-id');
 
 // Connect to parent (from iframe)
-await parley.connectParent('parent-id', { origin: 'https://...' });
+await parley.connect(window.parent, 'parent-id');
 ```
 
 ### Fire-and-Forget vs Request/Response
 
 ```typescript
 // Fire-and-forget (no response expected)
-await parley.send(
-    'target',
-    'notification',
-    { message: 'Hello!' },
-    {
-        expectsResponse: false,
-    }
-);
+await parley.send('notification', { message: 'Hello!' }, {
+    targetId: 'child',
+    expectsResponse: false,
+});
 
 // Request/Response (default)
-const response = await parley.send<Request, Response>(
-    'target',
+const response = await parley.send<RequestType, ResponseType>(
     'query',
-    payload
+    payload,
+    { targetId: 'child' }
 );
 ```
 
@@ -203,26 +188,33 @@ await parley.broadcast('update', { timestamp: Date.now() });
 ### System Events
 
 ```typescript
+import { Parley, SYSTEM_EVENTS } from 'parley-js';
+
 // Connection events
-parley.onSystem('target:connected', (event) =>
+parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) =>
     console.log('Connected:', event.targetId)
 );
-parley.onSystem('target:disconnected', (event) =>
+parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) =>
     console.log('Disconnected:', event.targetId)
+);
+parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) =>
+    console.log('Connection lost:', event.targetId, event.reason)
 );
 
 // Message events
-parley.onSystem('message:sent', (event) => console.log('Sent:', event.type));
-parley.onSystem('message:received', (event) =>
-    console.log('Received:', event.type)
+parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) =>
+    console.log('Sent:', event.messageType)
+);
+parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) =>
+    console.log('Received:', event.messageType)
 );
 
 // Error events
-parley.onSystem('error:timeout', (event) =>
+parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) =>
     console.log('Timeout:', event.messageId)
 );
-parley.onSystem('error:validation', (event) =>
-    console.log('Invalid:', event.error)
+parley.onSystem(SYSTEM_EVENTS.ERROR, (event) =>
+    console.log('Error:', event.message)
 );
 ```
 
@@ -254,7 +246,7 @@ const parley = Parley.create({
 import { TimeoutError, ValidationError, SecurityError } from 'parley-js';
 
 try {
-    await parley.send('target', 'message', payload);
+    await parley.send('message', payload, { targetId: 'child' });
 } catch (error) {
     if (error instanceof TimeoutError) {
         console.log('Request timed out');

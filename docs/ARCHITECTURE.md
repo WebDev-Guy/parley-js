@@ -546,7 +546,7 @@ For high-frequency messages, consider batching:
 // Not built-in, but pattern supported
 const batcher = createBatcher(
     (messages) => {
-        parley.send('target', 'batch', { messages });
+        parley.send('batch', { messages }, { targetId: 'target' });
     },
     { maxSize: 10, maxWait: 100 }
 );
@@ -738,7 +738,7 @@ enum DisconnectReason {
 Parent creates Parley
        │
        ▼
-connectIframe('child', iframe, { origin })
+connect(iframe, 'child')
        │
        ▼
 [State: CONNECTING]
