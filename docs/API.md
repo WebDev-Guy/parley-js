@@ -8,12 +8,15 @@ Complete API documentation for Parley-js.
     - [Static Methods](#static-methods)
     - [Instance Methods](#instance-methods)
     - [Properties](#properties)
+- [Connection Lifecycle](#connection-lifecycle)
+- [Heartbeat Monitoring Example](#heartbeat-monitoring-example)
 - [Types](#types)
-    - [Configuration](#configuration-types)
-    - [Messages](#message-types)
-    - [Events](#event-types)
+    - [Configuration Types](#configuration-types)
+    - [Message Types](#message-types)
+    - [Event Types](#event-types)
 - [Error Classes](#error-classes)
 - [Utilities](#utilities)
+- [TypeScript Support](#typescript-support)
 
 ---
 
@@ -552,6 +555,245 @@ parley.onSystem('system:connection_lost', (event) => {
 // Normal disconnect
 parley.onSystem('target:disconnected', (event) => {
     console.log(`Disconnected from ${event.targetId}: ${event.reason}`);
+});
+```
+
+---
+
+## Heartbeat Monitoring Example
+
+One of Parley's key features is automatic connection health monitoring via heartbeats. This solves a common problem with `postMessage`: detecting when an iframe or popup becomes unresponsive or is closed.
+
+### Why Heartbeat Monitoring?
+
+The `postMessage` API provides no built-in way to know if:
+- An iframe has crashed or become unresponsive
+- A popup window was closed by the user
+- Network issues are preventing communication
+- The child frame navigated away
+
+Parley's heartbeat mechanism automatically detects these scenarios and notifies your application.
+
+### Complete Example: Resilient Iframe Connection
+
+This example demonstrates a parent window that connects to an iframe with full heartbeat monitoring and automatic reconnection.
+
+**parent.html**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Parent - Heartbeat Monitoring Demo</title>
+</head>
+<body>
+    <h1>Parent Window</h1>
+    <div id="status">Status: Initializing...</div>
+    <div id="heartbeat-status"></div>
+    <button id="reconnect-btn" style="display: none;">Reconnect</button>
+    
+    <iframe id="child-frame" src="https://child.example.com/child.html"></iframe>
+    
+    <script type="module">
+        import { Parley, SYSTEM_EVENTS } from 'parley-js';
+        
+        const statusEl = document.getElementById('status');
+        const heartbeatEl = document.getElementById('heartbeat-status');
+        const reconnectBtn = document.getElementById('reconnect-btn');
+        const iframe = document.getElementById('child-frame');
+        
+        // Create Parley instance with heartbeat enabled
+        const parley = Parley.create({
+            allowedOrigins: ['https://child.example.com'],
+            heartbeat: {
+                enabled: true,
+                interval: 5000,    // Ping every 5 seconds
+                timeout: 2000,     // Wait 2s for pong response  
+                maxMissed: 3       // Disconnect after 3 missed pongs
+            }
+        });
+        
+        // Track connection state
+        let isConnected = false;
+        
+        // === Connection Events ===
+        
+        parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
+            isConnected = true;
+            statusEl.textContent = `Status: Connected to ${event.targetId}`;
+            statusEl.style.color = 'green';
+            heartbeatEl.textContent = 'Heartbeat: Healthy';
+            heartbeatEl.style.color = 'green';
+            reconnectBtn.style.display = 'none';
+            console.log('Connected:', event);
+        });
+        
+        parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+            isConnected = false;
+            statusEl.textContent = `Status: Disconnected (${event.reason})`;
+            statusEl.style.color = 'gray';
+            heartbeatEl.textContent = '';
+            console.log('Disconnected gracefully:', event);
+        });
+        
+        // === Heartbeat Monitoring ===
+        
+        parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
+            const { consecutiveMissed } = event;
+            const maxMissed = 3;
+            
+            heartbeatEl.textContent = `Heartbeat: Warning - ${consecutiveMissed}/${maxMissed} missed`;
+            heartbeatEl.style.color = consecutiveMissed >= 2 ? 'red' : 'orange';
+            
+            console.warn(`Heartbeat missed (${consecutiveMissed}/${maxMissed})`);
+        });
+        
+        parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
+            isConnected = false;
+            statusEl.textContent = `Status: Connection Lost (${event.reason})`;
+            statusEl.style.color = 'red';
+            heartbeatEl.textContent = 'Heartbeat: Failed';
+            heartbeatEl.style.color = 'red';
+            reconnectBtn.style.display = 'block';
+            
+            console.error('Connection lost:', event);
+            
+            // Auto-reconnect after 3 seconds for heartbeat failures
+            if (event.reason === 'heartbeat_failure') {
+                console.log('Auto-reconnecting in 3 seconds...');
+                setTimeout(() => connectToChild(), 3000);
+            }
+        });
+        
+        // === State Change Tracking ===
+        
+        parley.onSystem(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, (event) => {
+            console.log(`State: ${event.previousState} → ${event.currentState}`);
+        });
+        
+        // === Connection Function ===
+        
+        async function connectToChild() {
+            try {
+                statusEl.textContent = 'Status: Connecting...';
+                statusEl.style.color = 'blue';
+                await parley.connect(iframe, 'child');
+            } catch (error) {
+                statusEl.textContent = `Status: Connection failed - ${error.message}`;
+                statusEl.style.color = 'red';
+                reconnectBtn.style.display = 'block';
+            }
+        }
+        
+        // Manual reconnect button
+        reconnectBtn.addEventListener('click', connectToChild);
+        
+        // Initial connection
+        connectToChild();
+    </script>
+</body>
+</html>
+```
+
+**child.html**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Child - Heartbeat Monitoring Demo</title>
+</head>
+<body>
+    <h1>Child Frame</h1>
+    <div id="status">Status: Waiting for parent...</div>
+    
+    <script type="module">
+        import { Parley, SYSTEM_EVENTS } from 'parley-js';
+        
+        const statusEl = document.getElementById('status');
+        
+        const parley = Parley.create({
+            allowedOrigins: ['https://parent.example.com'],
+            heartbeat: { enabled: true }
+        });
+        
+        parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
+            statusEl.textContent = `Status: Connected to ${event.targetId}`;
+            statusEl.style.color = 'green';
+        });
+        
+        parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
+            statusEl.textContent = `Status: Lost connection (${event.reason})`;
+            statusEl.style.color = 'red';
+        });
+        
+        // Connect to parent window
+        parley.connect(window.parent, 'parent');
+    </script>
+</body>
+</html>
+```
+
+### Popup Window Example with Heartbeat
+
+Detecting when a popup is closed is a classic challenge. Parley's heartbeat makes this easy:
+
+```typescript
+import { Parley, SYSTEM_EVENTS } from 'parley-js';
+
+const parley = Parley.create({
+    allowedOrigins: ['https://popup.example.com'],
+    heartbeat: {
+        enabled: true,
+        interval: 2000,  // Check more frequently for popups
+        timeout: 1000,
+        maxMissed: 2     // Faster detection
+    }
+});
+
+// Open popup and connect
+const popup = window.open('https://popup.example.com/popup.html', '_blank');
+await parley.connect(popup, 'popup');
+
+// Detect when popup is closed
+parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
+    if (event.targetId === 'popup' && event.reason === 'heartbeat_failure') {
+        console.log('Popup was closed by user');
+        // Clean up, update UI, etc.
+    }
+});
+```
+
+### Tuning Heartbeat Settings
+
+Choose settings based on your use case:
+
+| Use Case | Interval | Timeout | Max Missed | Total Detection Time |
+|----------|----------|---------|------------|---------------------|
+| Real-time app | 2000ms | 1000ms | 2 | ~5 seconds |
+| Standard iframe | 5000ms | 2000ms | 3 | ~17 seconds |
+| Low-priority embed | 10000ms | 3000ms | 5 | ~53 seconds |
+| Popup detection | 1000ms | 500ms | 3 | ~4.5 seconds |
+
+```typescript
+// Real-time application (fast detection)
+const parley = Parley.create({
+    allowedOrigins: ['*'],
+    heartbeat: {
+        enabled: true,
+        interval: 2000,
+        timeout: 1000,
+        maxMissed: 2
+    }
+});
+
+// Battery-conscious mobile app (slower, fewer checks)
+const parley = Parley.create({
+    allowedOrigins: ['*'],
+    heartbeat: {
+        enabled: true,
+        interval: 15000,
+        timeout: 5000,
+        maxMissed: 3
+    }
 });
 ```
 

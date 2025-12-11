@@ -838,6 +838,7 @@
                     <button class="code-tab active" onclick="showTab('parent')">Parent Window</button>
                     <button class="code-tab" onclick="showTab('child')">Child Iframe</button>
                     <button class="code-tab" onclick="showTab('popup')">Window ↔ Popup</button>
+                    <button class="code-tab" onclick="showTab('heartbeat')">Heartbeat</button>
                     <button class="code-tab" onclick="showTab('schema')">Schema Validation</button>
                 </div>
                 <!-- Mobile dropdown -->
@@ -846,6 +847,7 @@
                         <option value="parent">Parent Window</option>
                         <option value="child">Child Iframe</option>
                         <option value="popup">Window ↔ Popup</option>
+                        <option value="heartbeat">Heartbeat</option>
                         <option value="schema">Schema Validation</option>
                     </select>
                 </div>
@@ -954,6 +956,60 @@ parley.<span class="function">on</span>(<span class="string">'get-time'</span>, 
 <span class="comment">// Send notification to main window</span>
 <span class="keyword">await</span> parley.<span class="function">send</span>(<span class="string">'popup:notification'</span>, { message: <span class="string">'Ready!'</span> }, {
     <span class="variable">targetId</span>: <span class="string">'opener'</span>, <span class="variable">expectsResponse</span>: <span class="keyword">false</span>
+});</code></pre>
+                    <pre id="heartbeat-code" style="display: none;"><code><span class="comment">/**</span>
+<span class="comment"> * Heartbeat Monitoring Example</span>
+<span class="comment"> * </span>
+<span class="comment"> * postMessage has no built-in way to detect if an iframe crashes,</span>
+<span class="comment"> * a popup closes, or a connection becomes unresponsive. Parley-js</span>
+<span class="comment"> * solves this with automatic heartbeat monitoring and reconnection.</span>
+<span class="comment"> */</span>
+<span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
+
+<span class="comment">// Create instance with heartbeat enabled</span>
+<span class="keyword">const</span> parley = Parley.<span class="function">create</span>({
+    <span class="variable">allowedOrigins</span>: [<span class="string">'https://child.example.com'</span>],
+    <span class="variable">heartbeat</span>: {
+        <span class="variable">enabled</span>: <span class="keyword">true</span>,
+        <span class="variable">interval</span>: <span class="number">5000</span>,   <span class="comment">// Ping every 5 seconds</span>
+        <span class="variable">timeout</span>: <span class="number">2000</span>,    <span class="comment">// Wait 2s for response</span>
+        <span class="variable">maxMissed</span>: <span class="number">3</span>      <span class="comment">// Disconnect after 3 misses</span>
+    }
+});
+
+<span class="comment">// ═══ MONITOR CONNECTION HEALTH ═══</span>
+
+<span class="comment">// Early warning: heartbeat missed</span>
+parley.<span class="function">onSystem</span>(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) =&gt; {
+    console.<span class="function">warn</span>(<span class="string">`Heartbeat missed: ${event.consecutiveMissed}/3`</span>);
+    <span class="function">showWarning</span>(<span class="string">'Connection unstable...'</span>);
+});
+
+<span class="comment">// Connection lost - iframe crashed, closed, or unresponsive</span>
+parley.<span class="function">onSystem</span>(SYSTEM_EVENTS.CONNECTION_LOST, (event) =&gt; {
+    console.<span class="function">error</span>(<span class="string">`Lost connection: ${event.reason}`</span>);
+    
+    <span class="keyword">if</span> (event.reason === <span class="string">'heartbeat_failure'</span>) {
+        <span class="comment">// Auto-reconnect after 3 seconds</span>
+        <span class="function">setTimeout</span>(() =&gt; <span class="function">reconnect</span>(), <span class="number">3000</span>);
+    }
+});
+
+<span class="comment">// Connection restored</span>
+parley.<span class="function">onSystem</span>(SYSTEM_EVENTS.CONNECTED, (event) =&gt; {
+    console.<span class="function">log</span>(<span class="string">`Connected to ${event.targetId}`</span>);
+    <span class="function">hideWarning</span>();
+});
+
+<span class="comment">// ═══ POPUP CLOSE DETECTION ═══</span>
+<span class="comment">// Detect when user closes a popup window</span>
+<span class="keyword">const</span> popup = window.<span class="function">open</span>(<span class="string">'popup.html'</span>, <span class="string">'_blank'</span>);
+<span class="keyword">await</span> parley.<span class="function">connect</span>(popup, <span class="string">'popup'</span>);
+
+parley.<span class="function">onSystem</span>(SYSTEM_EVENTS.CONNECTION_LOST, (event) =&gt; {
+    <span class="keyword">if</span> (event.targetId === <span class="string">'popup'</span>) {
+        console.<span class="function">log</span>(<span class="string">'Popup was closed by user'</span>);
+    }
 });</code></pre>
                     <pre id="schema-code" style="display: none;"><code><span class="comment">/**</span>
 <span class="comment"> * Schema Validation Example</span>
@@ -1093,6 +1149,7 @@ parley.<span class="function">register</span>(<span class="string">'user:create'
             document.getElementById('parent-code').style.display = tab === 'parent' ? 'block' : 'none';
             document.getElementById('child-code').style.display = tab === 'child' ? 'block' : 'none';
             document.getElementById('popup-code').style.display = tab === 'popup' ? 'block' : 'none';
+            document.getElementById('heartbeat-code').style.display = tab === 'heartbeat' ? 'block' : 'none';
             document.getElementById('schema-code').style.display = tab === 'schema' ? 'block' : 'none';
         }
 
