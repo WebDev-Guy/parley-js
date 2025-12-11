@@ -176,7 +176,7 @@ interface TargetInfo {
     id: string;
     type: 'iframe' | 'window' | 'parent' | 'opener';
     origin: string;
-    state: ConnectionState;  // 'connecting' | 'connected' | 'disconnecting' | 'disconnected'
+    state: ConnectionState; // 'connecting' | 'connected' | 'disconnecting' | 'disconnected'
     channel: BaseChannel;
     metadata?: Record<string, unknown>;
     missedHeartbeats: number;
@@ -673,7 +673,7 @@ Parent                                Child
 ```
 If no pong received within timeout:
    missedHeartbeats++
-   
+
    if (missedHeartbeats >= maxMissed):
        Emit 'system:connection_lost' { reason: 'heartbeat_failure' }
        Transition to DISCONNECTED
@@ -707,6 +707,7 @@ Initiator                            Remote
 **Timeout Behavior:**
 
 If acknowledgment not received within 1 second:
+
 - Log warning but proceed with cleanup
 - Other side may have already disconnected
 
@@ -724,11 +725,11 @@ const SYSTEM_MESSAGE_TYPES = {
 
 ```typescript
 enum DisconnectReason {
-    LOCAL_DISCONNECT = 'local_disconnect',      // This side called disconnect()
-    REMOTE_DISCONNECT = 'remote_disconnect',    // Other side called disconnect()
-    HEARTBEAT_FAILURE = 'heartbeat_failure',    // Heartbeat timeout
-    SEND_FAILURE = 'send_failure',              // Too many send failures
-    DESTROYED = 'destroyed',                    // Parley instance destroyed
+    LOCAL_DISCONNECT = 'local_disconnect', // This side called disconnect()
+    REMOTE_DISCONNECT = 'remote_disconnect', // Other side called disconnect()
+    HEARTBEAT_FAILURE = 'heartbeat_failure', // Heartbeat timeout
+    SEND_FAILURE = 'send_failure', // Too many send failures
+    DESTROYED = 'destroyed', // Parley instance destroyed
 }
 ```
 
@@ -781,9 +782,9 @@ Clean up target
 ```typescript
 // Connection-related error codes
 const CONNECTION_ERRORS = {
-    CONNECTION_FAILED: 'CONNECTION_FAILED',       // Handshake failed
-    CONNECTION_LOST: 'CONNECTION_LOST',           // Lost due to heartbeat/send failure
-    NOT_CONNECTED: 'NOT_CONNECTED',               // Target not in connected state
-    HEARTBEAT_TIMEOUT: 'HEARTBEAT_TIMEOUT',       // Heartbeat response timeout
+    CONNECTION_FAILED: 'CONNECTION_FAILED', // Handshake failed
+    CONNECTION_LOST: 'CONNECTION_LOST', // Lost due to heartbeat/send failure
+    NOT_CONNECTED: 'NOT_CONNECTED', // Target not in connected state
+    HEARTBEAT_TIMEOUT: 'HEARTBEAT_TIMEOUT', // Heartbeat response timeout
 };
 ```

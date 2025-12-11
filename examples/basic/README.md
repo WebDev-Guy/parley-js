@@ -1,6 +1,7 @@
 # Basic Example
 
-A simple example demonstrating parent-child communication between a parent window and an iframe.
+A simple example demonstrating parent-child communication between a parent
+window and an iframe.
 
 ## Files
 
@@ -30,15 +31,18 @@ npx serve .
 ## What This Example Demonstrates
 
 1. **Connection Setup** - Parent connects to iframe using `connect()`
-2. **Message Registration** - Both sides register handlers for message types with `on()`
+2. **Message Registration** - Both sides register handlers for message types
+   with `on()`
 3. **Request/Response** - Parent sends request, child responds
 4. **Fire-and-Forget** - Child sends notifications without expecting response
-5. **System Events** - Both sides listen for connection events using `onSystem()`
+5. **System Events** - Both sides listen for connection events using
+   `onSystem()`
 6. **Error Handling** - Proper error handling with try/catch
 
 ## Expected Output
 
 ### Parent Console:
+
 ```
 [Parent] Parley instance created
 [Parent] Connecting to iframe...
@@ -47,6 +51,7 @@ npx serve .
 ```
 
 ### Child Console:
+
 ```
 [Child] Parley instance created
 [Child] Connected to parent

@@ -375,7 +375,11 @@ describe('Parley', () => {
             await parley.connect(mockTarget.window, 'test');
 
             // Act
-            const result = await parley.send('message', { data: 1 }, { targetId: 'test' });
+            const result = await parley.send(
+                'message',
+                { data: 1 },
+                { targetId: 'test' }
+            );
 
             // Assert
             expect(result).toEqual({ response: true });
