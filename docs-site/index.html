@@ -348,17 +348,20 @@
         .code-section {
             padding: 6rem 2rem;
             background: var(--color-bg-secondary);
+            overflow-x: hidden;
         }
 
         .code-container {
             max-width: 1000px;
             margin: 0 auto;
+            width: 100%;
         }
 
         .code-tabs {
             display: flex;
             gap: 0.5rem;
             margin-bottom: -1px;
+            flex-wrap: wrap;
         }
 
         .code-tab {
@@ -380,11 +383,41 @@
             border-color: var(--color-border);
         }
 
+        /* Mobile dropdown for code examples */
+        .code-select-wrapper {
+            display: none;
+            margin-bottom: 1rem;
+        }
+
+        .code-select {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            font-family: var(--font-sans);
+            font-size: 1rem;
+            color: var(--color-text);
+            background: var(--color-code-bg);
+            border: 1px solid var(--color-border);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23B2A69A' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            padding-right: 2.5rem;
+        }
+
+        .code-select:focus {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+            border-color: var(--color-primary);
+        }
+
         .code-block {
             background: var(--color-code-bg);
             border: 1px solid var(--color-border);
             border-radius: 0 0.5rem 0.5rem 0.5rem;
             overflow: hidden;
+            max-width: 100%;
         }
 
         .code-block pre {
@@ -393,10 +426,14 @@
             font-family: var(--font-mono);
             font-size: 0.875rem;
             line-height: 1.7;
+            max-width: 100%;
+            -webkit-overflow-scrolling: touch;
         }
 
         .code-block code {
             color: var(--color-text);
+            white-space: pre-wrap;
+            display: block;
         }
 
         /* Syntax highlighting */
@@ -654,6 +691,37 @@
                 gap: 1rem;
                 text-align: center;
             }
+
+            /* Code section mobile fixes */
+            .code-section {
+                padding: 4rem 1rem;
+            }
+
+            .code-tabs {
+                display: none;
+            }
+
+            .code-select-wrapper {
+                display: block;
+            }
+
+            .code-block {
+                border-radius: 0.5rem;
+            }
+
+            .code-block pre {
+                padding: 1rem;
+                font-size: 0.75rem;
+                line-height: 1.6;
+            }
+
+            .section-title h2 {
+                font-size: 1.75rem;
+            }
+
+            .section-title p {
+                font-size: 1rem;
+            }
         }
     </style>
 </head>
@@ -765,14 +833,31 @@
                     <h2>Simple, Intuitive API</h2>
                     <p>Get started in minutes with a clean, <a href="https://github.com/WebDev-Guy/parley-js/blob/main/docs/API.md">well-documented API</a></p>
                 </div>
+                <!-- Desktop tabs -->
                 <div class="code-tabs">
                     <button class="code-tab active" onclick="showTab('parent')">Parent Window</button>
                     <button class="code-tab" onclick="showTab('child')">Child Iframe</button>
                     <button class="code-tab" onclick="showTab('popup')">Window ↔ Popup</button>
                     <button class="code-tab" onclick="showTab('schema')">Schema Validation</button>
                 </div>
+                <!-- Mobile dropdown -->
+                <div class="code-select-wrapper">
+                    <select class="code-select" onchange="showTab(this.value)" aria-label="Select code example">
+                        <option value="parent">Parent Window</option>
+                        <option value="child">Child Iframe</option>
+                        <option value="popup">Window ↔ Popup</option>
+                        <option value="schema">Schema Validation</option>
+                    </select>
+                </div>
                 <div class="code-block">
-                    <pre id="parent-code"><code><span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
+                    <pre id="parent-code"><code><span class="comment">/**</span>
+<span class="comment"> * Parent Window Example</span>
+<span class="comment"> * </span>
+<span class="comment"> * Demonstrates embedding an iframe and establishing secure two-way</span>
+<span class="comment"> * communication. Parley-js handles the complexity of postMessage:</span>
+<span class="comment"> * origin validation, response correlation, timeouts, and reconnection.</span>
+<span class="comment"> */</span>
+<span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
 
 <span class="comment">// Create instance with origin validation</span>
 <span class="keyword">const</span> parley = Parley.<span class="function">create</span>({
@@ -798,7 +883,14 @@ console.<span class="function">log</span>(response.greeting); <span class="comme
 
 <span class="comment">// Broadcast to all connected targets</span>
 <span class="keyword">await</span> parley.<span class="function">broadcast</span>(<span class="string">'announcement'</span>, { message: <span class="string">'Update available!'</span> });</code></pre>
-                    <pre id="child-code" style="display: none;"><code><span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
+                    <pre id="child-code" style="display: none;"><code><span class="comment">/**</span>
+<span class="comment"> * Child Iframe Example</span>
+<span class="comment"> * </span>
+<span class="comment"> * Shows the iframe side of parent-child communication. Each context</span>
+<span class="comment"> * runs its own Parley instance. The library provides a clean API for</span>
+<span class="comment"> * responding to requests, handling broadcasts, and sending notifications.</span>
+<span class="comment"> */</span>
+<span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
 
 <span class="comment">// Child iframe creates its own instance</span>
 <span class="keyword">const</span> parley = Parley.<span class="function">create</span>({
@@ -825,7 +917,15 @@ parley.<span class="function">on</span>(<span class="string">'announcement'</spa
     <span class="variable">targetId</span>: <span class="string">'parent'</span>,
     <span class="variable">expectsResponse</span>: <span class="keyword">false</span>
 });</code></pre>
-                    <pre id="popup-code" style="display: none;"><code><span class="comment">// ═══ MAIN WINDOW ═══</span>
+                    <pre id="popup-code" style="display: none;"><code><span class="comment">/**</span>
+<span class="comment"> * Window-to-Popup Example</span>
+<span class="comment"> * </span>
+<span class="comment"> * Pop-up windows are notoriously tricky—they can be blocked, closed,</span>
+<span class="comment"> * or navigated away. Parley-js manages window.opener references,</span>
+<span class="comment"> * detects when popups close, and provides the same clean API as iframes.</span>
+<span class="comment"> */</span>
+
+<span class="comment">// ═══ MAIN WINDOW ═══</span>
 <span class="keyword">const</span> parley = Parley.<span class="function">create</span>({
     <span class="variable">targetType</span>: <span class="string">'window'</span>,
     <span class="variable">allowedOrigins</span>: [window.location.origin],
@@ -855,7 +955,14 @@ parley.<span class="function">on</span>(<span class="string">'get-time'</span>, 
 <span class="keyword">await</span> parley.<span class="function">send</span>(<span class="string">'popup:notification'</span>, { message: <span class="string">'Ready!'</span> }, {
     <span class="variable">targetId</span>: <span class="string">'opener'</span>, <span class="variable">expectsResponse</span>: <span class="keyword">false</span>
 });</code></pre>
-                    <pre id="schema-code" style="display: none;"><code><span class="keyword">import</span> { Parley } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
+                    <pre id="schema-code" style="display: none;"><code><span class="comment">/**</span>
+<span class="comment"> * Schema Validation Example</span>
+<span class="comment"> * </span>
+<span class="comment"> * Cross-window messaging can be a security risk if payloads aren't</span>
+<span class="comment"> * validated. Parley-js supports JSON Schema validation out of the box,</span>
+<span class="comment"> * catching malformed data before your handlers ever see it.</span>
+<span class="comment"> */</span>
+<span class="keyword">import</span> { Parley } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
 
 <span class="keyword">const</span> parley = Parley.<span class="function">create</span>({ <span class="variable">targetType</span>: <span class="string">'iframe'</span> });
 
@@ -973,9 +1080,16 @@ parley.<span class="function">register</span>(<span class="string">'user:create'
         }
 
         function showTab(tab) {
+            // Update desktop tabs
             document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
-            document.querySelector(`[onclick="showTab('${tab}')"]`).classList.add('active');
+            const activeTab = document.querySelector(`[onclick="showTab('${tab}')"]`);
+            if (activeTab) activeTab.classList.add('active');
 
+            // Update mobile dropdown
+            const select = document.querySelector('.code-select');
+            if (select) select.value = tab;
+
+            // Show/hide code blocks
             document.getElementById('parent-code').style.display = tab === 'parent' ? 'block' : 'none';
             document.getElementById('child-code').style.display = tab === 'child' ? 'block' : 'none';
             document.getElementById('popup-code').style.display = tab === 'popup' ? 'block' : 'none';
