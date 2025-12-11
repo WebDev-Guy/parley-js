@@ -1,6 +1,7 @@
 # Window-to-Window Example
 
-A comprehensive example demonstrating communication between two separate browser windows using `window.open()` and `window.opener`.
+A comprehensive example demonstrating communication between two separate browser
+windows using `window.open()` and `window.opener`.
 
 ## Files
 
@@ -23,12 +24,14 @@ npm run build
 npx serve .
 ```
 
-3. Open http://localhost:3000/examples/window-to-window/main.html in your browser.
+3. Open http://localhost:3000/examples/window-to-window/main.html in your
+   browser.
 
 ## What This Example Demonstrates
 
 1. **Window Opening** - Main window opens a popup using `window.open()`
-2. **Bidirectional Connection** - Both windows establish a connection to each other
+2. **Bidirectional Connection** - Both windows establish a connection to each
+   other
 3. **Request/Response** - Send messages and receive responses across windows
 4. **Fire-and-Forget** - Send notifications without expecting a response
 5. **Window State Detection** - Detect when the popup is closed
@@ -37,23 +40,25 @@ npx serve .
 
 ## Key Differences from Iframe Communication
 
-| Aspect | Iframe | Window-to-Window |
-|--------|--------|------------------|
-| Target | `iframe.contentWindow` | `window.open()` result |
-| Parent Reference | `window.parent` | `window.opener` |
-| Target Type | `'iframe'` | `'window'` |
-| Lifecycle | Controlled by parent DOM | Independent window |
-| Visibility | Embedded in parent | Separate window/tab |
+| Aspect           | Iframe                   | Window-to-Window       |
+| ---------------- | ------------------------ | ---------------------- |
+| Target           | `iframe.contentWindow`   | `window.open()` result |
+| Parent Reference | `window.parent`          | `window.opener`        |
+| Target Type      | `'iframe'`               | `'window'`             |
+| Lifecycle        | Controlled by parent DOM | Independent window     |
+| Visibility       | Embedded in parent       | Separate window/tab    |
 
 ## Expected Behavior
 
 ### Main Window:
+
 1. Click "Open Popup" to open the popup window
 2. Connection is automatically established
 3. Use buttons to send messages to the popup
 4. Click "Close Popup" to close the popup window
 
 ### Popup Window:
+
 1. Automatically connects to the opener (main window)
 2. Receives and responds to messages
 3. Can send notifications back to the main window

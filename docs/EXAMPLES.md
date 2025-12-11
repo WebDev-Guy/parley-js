@@ -68,13 +68,17 @@ await parley.connect(window.parent, 'parent');
 
 ```typescript
 // Send notification without waiting for response
-await parley.send('notify', {
-    message: 'Operation completed',
-    level: 'info',
-}, {
-    targetId: 'child',
-    expectsResponse: false,
-});
+await parley.send(
+    'notify',
+    {
+        message: 'Operation completed',
+        level: 'info',
+    },
+    {
+        targetId: 'child',
+        expectsResponse: false,
+    }
+);
 ```
 
 ### Broadcasting
@@ -125,10 +129,14 @@ await parley.broadcast('config-update', {
             });
 
             // Send configuration
-            await parley.send('configure', {
-                theme: 'dark',
-                userId: currentUser.id,
-            }, { targetId: 'widget' });
+            await parley.send(
+                'configure',
+                {
+                    theme: 'dark',
+                    userId: currentUser.id,
+                },
+                { targetId: 'widget' }
+            );
         </script>
     </body>
 </html>
@@ -144,20 +152,27 @@ const parley = Parley.create({
 });
 
 // Handle configuration
-parley.on<{ theme: string; userId: string }>('configure', (payload, respond) => {
-    applyTheme(payload.theme);
-    setUser(payload.userId);
-});
+parley.on<{ theme: string; userId: string }>(
+    'configure',
+    (payload, respond) => {
+        applyTheme(payload.theme);
+        setUser(payload.userId);
+    }
+);
 
 // Connect to parent
 await parley.connect(window.parent, 'parent');
 
 // Notify parent of selection
 function onItemSelect(item: Item) {
-    parley.send('widget:selection', { item }, {
-        targetId: 'parent',
-        expectsResponse: false,
-    });
+    parley.send(
+        'widget:selection',
+        { item },
+        {
+            targetId: 'parent',
+            expectsResponse: false,
+        }
+    );
 }
 ```
 
@@ -232,18 +247,26 @@ await parley.connect(window.opener, 'opener');
 
 // After OAuth completes
 function onOAuthComplete(token: AuthToken) {
-    parley.send('oauth:success', { token }, {
-        targetId: 'opener',
-        expectsResponse: false,
-    });
+    parley.send(
+        'oauth:success',
+        { token },
+        {
+            targetId: 'opener',
+            expectsResponse: false,
+        }
+    );
     window.close();
 }
 
 function onOAuthError(error: string) {
-    parley.send('oauth:error', { error }, {
-        targetId: 'opener',
-        expectsResponse: false,
-    });
+    parley.send(
+        'oauth:error',
+        { error },
+        {
+            targetId: 'opener',
+            expectsResponse: false,
+        }
+    );
     window.close();
 }
 ```
@@ -268,7 +291,9 @@ export function useParley(config: ParleyConfig) {
         parleyRef.current = parley;
 
         parley.onSystem(SYSTEM_EVENTS.CONNECTED, () => setIsConnected(true));
-        parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, () => setIsConnected(false));
+        parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, () =>
+            setIsConnected(false)
+        );
 
         return () => {
             parley.destroy();
@@ -465,11 +490,9 @@ parley.on('get-session', (payload, respond) => {
 // Widget: Request session from parent
 await parley.connect(window.parent, 'parent');
 
-const session = await parley.send<void, SessionData>(
-    'get-session',
-    undefined,
-    { targetId: 'parent' }
-);
+const session = await parley.send<void, SessionData>('get-session', undefined, {
+    targetId: 'parent',
+});
 authService.setSession(session);
 ```
 
@@ -517,11 +540,9 @@ parley.on('state:get', (payload, respond) => {
 await parley.connect(window.parent, 'parent');
 
 // Get initial state
-const initialState = await parley.send<void, AppState>(
-    'state:get',
-    undefined,
-    { targetId: 'parent' }
-);
+const initialState = await parley.send<void, AppState>('state:get', undefined, {
+    targetId: 'parent',
+});
 localStore.setState(initialState);
 
 // Listen for updates
@@ -534,7 +555,8 @@ parley.on<AppState>('state:update', (state, respond) => {
 
 ## Connection Lifecycle Management
 
-Parley provides robust connection lifecycle management with automatic heartbeat monitoring and graceful disconnect handling.
+Parley provides robust connection lifecycle management with automatic heartbeat
+monitoring and graceful disconnect handling.
 
 ### Basic Lifecycle Monitoring
 
@@ -547,9 +569,9 @@ const parley = Parley.create({
     allowedOrigins: ['https://child.example.com'],
     heartbeat: {
         enabled: true,
-        interval: 5000,    // Check every 5 seconds
-        timeout: 2000,     // Wait 2 seconds for response
-        maxMissed: 3,      // Allow 3 missed heartbeats
+        interval: 5000, // Check every 5 seconds
+        timeout: 2000, // Wait 2 seconds for response
+        maxMissed: 3, // Allow 3 missed heartbeats
     },
 });
 
@@ -561,7 +583,9 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
 
 // Connection state changed
 parley.onSystem(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, (event) => {
-    console.log(`${event.targetId}: ${event.previousState} → ${event.currentState}`);
+    console.log(
+        `${event.targetId}: ${event.previousState} → ${event.currentState}`
+    );
     if (event.reason) {
         console.log(`Reason: ${event.reason}`);
     }
@@ -569,7 +593,9 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, (event) => {
 
 // Heartbeat missed - early warning
 parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
-    console.warn(`Heartbeat missed from ${event.targetId} (${event.consecutiveMissed} missed)`);
+    console.warn(
+        `Heartbeat missed from ${event.targetId} (${event.consecutiveMissed} missed)`
+    );
     showWarning('Connection unstable');
 });
 
@@ -617,12 +643,12 @@ const parley = Parley.create({
 // Monitor connection lifecycle
 parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
     console.log(`Lost connection to ${event.targetId}: ${event.reason}`);
-    
+
     if (event.reason === 'heartbeat_timeout') {
         // Parent became unresponsive
         showMessage('Lost contact with parent window');
     }
-    
+
     // Clean up local state
     handleDisconnection();
 });
@@ -633,7 +659,12 @@ await parley.connect(window.parent, 'parent');
 ### Reconnection Logic
 
 ```typescript
-import { Parley, SYSTEM_EVENTS, ConnectionError, type ParleyConfig } from 'parley-js';
+import {
+    Parley,
+    SYSTEM_EVENTS,
+    ConnectionError,
+    type ParleyConfig,
+} from 'parley-js';
 
 class ReconnectingParley {
     private parley: Parley;
@@ -660,9 +691,12 @@ class ReconnectingParley {
     private async attemptReconnect(targetId: string) {
         while (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
-            const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-            
-            console.log(`Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
+            const delay =
+                this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+
+            console.log(
+                `Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`
+            );
             await this.sleep(delay);
 
             try {
@@ -694,7 +728,7 @@ class ReconnectingParley {
     }
 
     private sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 }
 ```
@@ -750,14 +784,16 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
 function updateDashboard() {
     const container = document.getElementById('connection-dashboard');
     container.innerHTML = Array.from(connections.values())
-        .map(h => `
+        .map(
+            (h) => `
             <div class="connection ${h.state}">
                 <strong>${h.targetId}</strong>
                 <span>State: ${h.state}</span>
                 <span>Missed: ${h.missedHeartbeats}</span>
                 <span>Connected: ${h.connectionTime.toLocaleTimeString()}</span>
             </div>
-        `)
+        `
+        )
         .join('');
 }
 ```
@@ -770,7 +806,7 @@ For environments where heartbeat is not needed:
 const parley = Parley.create({
     allowedOrigins: ['https://trusted.example.com'],
     heartbeat: {
-        enabled: false,  // Disable heartbeat monitoring
+        enabled: false, // Disable heartbeat monitoring
     },
 });
 ```

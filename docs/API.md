@@ -112,10 +112,10 @@ parley.on('validated', (payload, respond) => {
 
 **Parameters:**
 
-| Parameter | Type                   | Required | Description             |
-| --------- | ---------------------- | -------- | ----------------------- |
-| `type`    | `string`               | Yes      | Message type identifier |
-| `handler` | `MessageHandler<T>`    | Yes      | Handler function        |
+| Parameter | Type                | Required | Description             |
+| --------- | ------------------- | -------- | ----------------------- |
+| `type`    | `string`            | Yes      | Message type identifier |
+| `handler` | `MessageHandler<T>` | Yes      | Handler function        |
 
 **Returns:** Unsubscribe function
 
@@ -153,28 +153,32 @@ const response = await parley.send('slow-operation', data, {
 });
 
 // Fire-and-forget
-await parley.send('notification', { message: 'Hello' }, {
-    targetId: 'child',
-    expectsResponse: false,
-});
+await parley.send(
+    'notification',
+    { message: 'Hello' },
+    {
+        targetId: 'child',
+        expectsResponse: false,
+    }
+);
 ```
 
 **Parameters:**
 
-| Parameter | Type          | Required | Description       |
-| --------- | ------------- | -------- | ----------------- |
-| `type`    | `string`      | Yes      | Message type      |
-| `payload` | `T`           | Yes      | Message payload   |
-| `options` | `SendOptions` | No       | Send options      |
+| Parameter | Type          | Required | Description     |
+| --------- | ------------- | -------- | --------------- |
+| `type`    | `string`      | Yes      | Message type    |
+| `payload` | `T`           | Yes      | Message payload |
+| `options` | `SendOptions` | No       | Send options    |
 
 **SendOptions:**
 
-| Property          | Type      | Default | Description                    |
-| ----------------- | --------- | ------- | ------------------------------ |
-| `targetId`        | `string`  | -       | Target to send to              |
-| `timeout`         | `number`  | 5000    | Timeout in milliseconds        |
-| `retries`         | `number`  | 0       | Number of retry attempts       |
-| `expectsResponse` | `boolean` | true    | Whether to wait for response   |
+| Property          | Type      | Default | Description                  |
+| ----------------- | --------- | ------- | ---------------------------- |
+| `targetId`        | `string`  | -       | Target to send to            |
+| `timeout`         | `number`  | 5000    | Timeout in milliseconds      |
+| `retries`         | `number`  | 0       | Number of retry attempts     |
+| `expectsResponse` | `boolean` | true    | Whether to wait for response |
 
 **Returns:** `Promise<R>` - Response from target
 
@@ -254,7 +258,8 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
 
 ### SYSTEM_EVENTS Constants
 
-The `SYSTEM_EVENTS` object provides type-safe constants for all system event names:
+The `SYSTEM_EVENTS` object provides type-safe constants for all system event
+names:
 
 ```typescript
 import { SYSTEM_EVENTS } from 'parley-js';
@@ -263,43 +268,43 @@ import { SYSTEM_EVENTS } from 'parley-js';
 const { SYSTEM_EVENTS } = Parley;
 ```
 
-| Constant | Value | Description |
-| -------- | ----- | ----------- |
-| `SYSTEM_EVENTS.CONNECTED` | `'system:connected'` | Target connection established |
-| `SYSTEM_EVENTS.DISCONNECTED` | `'system:disconnected'` | Target disconnected gracefully |
-| `SYSTEM_EVENTS.CONNECTION_LOST` | `'system:connection_lost'` | Connection lost (heartbeat failure) |
-| `SYSTEM_EVENTS.CONNECTION_STATE_CHANGED` | `'system:connection_state_changed'` | Connection state transition |
-| `SYSTEM_EVENTS.HEARTBEAT_MISSED` | `'system:heartbeat_missed'` | Heartbeat response not received |
-| `SYSTEM_EVENTS.ERROR` | `'system:error'` | General error occurred |
-| `SYSTEM_EVENTS.TIMEOUT` | `'system:timeout'` | Message timed out |
-| `SYSTEM_EVENTS.MESSAGE_SENT` | `'system:message_sent'` | Message sent (analytics) |
-| `SYSTEM_EVENTS.MESSAGE_RECEIVED` | `'system:message_received'` | Message received (analytics) |
-| `SYSTEM_EVENTS.RESPONSE_SENT` | `'system:response_sent'` | Response sent (analytics) |
-| `SYSTEM_EVENTS.RESPONSE_RECEIVED` | `'system:response_received'` | Response received (analytics) |
-| `SYSTEM_EVENTS.HANDSHAKE_START` | `'system:handshake_start'` | Handshake initiated |
-| `SYSTEM_EVENTS.HANDSHAKE_COMPLETE` | `'system:handshake_complete'` | Handshake successful |
-| `SYSTEM_EVENTS.HANDSHAKE_FAILED` | `'system:handshake_failed'` | Handshake failed |
+| Constant                                 | Value                               | Description                         |
+| ---------------------------------------- | ----------------------------------- | ----------------------------------- |
+| `SYSTEM_EVENTS.CONNECTED`                | `'system:connected'`                | Target connection established       |
+| `SYSTEM_EVENTS.DISCONNECTED`             | `'system:disconnected'`             | Target disconnected gracefully      |
+| `SYSTEM_EVENTS.CONNECTION_LOST`          | `'system:connection_lost'`          | Connection lost (heartbeat failure) |
+| `SYSTEM_EVENTS.CONNECTION_STATE_CHANGED` | `'system:connection_state_changed'` | Connection state transition         |
+| `SYSTEM_EVENTS.HEARTBEAT_MISSED`         | `'system:heartbeat_missed'`         | Heartbeat response not received     |
+| `SYSTEM_EVENTS.ERROR`                    | `'system:error'`                    | General error occurred              |
+| `SYSTEM_EVENTS.TIMEOUT`                  | `'system:timeout'`                  | Message timed out                   |
+| `SYSTEM_EVENTS.MESSAGE_SENT`             | `'system:message_sent'`             | Message sent (analytics)            |
+| `SYSTEM_EVENTS.MESSAGE_RECEIVED`         | `'system:message_received'`         | Message received (analytics)        |
+| `SYSTEM_EVENTS.RESPONSE_SENT`            | `'system:response_sent'`            | Response sent (analytics)           |
+| `SYSTEM_EVENTS.RESPONSE_RECEIVED`        | `'system:response_received'`        | Response received (analytics)       |
+| `SYSTEM_EVENTS.HANDSHAKE_START`          | `'system:handshake_start'`          | Handshake initiated                 |
+| `SYSTEM_EVENTS.HANDSHAKE_COMPLETE`       | `'system:handshake_complete'`       | Handshake successful                |
+| `SYSTEM_EVENTS.HANDSHAKE_FAILED`         | `'system:handshake_failed'`         | Handshake failed                    |
 
 ### System Event Payloads
 
 Each system event includes a typed payload:
 
-| Event | Payload Properties |
-| ----- | ------------------ |
-| `CONNECTED` | `{ targetId, targetType, origin, timestamp }` |
-| `DISCONNECTED` | `{ targetId, reason, timestamp }` |
-| `CONNECTION_LOST` | `{ targetId, reason, timestamp }` |
-| `CONNECTION_STATE_CHANGED` | `{ targetId, previousState, currentState, reason?, timestamp }` |
-| `HEARTBEAT_MISSED` | `{ targetId, consecutiveMissed, timestamp }` |
-| `ERROR` | `{ code, message, targetId?, messageId?, details?, timestamp }` |
-| `TIMEOUT` | `{ messageId, messageType, targetId?, timeoutMs, retriesAttempted, timestamp }` |
-| `MESSAGE_SENT` | `{ messageId, messageType, targetId?, expectsResponse, timestamp }` |
-| `MESSAGE_RECEIVED` | `{ messageId, messageType, origin, timestamp }` |
-| `RESPONSE_SENT` | `{ responseId, requestId, success, timestamp }` |
-| `RESPONSE_RECEIVED` | `{ responseId, requestId, success, duration, timestamp }` |
-| `HANDSHAKE_START` | `{ targetId, targetType, timestamp }` |
-| `HANDSHAKE_COMPLETE` | `{ targetId, targetType, timestamp }` |
-| `HANDSHAKE_FAILED` | `{ targetId, targetType, timestamp, error: { code, message } }` |
+| Event                      | Payload Properties                                                              |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `CONNECTED`                | `{ targetId, targetType, origin, timestamp }`                                   |
+| `DISCONNECTED`             | `{ targetId, reason, timestamp }`                                               |
+| `CONNECTION_LOST`          | `{ targetId, reason, timestamp }`                                               |
+| `CONNECTION_STATE_CHANGED` | `{ targetId, previousState, currentState, reason?, timestamp }`                 |
+| `HEARTBEAT_MISSED`         | `{ targetId, consecutiveMissed, timestamp }`                                    |
+| `ERROR`                    | `{ code, message, targetId?, messageId?, details?, timestamp }`                 |
+| `TIMEOUT`                  | `{ messageId, messageType, targetId?, timeoutMs, retriesAttempted, timestamp }` |
+| `MESSAGE_SENT`             | `{ messageId, messageType, targetId?, expectsResponse, timestamp }`             |
+| `MESSAGE_RECEIVED`         | `{ messageId, messageType, origin, timestamp }`                                 |
+| `RESPONSE_SENT`            | `{ responseId, requestId, success, timestamp }`                                 |
+| `RESPONSE_RECEIVED`        | `{ responseId, requestId, success, duration, timestamp }`                       |
+| `HANDSHAKE_START`          | `{ targetId, targetType, timestamp }`                                           |
+| `HANDSHAKE_COMPLETE`       | `{ targetId, targetType, timestamp }`                                           |
+| `HANDSHAKE_FAILED`         | `{ targetId, targetType, timestamp, error: { code, message } }`                 |
 
 ---
 
@@ -339,6 +344,7 @@ await parley.connect(window.opener, 'opener');
 Disconnect from a specific target with graceful handshake.
 
 The disconnect process follows a two-phase handshake:
+
 1. Send disconnect notification to the target
 2. Wait for acknowledgment or timeout (1 second)
 3. Clean up local resources
@@ -366,9 +372,9 @@ parley.onSystem('system:connection_lost', (event) => {
 
 **Parameters:**
 
-| Parameter  | Type     | Required | Description                |
-| ---------- | -------- | -------- | -------------------------- |
-| `targetId` | `string` | Yes      | Target to disconnect from  |
+| Parameter  | Type     | Required | Description               |
+| ---------- | -------- | -------- | ------------------------- |
+| `targetId` | `string` | Yes      | Target to disconnect from |
 
 **Throws:** May throw if target doesn't exist, but always completes cleanup
 
@@ -421,7 +427,8 @@ if (!parley.isDestroyed) {
 
 ## Connection Lifecycle
 
-Parley-js provides robust connection lifecycle management with automatic health monitoring.
+Parley-js provides robust connection lifecycle management with automatic health
+monitoring.
 
 ### Connection States
 
@@ -429,8 +436,8 @@ Connections progress through defined states:
 
 ```typescript
 enum ConnectionState {
-    CONNECTING = 'connecting',     // Handshake in progress
-    CONNECTED = 'connected',       // Connection active and healthy
+    CONNECTING = 'connecting', // Handshake in progress
+    CONNECTED = 'connected', // Connection active and healthy
     DISCONNECTING = 'disconnecting', // Disconnect handshake in progress
     DISCONNECTED = 'disconnected', // Connection terminated
 }
@@ -451,9 +458,9 @@ const parley = Parley.create({
     allowedOrigins: ['https://child.example.com'],
     heartbeat: {
         enabled: true,
-        interval: 5000,    // Check every 5 seconds
-        timeout: 2000,     // Wait 2 seconds for response
-        maxMissed: 3,      // 3 misses = disconnect
+        interval: 5000, // Check every 5 seconds
+        timeout: 2000, // Wait 2 seconds for response
+        maxMissed: 3, // 3 misses = disconnect
     },
 });
 
@@ -489,13 +496,13 @@ parley.onSystem('system:connection_lost', (event) => {
 
 Connections can be lost due to:
 
-| Reason                 | Description                                    |
-| ---------------------- | ---------------------------------------------- |
-| `remote_disconnect`    | Other side called `disconnect()`               |
-| `heartbeat_failure`    | Too many missed heartbeats                     |
-| `send_failure`         | Too many consecutive send failures             |
-| `local_disconnect`     | Local side initiated disconnect                |
-| `destroyed`            | Parley instance was destroyed                  |
+| Reason              | Description                        |
+| ------------------- | ---------------------------------- |
+| `remote_disconnect` | Other side called `disconnect()`   |
+| `heartbeat_failure` | Too many missed heartbeats         |
+| `send_failure`      | Too many consecutive send failures |
+| `local_disconnect`  | Local side initiated disconnect    |
+| `destroyed`         | Parley instance was destroyed      |
 
 ### State Change Events
 
@@ -526,7 +533,9 @@ parley.onSystem('target:connected', (event) => {
 
 // State transitions
 parley.onSystem('system:connection_state_changed', (event) => {
-    console.log(`${event.targetId}: ${event.previousState} → ${event.newState}`);
+    console.log(
+        `${event.targetId}: ${event.previousState} → ${event.newState}`
+    );
 });
 
 // Heartbeat health
@@ -613,13 +622,13 @@ interface HeartbeatConfig {
 
 **Default Values:**
 
-| Property      | Default | Description                                  |
-| ------------- | ------- | -------------------------------------------- |
-| `enabled`     | `true`  | Heartbeat monitoring enabled by default      |
-| `interval`    | `5000`  | Send heartbeat every 5 seconds               |
-| `timeout`     | `2000`  | Wait 2 seconds for heartbeat response        |
-| `maxMissed`   | `3`     | Allow 3 missed heartbeats before disconnect  |
-| `maxFailures` | `3`     | Allow 3 send failures before disconnect      |
+| Property      | Default | Description                                 |
+| ------------- | ------- | ------------------------------------------- |
+| `enabled`     | `true`  | Heartbeat monitoring enabled by default     |
+| `interval`    | `5000`  | Send heartbeat every 5 seconds              |
+| `timeout`     | `2000`  | Wait 2 seconds for heartbeat response       |
+| `maxMissed`   | `3`     | Allow 3 missed heartbeats before disconnect |
+| `maxFailures` | `3`     | Allow 3 send failures before disconnect     |
 
 **Example:**
 
@@ -628,9 +637,9 @@ const parley = Parley.create({
     allowedOrigins: ['https://child.example.com'],
     heartbeat: {
         enabled: true,
-        interval: 5000,  // Check every 5 seconds
-        timeout: 2000,   // Wait 2 seconds for response
-        maxMissed: 3,    // Allow 3 misses = 15s total tolerance
+        interval: 5000, // Check every 5 seconds
+        timeout: 2000, // Wait 2 seconds for response
+        maxMissed: 3, // Allow 3 misses = 15s total tolerance
     },
 });
 ```
@@ -822,7 +831,7 @@ catch (error) {
     if (error instanceof ConnectionError) {
         console.log('Connection failed:', error.message);
         console.log('Code:', error.code);
-        // Possible codes: 'CONNECTION_FAILED', 'CONNECTION_LOST', 
+        // Possible codes: 'CONNECTION_FAILED', 'CONNECTION_LOST',
         //                 'NOT_CONNECTED', 'HEARTBEAT_TIMEOUT'
     }
 }

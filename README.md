@@ -20,8 +20,8 @@
 
 ## Features
 
-- **Security-First Design** - Origin validation, message integrity,
-  configurable security policies
+- **Security-First Design** - Origin validation, message integrity, configurable
+  security policies
 - **Zero Runtime Dependencies** - Lightweight and minimal footprint
 - **Type-Safe** - Full TypeScript support with strict typing and generics
 - **Request/Response Pattern** - Built-in timeout handling, retries, and
@@ -29,8 +29,7 @@
 - **Analytics Ready** - Hooks for monitoring, debugging, and performance
   tracking
 - **Framework Agnostic** - Works with React, Vue, Angular, or vanilla JS
-- **Schema Validation** - Optional JSON Schema validation for message
-  payloads
+- **Schema Validation** - Optional JSON Schema validation for message payloads
 - **Multiple Targets** - Communicate with iframes, popups, and other windows
 
 ## Installation
@@ -120,7 +119,8 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
 
 ### Message Types
 
-Register message handlers with `on()`, optionally with schema validation via `register()`:
+Register message handlers with `on()`, optionally with schema validation via
+`register()`:
 
 ```typescript
 // Simple handler using on()
@@ -165,10 +165,14 @@ await parley.connect(window.parent, 'parent-id');
 
 ```typescript
 // Fire-and-forget (no response expected)
-await parley.send('notification', { message: 'Hello!' }, {
-    targetId: 'child',
-    expectsResponse: false,
-});
+await parley.send(
+    'notification',
+    { message: 'Hello!' },
+    {
+        targetId: 'child',
+        expectsResponse: false,
+    }
+);
 
 // Request/Response (default)
 const response = await parley.send<RequestType, ResponseType>(
