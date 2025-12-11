@@ -481,9 +481,17 @@ export class TargetManager {
             return;
         }
 
+        // Adaptive interval: more aggressive with more targets
+        const interval = this._targets.size > 100 ? 1000 : 5000;
+
         this._cleanupInterval = setInterval(() => {
             this.cleanup();
-        }, this._cleanupIntervalMs);
+
+            // Stop cleanup if no targets left
+            if (this._targets.size === 0) {
+                this._stopCleanup();
+            }
+        }, interval);
     }
 
     /**

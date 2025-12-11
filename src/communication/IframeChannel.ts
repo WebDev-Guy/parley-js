@@ -70,6 +70,12 @@ export class IframeChannel extends BaseChannel {
     private _handshakeTimeout: ReturnType<typeof setTimeout> | null = null;
 
     /**
+     * Memoized connection promise to prevent race conditions
+     * If connect() is called multiple times, all calls return the same promise
+     */
+    private _connectPromise: Promise<void> | null = null;
+
+    /**
      * Creates a new IframeChannel instance
      *
      * @param options - Channel configuration options
@@ -92,6 +98,31 @@ export class IframeChannel extends BaseChannel {
      * @throws ConnectionError if connection fails
      */
     public async connect(target: HTMLIFrameElement | Window): Promise<void> {
+        // Race condition prevention: if already connecting, return the existing promise
+        // This ensures that multiple rapid connect() calls all wait for the same connection
+        if (this._connectPromise) {
+            return this._connectPromise;
+        }
+
+        // Create and memoize the connection promise
+        this._connectPromise = this._doConnect(target);
+
+        try {
+            await this._connectPromise;
+        } finally {
+            // Clear the memoized promise when complete (success or failure)
+            this._connectPromise = null;
+        }
+    }
+
+    /**
+     * Internal connection logic (separated from public connect for memoization)
+     *
+     * @param target - Iframe element or parent window
+     * @returns Promise that resolves when connected
+     * @throws ConnectionError if connection fails
+     */
+    private async _doConnect(target: HTMLIFrameElement | Window): Promise<void> {
         if (this._state === 'connected') {
             this._logger.warn('Already connected');
             return;
@@ -240,28 +271,58 @@ export class IframeChannel extends BaseChannel {
             await this._waitForIframeLoad(iframe);
         }
 
-        // Determine target origin
+        // Determine target origin - Security: Must be explicitly determined, never use wildcard
+        // See: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_considerations
+        let origin: string | null = null;
+
         try {
             // Try to get origin from same-origin iframe
             if (iframe.contentWindow?.location?.origin) {
-                this._targetOrigin = iframe.contentWindow.location.origin;
+                origin = iframe.contentWindow.location.origin;
             }
         } catch {
-            // Cross-origin iframe - use origin from src attribute
-            const src = iframe.src;
-            if (src) {
-                try {
-                    const url = new URL(src);
-                    this._targetOrigin = url.origin;
-                } catch {
-                    throw new ConnectionError(
-                        'Cannot determine iframe origin',
-                        undefined,
-                        CONNECTION_ERRORS.FAILED
-                    );
-                }
-            }
+            // Cross-origin - cannot directly access location
+            // For security, we must require an explicit origin in allowedOrigins config
+            // We do NOT trust the src attribute to determine origin
         }
+
+        if (!origin) {
+            // Cross-origin iframe: require explicit origin configuration
+            // This prevents attacks where the src attribute is dynamically changed
+            if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
+                throw new ConnectionError(
+                    'Cannot establish cross-origin iframe connection: no allowedOrigins configured. ' +
+                    'For cross-origin iframes, you must explicitly configure the allowed origin(s). ' +
+                    'This prevents attacks where a dynamically-changed src attribute could expose your iframe to untrusted origins.',
+                    undefined,
+                    CONNECTION_ERRORS.FAILED
+                );
+            }
+
+            // Security: Use only the first configured origin for cross-origin iframes
+            // This ensures we have exactly one, explicitly-configured, known-safe origin
+            origin = this._options.allowedOrigins[0];
+
+            // Validate the configured origin against allowedOrigins to ensure consistency
+            // (redundant check, but provides defense-in-depth)
+            if (!this._isAllowedOrigin(origin)) {
+                throw new ConnectionError(
+                    'Invalid iframe connection: configured origin failed validation. ' +
+                    'This should not happen - please check your allowedOrigins configuration.',
+                    undefined,
+                    CONNECTION_ERRORS.FAILED
+                );
+            }
+
+            // Log warning about cross-origin connection for security audit
+            this._logger.warn(
+                'Cross-origin iframe connection: using pre-configured origin, not src attribute. ' +
+                'This is a security feature to prevent origin injection attacks.',
+                { origin }
+            );
+        }
+
+        this._targetOrigin = origin;
 
         // Initiate handshake
         await this._initiateHandshake();
@@ -275,7 +336,18 @@ export class IframeChannel extends BaseChannel {
     private async _connectAsChild(parent: Window): Promise<void> {
         this._isParent = false;
         this._parentWindow = parent;
-        this._targetOrigin = this._options.allowedOrigins[0] ?? '*';
+
+        // Security: Use explicit allowed origin, never use wildcard
+        // See: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_considerations
+        if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
+            throw new ConnectionError(
+                'Cannot establish child iframe connection: no allowedOrigins configured. ' +
+                'At least one explicit origin must be specified in allowedOrigins array.',
+                undefined,
+                CONNECTION_ERRORS.FAILED
+            );
+        }
+        this._targetOrigin = this._options.allowedOrigins[0];
 
         // Send handshake init to parent
         const initMessage = createMessage({
@@ -404,5 +476,6 @@ export class IframeChannel extends BaseChannel {
         this._iframe = null;
         this._parentWindow = null;
         this._targetOrigin = '';
+        this._connectPromise = null;
     }
 }

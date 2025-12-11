@@ -9,6 +9,8 @@
 
 import { EventEmitter } from '../events/EventEmitter';
 import { Logger } from '../utils/Logger';
+import { ConnectionError } from '../errors/ErrorTypes';
+import { CONNECTION_ERRORS } from '../errors/ErrorCodes';
 import type { MessageProtocol, ResponseProtocol } from '../core/MessageProtocol';
 import type { ChannelState, ChannelOptions } from '../types/ChannelTypes';
 
@@ -116,16 +118,39 @@ export abstract class BaseChannel {
             return;
         }
 
-        // Handle 'null' origin (file:// protocol) by using '*'
-        // This is necessary because postMessage does not accept 'null' as a target origin
-        const effectiveOrigin = targetOrigin === 'null' ? '*' : targetOrigin;
+        // Security: Never use '*' as targetOrigin - always require explicit origin validation
+        // The file:// protocol results in 'null' origin which is not supported in production.
+        // See: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_considerations
+        if (targetOrigin === 'null') {
+            this._logger.error(
+                'Cannot send message: origin is null (file:// protocol). ' +
+                'file:// protocol is not supported. Use a proper http/https server in production.'
+            );
+            throw new ConnectionError(
+                'Cannot send message without explicit target origin. The file:// protocol is not supported. ' +
+                'Please use a proper http/https server for production use.',
+                undefined,
+                CONNECTION_ERRORS.FAILED
+            );
+        }
+
+        // Validate that the origin is not a wildcard
+        if (targetOrigin === '*') {
+            this._logger.error('Cannot send message: targetOrigin cannot be a wildcard');
+            throw new ConnectionError(
+                'Target origin must be explicitly specified, not a wildcard. ' +
+                'Wildcard origins are a security risk and violate postMessage safety guidelines.',
+                undefined,
+                CONNECTION_ERRORS.FAILED
+            );
+        }
 
         try {
-            targetWindow.postMessage(message, effectiveOrigin);
+            targetWindow.postMessage(message, targetOrigin);
             this._logger.debug('Message sent', {
                 type: '_type' in message ? message._type : 'response',
                 id: message._id,
-                targetOrigin: effectiveOrigin,
+                targetOrigin: targetOrigin,
             });
         } catch (error) {
             this._logger.error('Failed to send message', error);

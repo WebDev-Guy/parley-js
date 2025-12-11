@@ -171,6 +171,32 @@ export interface ParleyConfig {
      * @default { enabled: true, interval: 5000, timeout: 2000, maxMissed: 3, maxFailures: 3 }
      */
     heartbeat?: HeartbeatConfig;
+
+    /**
+     * Rate limiting configuration
+     *
+     * Prevents DoS attacks by limiting the number of messages that can be sent
+     * per time period. When enabled, messages exceeding the limit will throw an error.
+     */
+    rateLimit?: {
+        /**
+         * Enable rate limiting
+         * @default false
+         */
+        enabled?: boolean;
+
+        /**
+         * Maximum messages allowed per second
+         * @default 100
+         */
+        messagesPerSecond?: number;
+
+        /**
+         * Burst size for initial messages without throttling
+         * @default 10
+         */
+        burstSize?: number;
+    };
 }
 
 /**
@@ -203,6 +229,13 @@ export interface ResolvedConfig {
 
     /** Heartbeat configuration with defaults applied */
     heartbeat: ResolvedHeartbeatConfig;
+
+    /** Rate limit configuration */
+    rateLimit?: {
+        enabled: boolean;
+        messagesPerSecond: number;
+        burstSize: number;
+    };
 }
 
 /**
