@@ -7,7 +7,7 @@
 <a href="https://www.typescriptlang.org/" target="_blank">![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)</a>
 <a href="https://opensource.org/licenses/MIT" target="_blank">![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)</a>
 <a href="https://prettier.io/" target="_blank">![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)</a>
-<a href="https://bundlephobia.com/package/parley-js" target="_blank">![Bundle Size](https://img.shields.io/badge/Bundle-~40KB-green)</a>
+<a href="https://bundlephobia.com/package/parley-js" target="_blank">![Bundle Size](https://img.shields.io/badge/Bundle-~54KB-green)</a>
 <a href="https://www.npmjs.com/package/parley-js" target="_blank">![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-success)</a>
 
 **Type-safe, robust framework for window, tab, and iframe communication**

@@ -25,7 +25,7 @@ and this project adheres to
 - Analytics hooks for monitoring
 - TypeScript support with full type definitions
 - Zero runtime dependencies
-- ~40KB bundle size (minified)
+- ~54KB bundle size (minified)
 
 ### Features
 
