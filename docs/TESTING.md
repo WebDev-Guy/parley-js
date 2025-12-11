@@ -1,21 +1,24 @@
 # Testing Guide
 
-This document provides comprehensive guidance for running, writing, and
-reviewing tests for parley-js. The test suite is built using Vitest with
-happy-dom as the DOM environment.
+Parley-js maintains **85%+ test coverage** with comprehensive unit, integration,
+and security tests using
+<a href="https://vitest.dev/" target="_blank">Vitest</a>.
 
 ## Table of Contents
 
 1. [Quick Start](#quick-start)
 2. [Test Commands](#test-commands)
-3. [Project Structure](#project-structure)
-4. [Writing Tests](#writing-tests)
-5. [Test Utilities](#test-utilities)
-6. [Test Fixtures](#test-fixtures)
-7. [Coverage Requirements](#coverage-requirements)
-8. [Best Practices](#best-practices)
-9. [Debugging Tests](#debugging-tests)
-10. [Common Patterns](#common-patterns)
+3. [Test Structure](#test-structure)
+4. [Test Categories](#test-categories)
+5. [Coverage Requirements](#coverage-requirements)
+6. [Writing Tests](#writing-tests)
+7. [Test Utilities](#test-utilities)
+8. [Test Fixtures](#test-fixtures)
+9. [Best Practices](#best-practices)
+10. [Debugging Tests](#debugging-tests)
+11. [Common Patterns](#common-patterns)
+12. [Continuous Integration](#continuous-integration)
+13. [Contributing](#contributing)
 
 ---
 
@@ -25,20 +28,18 @@ Install dependencies and run all tests:
 
 ```bash
 npm install
-npm run test:run
+npm test
 ```
 
-For interactive development with watch mode:
+For coverage reports:
 
 ```bash
-npm test
+npm run test:coverage
 ```
 
 ---
 
 ## Test Commands
-
-The following npm scripts are available for testing:
 
 | Command                 | Description                       |
 | ----------------------- | --------------------------------- |
@@ -47,7 +48,6 @@ The following npm scripts are available for testing:
 | `npm run test:watch`    | Run tests in watch mode           |
 | `npm run test:coverage` | Run tests with coverage report    |
 | `npm run test:ui`       | Open Vitest UI in browser         |
-| `npm run test:debug`    | Run tests with debugger attached  |
 
 ### Running Specific Tests
 
@@ -71,23 +71,40 @@ npx vitest run --reporter=verbose
 
 ---
 
-## Project Structure
+## Test Structure
+
+### Directory Organization
 
 ```
 tests/
-├── fixtures/           # Shared test data and message definitions
-│   └── test-messages.ts
-├── unit/               # Unit tests for each module
+├── unit/                    # Unit tests (isolated component testing)
 │   ├── BaseChannel.test.ts
 │   ├── EventEmitter.test.ts
-│   ├── HeartbeatManager.test.ts
-│   ├── MessageRegistry.test.ts
-│   ├── OriginValidator.test.ts
-│   ├── Parley.test.ts
-│   ├── SchemaValidator.test.ts
-│   ├── SecurityLayer.test.ts
-│   └── TargetManager.test.ts
-└── utils/              # Test helper functions and mock factories
+│   ├── Helpers.test.ts
+│   ├── IframeChannel.test.ts
+│   ├── Logger.test.ts
+│   ├── MessageProtocol.test.ts
+│   └── WindowChannel.test.ts
+├── integration/             # Integration tests (end-to-end flows)
+│   ├── broadcast.test.ts
+│   ├── error-recovery.test.ts
+│   ├── full-lifecycle.test.ts
+│   ├── heartbeat-monitoring.test.ts
+│   ├── iframe-communication.test.ts
+│   ├── schema-validation.test.ts
+│   └── window-communication.test.ts
+├── security/                # Security tests (attack prevention)
+│   ├── error-info-disclosure.test.ts
+│   ├── listener-limits.test.ts
+│   ├── message-validation.test.ts
+│   ├── origin-validation.test.ts
+│   ├── payload-sanitization.test.ts
+│   ├── payload-size-limits.test.ts
+│   ├── postmessage-security.test.ts
+│   └── schema-validation-dos.test.ts
+├── fixtures/                # Test data and helpers
+│   └── test-messages.ts
+└── utils/                   # Test utilities
     ├── mock-factory.ts
     └── test-helpers.ts
 ```
@@ -96,17 +113,171 @@ tests/
 
 Each source file has a corresponding test file:
 
-| Source File                         | Test File                             |
-| ----------------------------------- | ------------------------------------- |
-| `src/core/Parley.ts`                | `tests/unit/Parley.test.ts`           |
-| `src/events/EventEmitter.ts`        | `tests/unit/EventEmitter.test.ts`     |
-| `src/core/HeartbeatManager.ts`      | `tests/unit/HeartbeatManager.test.ts` |
-| `src/core/MessageRegistry.ts`       | `tests/unit/MessageRegistry.test.ts`  |
-| `src/core/TargetManager.ts`         | `tests/unit/TargetManager.test.ts`    |
-| `src/security/OriginValidator.ts`   | `tests/unit/OriginValidator.test.ts`  |
-| `src/security/SecurityLayer.ts`     | `tests/unit/SecurityLayer.test.ts`    |
-| `src/validation/SchemaValidator.ts` | `tests/unit/SchemaValidator.test.ts`  |
-| `src/communication/BaseChannel.ts`  | `tests/unit/BaseChannel.test.ts`      |
+| Source File                          | Test File                             |
+| ------------------------------------ | ------------------------------------- |
+| `src/core/Parley.ts`                 | `tests/unit/Parley.test.ts`           |
+| `src/events/EventEmitter.ts`         | `tests/unit/EventEmitter.test.ts`     |
+| `src/core/HeartbeatManager.ts`       | `tests/unit/HeartbeatManager.test.ts` |
+| `src/core/MessageRegistry.ts`        | `tests/unit/MessageRegistry.test.ts`  |
+| `src/core/TargetManager.ts`          | `tests/unit/TargetManager.test.ts`    |
+| `src/security/OriginValidator.ts`    | `tests/unit/OriginValidator.test.ts`  |
+| `src/security/SecurityLayer.ts`      | `tests/unit/SecurityLayer.test.ts`    |
+| `src/validation/SchemaValidator.ts`  | `tests/unit/SchemaValidator.test.ts`  |
+| `src/communication/BaseChannel.ts`   | `tests/unit/BaseChannel.test.ts`      |
+| `src/communication/IframeChannel.ts` | `tests/unit/IframeChannel.test.ts`    |
+| `src/communication/WindowChannel.ts` | `tests/unit/WindowChannel.test.ts`    |
+| `src/core/MessageProtocol.ts`        | `tests/unit/MessageProtocol.test.ts`  |
+| `src/utils/Logger.ts`                | `tests/unit/Logger.test.ts`           |
+| `src/utils/Helpers.ts`               | `tests/unit/Helpers.test.ts`          |
+
+---
+
+## Test Categories
+
+### Unit Tests
+
+Test individual components in isolation with mocked dependencies.
+
+**Purpose:**
+
+- Verify single function/class behavior
+- Test edge cases and error conditions
+- Ensure proper error handling
+- Validate TypeScript type safety
+
+**Example:**
+
+```typescript
+describe('EventEmitter', () => {
+    it('should register and trigger event listeners', () => {
+        const emitter = new EventEmitter();
+        const handler = vi.fn();
+
+        emitter.on('test', handler);
+        emitter.emit('test', { data: 'value' });
+
+        expect(handler).toHaveBeenCalledWith({ data: 'value' });
+    });
+});
+```
+
+**Coverage Target:** 90%+
+
+### Integration Tests
+
+Test complete workflows with multiple components working together.
+
+**Purpose:**
+
+- Verify end-to-end communication flows
+- Test real-world usage scenarios
+- Validate component interactions
+- Ensure system reliability
+
+**Example:**
+
+```typescript
+describe('Iframe Communication', () => {
+    it('should establish connection between parent and child', async () => {
+        const parent = new Parley({
+            allowedOrigins: ['http://localhost:3000'],
+            role: 'parent',
+        });
+
+        const child = new Parley({
+            allowedOrigins: ['http://localhost:3000'],
+            role: 'child',
+        });
+
+        // Simulate iframe setup and communication
+        await parent.connect('child', mockIframe.contentWindow);
+        await child.connect('parent', window.parent);
+
+        const response = await parent.send('ping', {}, { targetId: 'child' });
+        expect(response).toBeDefined();
+    });
+});
+```
+
+**Coverage Target:** 85%+
+
+### Security Tests
+
+Test security mechanisms and validate protection against attacks.
+
+**Purpose:**
+
+- Verify origin validation enforcement
+- Test payload sanitization
+- Validate DoS prevention
+- Ensure error message safety
+
+**Example:**
+
+```typescript
+describe('Origin Validation', () => {
+    it('should reject messages from unauthorized origins', async () => {
+        const parley = new Parley({
+            allowedOrigins: ['https://trusted.com'],
+        });
+
+        const maliciousMessage = createMessage(
+            'test',
+            {},
+            {
+                origin: 'https://evil.com',
+            }
+        );
+
+        await expect(parley.handleMessage(maliciousMessage)).rejects.toThrow(
+            SecurityError
+        );
+    });
+});
+```
+
+**Coverage Target:** 95%+
+
+---
+
+## Coverage Requirements
+
+### Overall Coverage Targets
+
+| Component      | Target | Description                            |
+| -------------- | ------ | -------------------------------------- |
+| Overall        | 85%+   | Minimum across entire codebase         |
+| Core Modules   | 90%+   | Parley, MessageProtocol, TargetManager |
+| Security Layer | 95%+   | OriginValidator, SecurityLayer         |
+| Communication  | 90%+   | All Channel implementations            |
+| Utilities      | 85%+   | Helpers, Logger                        |
+
+### How Coverage is Measured
+
+Coverage reports include:
+
+- **Line Coverage** - Percentage of executed lines
+- **Branch Coverage** - Percentage of executed conditional branches
+- **Function Coverage** - Percentage of called functions
+- **Statement Coverage** - Percentage of executed statements
+
+### Viewing Coverage Reports
+
+After running `npm run test:coverage`:
+
+```bash
+# View HTML report in browser
+open coverage/index.html
+
+# Terminal will show summary like:
+# ----------------------------|---------|----------|---------|---------|
+# File                        | % Stmts | % Branch | % Funcs | % Lines |
+# ----------------------------|---------|----------|---------|---------|
+# All files                   |   87.5  |    85.3  |   89.1  |   87.8  |
+#  src/core                   |   92.1  |    89.7  |   94.2  |   92.5  |
+#  src/security               |   96.3  |    95.1  |   97.8  |   96.7  |
+# ----------------------------|---------|----------|---------|---------|
+```
 
 ---
 
@@ -237,6 +408,74 @@ describe('error handling', () => {
     });
 });
 ```
+
+### Best Practices
+
+1. **Descriptive Test Names**
+
+    ```typescript
+    // Good
+    it('should reject messages from unauthorized origins', () => {});
+
+    // Bad
+    it('test origin', () => {});
+    ```
+
+2. **Arrange-Act-Assert Pattern**
+
+    ```typescript
+    it('should emit events to registered listeners', () => {
+        // Arrange
+        const emitter = new EventEmitter();
+        const handler = vi.fn();
+        emitter.on('test', handler);
+
+        // Act
+        emitter.emit('test', { data: 'value' });
+
+        // Assert
+        expect(handler).toHaveBeenCalledWith({ data: 'value' });
+    });
+    ```
+
+3. **Test Edge Cases**
+
+    ```typescript
+    describe('generateUUID', () => {
+        it('should generate valid UUID format', () => {
+            const uuid = generateUUID();
+            expect(uuid).toMatch(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+            );
+        });
+
+        it('should generate unique UUIDs', () => {
+            const uuid1 = generateUUID();
+            const uuid2 = generateUUID();
+            expect(uuid1).not.toBe(uuid2);
+        });
+    });
+    ```
+
+4. **Use Mocks Appropriately**
+
+    ```typescript
+    // Mock external dependencies
+    vi.mock('external-library', () => ({
+        externalFunction: vi.fn(() => 'mocked'),
+    }));
+
+    // Spy on internal methods
+    const spy = vi.spyOn(instance, 'methodName');
+    ```
+
+5. **Clean Up After Tests**
+    ```typescript
+    afterEach(() => {
+        vi.clearAllMocks();
+        vi.clearAllTimers();
+    });
+    ```
 
 ---
 
@@ -723,11 +962,84 @@ it('should transition through expected states', async () => {
 
 ---
 
+## Continuous Integration
+
+Tests run automatically on:
+
+- Every pull request
+- Every commit to main branch
+- Scheduled daily runs
+
+### GitHub Actions Workflow
+
+See `.github/workflows/test.yml` for the full CI configuration:
+
+```yaml
+name: Tests
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+            - run: npm ci
+            - run: npm test
+            - run: npm run test:coverage
+```
+
+### Coverage Enforcement
+
+Pull requests must maintain or improve coverage:
+
+- Overall coverage: 85%+ required
+- No decrease in coverage allowed without justification
+- New code should have 90%+ coverage
+
+---
+
+## Contributing
+
+When contributing code:
+
+1. Write tests for all new features
+2. Maintain or improve coverage
+3. Follow existing test patterns
+4. Run full test suite before submitting PR
+5. Add tests for bug fixes
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guidelines.
+
+---
+
 ## Additional Resources
 
-- [Vitest Documentation](https://vitest.dev/)
-- [happy-dom Documentation](https://github.com/capricorn86/happy-dom)
-- [Testing Library Best Practices](https://testing-library.com/docs/guiding-principles)
+- <a href="https://vitest.dev/" target="_blank">Vitest Documentation</a>
+- <a href="https://github.com/capricorn86/happy-dom" target="_blank">happy-dom
+  Documentation</a>
+- <a href="https://github.com/goldbergyoni/javascript-testing-best-practices" target="_blank">Testing
+  Best Practices</a>
+- <a href="https://martinfowler.com/bliki/TestCoverage.html" target="_blank">Test
+  Coverage Best Practices</a>
 
 For questions about testing patterns or to report issues with the test suite,
 please open an issue in the repository.
+
+---
+
+## Related Documentation
+
+- [API Reference](./API.md) - Complete API documentation
+- [Security Guide](./SECURITY.md) - Security best practices
+- [Architecture](./ARCHITECTURE.md) - System design and internals
+- [Examples](./EXAMPLES.md) - Code examples and patterns
+- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
+- [README](../README.md) - Project overview

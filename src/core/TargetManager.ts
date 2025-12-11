@@ -56,9 +56,14 @@ export class TargetManager {
     private _cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
     /**
-     * Cleanup interval in milliseconds
+     * Default cleanup interval in milliseconds (used when <= 100 targets)
      */
-    private readonly _cleanupIntervalMs = 5000;
+    private readonly _defaultCleanupIntervalMs = 5000;
+
+    /**
+     * Aggressive cleanup interval in milliseconds (used when > 100 targets)
+     */
+    private readonly _aggressiveCleanupIntervalMs = 1000;
 
     /**
      * Creates a new TargetManager instance
@@ -237,6 +242,23 @@ export class TargetManager {
             info.missedHeartbeats = 0;
             info.consecutiveFailures = 0;
             this._logger.debug('Target marked connected', { id });
+        }
+    }
+
+    /**
+     * Update a target's origin
+     *
+     * This is called after connection is established to update the origin
+     * that was initially unknown (e.g., for newly opened windows).
+     *
+     * @param id - Target ID
+     * @param origin - New origin value
+     */
+    public updateOrigin(id: string, origin: string): void {
+        const info = this._targets.get(id);
+        if (info && origin) {
+            info.origin = origin;
+            this._logger.debug('Target origin updated', { id, origin });
         }
     }
 
@@ -482,7 +504,10 @@ export class TargetManager {
         }
 
         // Adaptive interval: more aggressive with more targets
-        const interval = this._targets.size > 100 ? 1000 : 5000;
+        const interval =
+            this._targets.size > 100
+                ? this._aggressiveCleanupIntervalMs
+                : this._defaultCleanupIntervalMs;
 
         this._cleanupInterval = setInterval(() => {
             this.cleanup();

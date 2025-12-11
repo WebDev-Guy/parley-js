@@ -284,12 +284,12 @@ export class WindowChannel extends BaseChannel {
         if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
             throw new ConnectionError(
                 'Cannot establish window connection to opener: no allowedOrigins configured. ' +
-                'At least one explicit origin must be specified in allowedOrigins array.',
+                    'At least one explicit origin must be specified in allowedOrigins array.',
                 undefined,
                 CONNECTION_ERRORS.FAILED
             );
         }
-        this._targetOrigin = this._options.allowedOrigins[0];
+        this._targetOrigin = this._options.allowedOrigins[0]!;
 
         // Send handshake init to opener
         const initMessage = createMessage({
@@ -318,7 +318,7 @@ export class WindowChannel extends BaseChannel {
 
         // Security: Determine origin explicitly, never use wildcard
         // See: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_considerations
-        let origin: string | null = null;
+        let origin = '';
 
         try {
             // For same-origin windows, we can access location
@@ -332,12 +332,12 @@ export class WindowChannel extends BaseChannel {
             if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
                 throw new ConnectionError(
                     'Cannot establish connection to cross-origin window: no allowedOrigins configured. ' +
-                    'For cross-origin window.open communication, at least one explicit origin must be specified.',
+                        'For cross-origin window.open communication, at least one explicit origin must be specified.',
                     undefined,
                     CONNECTION_ERRORS.FAILED
                 );
             }
-            origin = this._options.allowedOrigins[0];
+            origin = this._options.allowedOrigins[0]!;
         }
 
         this._targetOrigin = origin;

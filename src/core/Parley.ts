@@ -33,7 +33,12 @@ import {
     TargetNotFoundError,
     ConnectionError,
 } from '../errors/ErrorTypes';
-import { TIMEOUT_ERRORS, TARGET_ERRORS, CONNECTION_ERRORS, VALIDATION_ERRORS } from '../errors/ErrorCodes';
+import {
+    TIMEOUT_ERRORS,
+    TARGET_ERRORS,
+    CONNECTION_ERRORS,
+    VALIDATION_ERRORS,
+} from '../errors/ErrorCodes';
 import { DefaultSecurityLayer, type SecurityLayer } from '../security/SecurityLayer';
 import {
     DEFAULT_HEARTBEAT_CONFIG,
@@ -294,7 +299,7 @@ export class Parley {
      * @param messageType - Registered message type
      * @param payload - Message payload
      * @param options - Send options
-     * @returns Promise that resolves with response if expectsResponse is true, 
+     * @returns Promise that resolves with response if expectsResponse is true,
      *          or undefined if expectsResponse is false
      *
      * @example
@@ -573,6 +578,12 @@ export class Parley {
         try {
             // Connect
             await channel.connect(target);
+
+            // Update target origin from channel (now known after handshake)
+            const channelOrigin = channel.getTargetOrigin();
+            if (channelOrigin) {
+                this._targets.updateOrigin(id, channelOrigin);
+            }
 
             // Mark target as connected
             this._targets.markConnected(id);
@@ -1027,32 +1038,34 @@ export class Parley {
         source: Window,
         sourceTargetId: string
     ): Promise<void> {
-        // Skip internal messages
-        if (isInternalMessage(message)) {
-            return;
+        const isInternal = isInternalMessage(message);
+
+        // For non-internal messages, emit received event and analytics
+        if (!isInternal) {
+            await this._emitter.emit(SYSTEM_EVENTS.MESSAGE_RECEIVED, {
+                messageId: message._id,
+                messageType: message._type,
+                origin: message._origin,
+                timestamp: getTimestamp(),
+            });
+
+            this._emitAnalyticsEvent({
+                type: 'message_received',
+                messageType: message._type,
+                messageId: message._id,
+                targetId: sourceTargetId,
+                timestamp: getTimestamp(),
+            });
         }
-
-        // Emit received event
-        await this._emitter.emit(SYSTEM_EVENTS.MESSAGE_RECEIVED, {
-            messageId: message._id,
-            messageType: message._type,
-            origin: message._origin,
-            timestamp: getTimestamp(),
-        });
-
-        this._emitAnalyticsEvent({
-            type: 'message_received',
-            messageType: message._type,
-            messageId: message._id,
-            targetId: sourceTargetId,
-            timestamp: getTimestamp(),
-        });
 
         // Get handlers for this message type
         const handlers = this._registry.getHandlers(message._type);
 
         if (handlers.length === 0) {
-            this._logger.warn('No handler for message type', { type: message._type });
+            // Only warn for non-internal messages
+            if (!isInternal) {
+                this._logger.warn('No handler for message type', { type: message._type });
+            }
 
             // Send error response if expected
             if (message._expectsResponse) {
@@ -1064,26 +1077,28 @@ export class Parley {
             return;
         }
 
-        // Validate payload
-        try {
-            this._registry.validatePayload(message._type, message.payload);
-        } catch (error) {
-            if (error instanceof ValidationError) {
-                this._logger.warn('Payload validation failed', {
-                    type: message._type,
-                    errors: error.validationErrors,
-                });
-
-                if (message._expectsResponse) {
-                    this._sendErrorResponse(message, source, sourceTargetId, {
-                        code: error.code,
-                        message: error.message,
-                        details: error.validationErrors,
+        // Validate payload (skip for internal messages)
+        if (!isInternal) {
+            try {
+                this._registry.validatePayload(message._type, message.payload);
+            } catch (error) {
+                if (error instanceof ValidationError) {
+                    this._logger.warn('Payload validation failed', {
+                        type: message._type,
+                        errors: error.validationErrors,
                     });
+
+                    if (message._expectsResponse) {
+                        this._sendErrorResponse(message, source, sourceTargetId, {
+                            code: error.code,
+                            message: error.message,
+                            details: error.validationErrors,
+                        });
+                    }
+                    return;
                 }
-                return;
+                throw error;
             }
-            throw error;
         }
 
         // Create metadata
@@ -1103,7 +1118,7 @@ export class Parley {
             if (responseHandled.sent) {
                 throw new Error(
                     `Response already sent for message ${message._id}. ` +
-                    'Multiple handlers called respond() or respond() called after error.'
+                        'Multiple handlers called respond() or respond() called after error.'
                 );
             }
             responseHandled.sent = true;
@@ -1216,11 +1231,13 @@ export class Parley {
         }
 
         // Convert handlers to promises and run all in parallel
-        const promises = Array.from(this._analyticsHandlers).map(handler =>
-            Promise.resolve().then(() => handler(event)).catch(error => {
-                this._logger.error('Analytics handler error:', error);
-                // Don't re-throw - let other handlers continue
-            })
+        const promises = Array.from(this._analyticsHandlers).map((handler) =>
+            Promise.resolve()
+                .then(() => handler(event))
+                .catch((error) => {
+                    this._logger.error('Analytics handler error:', error);
+                    // Don't re-throw - let other handlers continue
+                })
         );
 
         // Use allSettled to wait for all, even if some fail
@@ -1257,7 +1274,7 @@ export class Parley {
             if (serialized !== undefined && serialized.length > this.MAX_PAYLOAD_SIZE) {
                 throw new ValidationError(
                     `Payload size ${serialized.length} bytes exceeds maximum of ${this.MAX_PAYLOAD_SIZE} bytes (10MB). ` +
-                    `This prevents DoS attacks through memory exhaustion and browser freezes.`,
+                        `This prevents DoS attacks through memory exhaustion and browser freezes.`,
                     {
                         size: serialized.length,
                         maxSize: this.MAX_PAYLOAD_SIZE,
@@ -1310,10 +1327,7 @@ export class Parley {
         const limit = this._config.rateLimit.messagesPerSecond ?? 100;
 
         if (tracker.count >= limit) {
-            throw new Error(
-                `Rate limit exceeded for ${key}: ` +
-                `${limit} messages/sec max`
-            );
+            throw new Error(`Rate limit exceeded for ${key}: ` + `${limit} messages/sec max`);
         }
 
         tracker.count++;
@@ -1354,7 +1368,11 @@ export class Parley {
         // Handle heartbeat pongs (responses)
         this._registry.addHandler(
             SYSTEM_MESSAGE_TYPES.HEARTBEAT_PONG,
-            (_payload: HeartbeatPongPayload, _respond: (response: unknown) => void, metadata: MessageMetadata) => {
+            (
+                _payload: HeartbeatPongPayload,
+                _respond: (response: unknown) => void,
+                metadata: MessageMetadata
+            ) => {
                 // Security: Only record success for the target that actually sent this pong
                 // Using metadata.senderId ensures we only reset the heartbeat timer for the sending target
                 // This prevents a malicious target from sending pongs to keep all connections marked as "alive"

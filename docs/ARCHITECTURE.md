@@ -788,3 +788,14 @@ const CONNECTION_ERRORS = {
     HEARTBEAT_TIMEOUT: 'HEARTBEAT_TIMEOUT', // Heartbeat response timeout
 };
 ```
+
+---
+
+## Related Documentation
+
+- [API Reference](./API.md) - Complete API documentation
+- [Testing Guide](./TESTING.md) - Testing documentation and best practices
+- [Security Guide](./SECURITY.md) - Security best practices
+- [Examples](./EXAMPLES.md) - Code examples and patterns
+- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
+- [README](../README.md) - Project overview

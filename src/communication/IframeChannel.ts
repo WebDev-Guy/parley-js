@@ -273,7 +273,7 @@ export class IframeChannel extends BaseChannel {
 
         // Determine target origin - Security: Must be explicitly determined, never use wildcard
         // See: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_considerations
-        let origin: string | null = null;
+        let origin = '';
 
         try {
             // Try to get origin from same-origin iframe
@@ -292,8 +292,8 @@ export class IframeChannel extends BaseChannel {
             if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
                 throw new ConnectionError(
                     'Cannot establish cross-origin iframe connection: no allowedOrigins configured. ' +
-                    'For cross-origin iframes, you must explicitly configure the allowed origin(s). ' +
-                    'This prevents attacks where a dynamically-changed src attribute could expose your iframe to untrusted origins.',
+                        'For cross-origin iframes, you must explicitly configure the allowed origin(s). ' +
+                        'This prevents attacks where a dynamically-changed src attribute could expose your iframe to untrusted origins.',
                     undefined,
                     CONNECTION_ERRORS.FAILED
                 );
@@ -301,14 +301,14 @@ export class IframeChannel extends BaseChannel {
 
             // Security: Use only the first configured origin for cross-origin iframes
             // This ensures we have exactly one, explicitly-configured, known-safe origin
-            origin = this._options.allowedOrigins[0];
+            origin = this._options.allowedOrigins[0]!;
 
             // Validate the configured origin against allowedOrigins to ensure consistency
             // (redundant check, but provides defense-in-depth)
             if (!this._isAllowedOrigin(origin)) {
                 throw new ConnectionError(
                     'Invalid iframe connection: configured origin failed validation. ' +
-                    'This should not happen - please check your allowedOrigins configuration.',
+                        'This should not happen - please check your allowedOrigins configuration.',
                     undefined,
                     CONNECTION_ERRORS.FAILED
                 );
@@ -317,7 +317,7 @@ export class IframeChannel extends BaseChannel {
             // Log warning about cross-origin connection for security audit
             this._logger.warn(
                 'Cross-origin iframe connection: using pre-configured origin, not src attribute. ' +
-                'This is a security feature to prevent origin injection attacks.',
+                    'This is a security feature to prevent origin injection attacks.',
                 { origin }
             );
         }
@@ -342,12 +342,12 @@ export class IframeChannel extends BaseChannel {
         if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
             throw new ConnectionError(
                 'Cannot establish child iframe connection: no allowedOrigins configured. ' +
-                'At least one explicit origin must be specified in allowedOrigins array.',
+                    'At least one explicit origin must be specified in allowedOrigins array.',
                 undefined,
                 CONNECTION_ERRORS.FAILED
             );
         }
-        this._targetOrigin = this._options.allowedOrigins[0];
+        this._targetOrigin = this._options.allowedOrigins[0]!;
 
         // Send handshake init to parent
         const initMessage = createMessage({

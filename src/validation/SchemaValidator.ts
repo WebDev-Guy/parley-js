@@ -90,7 +90,12 @@ export class SchemaValidator {
      * @param path - Current path in the object (for error messages)
      * @returns Validation result
      */
-    private _validateValue(value: unknown, schema: JsonSchema, path: string, depth: number = 0): ValidationResult {
+    private _validateValue(
+        value: unknown,
+        schema: JsonSchema,
+        path: string,
+        depth: number = 0
+    ): ValidationResult {
         // DoS prevention: check depth to prevent stack overflow from deeply nested schemas
         if (depth > SchemaValidator.MAX_DEPTH) {
             return invalidResult([
@@ -139,7 +144,9 @@ export class SchemaValidator {
         }
 
         if (schema.type === 'object' && value !== null && typeof value === 'object') {
-            errors.push(...this._validateObject(value as Record<string, unknown>, schema, path, depth));
+            errors.push(
+                ...this._validateObject(value as Record<string, unknown>, schema, path, depth)
+            );
         }
 
         return errors.length === 0 ? validResult() : invalidResult(errors);
@@ -308,7 +315,7 @@ export class SchemaValidator {
                         {
                             expected: 'valid-regex',
                             received: error instanceof Error ? error.message : 'unknown error',
-                            rule: 'pattern'
+                            rule: 'pattern',
                         }
                     )
                 );
@@ -451,7 +458,12 @@ export class SchemaValidator {
             for (const [propName, propSchema] of Object.entries(schema.properties)) {
                 if (propName in value) {
                     const propPath = path ? `${path}.${propName}` : propName;
-                    const propResult = this._validateValue(value[propName], propSchema, propPath, depth + 1);
+                    const propResult = this._validateValue(
+                        value[propName],
+                        propSchema,
+                        propPath,
+                        depth + 1
+                    );
                     errors.push(...propResult.errors);
                 }
             }

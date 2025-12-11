@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,11 +12,13 @@
             background: #e8f4f8;
             margin: 0;
         }
+
         h2 {
             color: #333;
             margin-top: 0;
             font-size: 18px;
         }
+
         .status {
             display: inline-block;
             padding: 4px 8px;
@@ -23,9 +26,22 @@
             font-size: 12px;
             margin-left: 10px;
         }
-        .status.connected { background: #d4edda; color: #155724; }
-        .status.disconnected { background: #f8d7da; color: #721c24; }
-        .status.connecting { background: #fff3cd; color: #856404; }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
         .log {
             background: #1e1e1e;
             color: #d4d4d4;
@@ -36,15 +52,27 @@
             max-height: 150px;
             overflow-y: auto;
         }
+
         .log-entry {
             margin-bottom: 4px;
         }
-        .log-entry.success { color: #4ec9b0; }
-        .log-entry.error { color: #f14c4c; }
-        .log-entry.info { color: #9cdcfe; }
+
+        .log-entry.success {
+            color: #4ec9b0;
+        }
+
+        .log-entry.error {
+            color: #f14c4c;
+        }
+
+        .log-entry.info {
+            color: #9cdcfe;
+        }
+
         .controls {
             margin: 10px 0;
         }
+
         button {
             background: #28a745;
             color: white;
@@ -55,22 +83,25 @@
             font-size: 12px;
             margin-right: 8px;
         }
+
         button:hover {
             background: #218838;
         }
+
         button:disabled {
             background: #ccc;
             cursor: not-allowed;
         }
     </style>
 </head>
+
 <body>
-    <h2>📦 Child Iframe <span id="status" class="status disconnected">Disconnected</span></h2>
-    
+    <h2>Child Iframe <span id="status" class="status disconnected">Disconnected</span></h2>
+
     <div class="controls">
         <button id="btn-notify" onclick="sendNotification()" disabled>Send Notification</button>
     </div>
-    
+
     <div id="log" class="log"></div>
 
     <!-- Load Parley.js from dist -->
@@ -111,10 +142,10 @@
         // Initialize Parley and connect to parent
         async function initParley() {
             // Get the parent origin
-            const parentOrigin = window.parent !== window 
+            const parentOrigin = window.parent !== window
                 ? (document.referrer ? new URL(document.referrer).origin : window.location.origin)
                 : window.location.origin;
-            
+
             parley = Parley.create({
                 targetType: 'iframe',
                 allowedOrigins: [parentOrigin, window.location.origin, 'null'],
@@ -184,7 +215,7 @@
             try {
                 statusEl.textContent = 'Connecting...';
                 statusEl.className = 'status connecting';
-                
+
                 log('Connecting to parent...', 'info');
                 await parley.connect(window.parent, 'parent');
                 log('Connected to parent!', 'success');
@@ -216,7 +247,7 @@
         window.addEventListener('load', () => {
             log('Child iframe loaded', 'info');
             updateUI();
-            
+
             // Delay to ensure parent has connected first
             setTimeout(() => {
                 initParley();
@@ -224,4 +255,5 @@
         });
     </script>
 </body>
+
 </html>

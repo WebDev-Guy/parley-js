@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authenticated Communication - Child</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 15px;
+            background: #e8f4f8;
+            margin: 0;
+        }
+
+        h2 {
+            color: #333;
+            margin-top: 0;
+            font-size: 18px;
+        }
+
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+        }
+
+        .log-entry.success {
+            color: #4ec9b0;
+        }
+
+        .log-entry.error {
+            color: #f14c4c;
+        }
+
+        .log-entry.info {
+            color: #9cdcfe;
+        }
+
+        .auth-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Child Iframe - Authentication Handler</h2>
+    <p>This iframe handles authentication requests and validates tokens.</p>
+
+    <div class="auth-info" id="authInfo">
+        Auth Status: <span id="authStatus">Not authenticated</span>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <script type="module">
+        import { Parley, SYSTEM_EVENTS } from '../../dist/index.mjs';
+
+        let currentToken = null;
+        let currentSession = null;
+        const validTokens = new Set();
+
+        const parley = Parley.create({
+            targetType: 'iframe',
+            allowedOrigins: [window.location.origin],
+            logLevel: 'debug',
+            timeout: 10000
+        });
+
+        // Connect to parent window
+        async function connectToParent() {
+            try {
+                log('Connecting to parent window...');
+                await parley.connect(window.parent, 'parent');
+                log('Connected to parent window', 'success');
+            } catch (error) {
+                log(`Connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Delay connection slightly to ensure parent iframe.onload has fired
+        // and parent has started listening for handshake
+        setTimeout(connectToParent, 100);
+
+        // Handle authentication requests
+        parley.on('auth:request', async (payload, respond, metadata) => {
+            log('Authentication request received');
+            log(`   Username: ${payload.username}`);
+
+            try {
+                // Simulate authentication
+                if (payload.username === 'demo_user' && payload.password === 'demo_pass') {
+                    // Generate token
+                    currentToken = 'token_' + Math.random().toString(36).substring(2, 15);
+                    currentSession = 'session_' + Date.now();
+                    validTokens.add(currentToken);
+
+                    updateAuthStatus(true);
+
+                    // Send token back to parent
+                    await parley.send('auth:response', {
+                        token: currentToken,
+                        sessionId: currentSession,
+                        expiresIn: 3600
+                    }, { targetId: 'parent' });
+
+                    log('Authentication successful', 'success');
+                    respond({ success: true });
+                } else {
+                    log('Authentication failed: Invalid credentials', 'error');
+                    respond({ success: false, error: 'Invalid credentials' });
+                }
+            } catch (error) {
+                log(`Error in auth handler: ${error.message}`, 'error');
+                respond({ success: false, error: error.message });
+            }
+        });
+
+        // Handle data requests (requires valid token)
+        parley.on('data:request', async (payload, respond, metadata) => {
+            log('Data request received');
+
+            // Validate token
+            if (!payload.token || !validTokens.has(payload.token)) {
+                log('Invalid or missing token', 'error');
+                throw new Error('Unauthorized: Invalid token');
+            }
+
+            log('Token validated', 'success');
+
+            // Simulate data fetch
+            const userData = {
+                userId: '12345',
+                username: 'demo_user',
+                email: 'demo@example.com',
+                profile: {
+                    firstName: 'Demo',
+                    lastName: 'User',
+                    role: 'admin'
+                }
+            };
+
+            await parley.send('data:response', {
+                data: userData
+            }, { targetId: 'parent' });
+
+            log('Data sent to parent', 'success');
+            respond({ success: true });
+        });
+
+        // Handle form submissions (requires valid token)
+        parley.on('form:submit', async (payload, respond, metadata) => {
+            log('Form submission received');
+
+            // Validate token
+            if (!payload.token || !validTokens.has(payload.token)) {
+                log('Invalid or missing token', 'error');
+                throw new Error('Unauthorized: Invalid token');
+            }
+
+            log('Token validated', 'success');
+            log(`Form data: ${JSON.stringify(payload.formData, null, 2)}`);
+
+            await parley.send('form:response', {
+                message: 'Form submitted successfully',
+                formId: 'form_' + Date.now()
+            }, { targetId: 'parent' });
+
+            log('Form processed', 'success');
+            respond({ success: true });
+        });
+
+        // Handle logout requests
+        parley.on('logout:request', async (payload, respond, metadata) => {
+            log('Logout request received');
+
+            // Validate token
+            if (!payload.token || !validTokens.has(payload.token)) {
+                log('Invalid or missing token', 'error');
+                throw new Error('Unauthorized: Invalid token');
+            }
+
+            // Invalidate token
+            validTokens.delete(payload.token);
+            currentToken = null;
+            currentSession = null;
+
+            updateAuthStatus(false);
+
+            await parley.send('logout:response', {
+                message: 'Logged out successfully'
+            }, { targetId: 'parent' });
+
+            log('Logout successful', 'success');
+            respond({ success: true });
+        });
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateAuthStatus(authenticated) {
+            const statusSpan = document.getElementById('authStatus');
+            if (authenticated) {
+                statusSpan.textContent = `Authenticated (Token: ${currentToken.substring(0, 10)}...)`;
+                statusSpan.style.color = '#28a745';
+            } else {
+                statusSpan.textContent = 'Not authenticated';
+                statusSpan.style.color = '#dc3545';
+            }
+        }
+
+        // Listen for connection events
+        parley.onSystem(SYSTEM_EVENTS.CONNECTED, (data) => {
+            log(`Connection established with ${data.targetId}`);
+        });
+
+        parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (data) => {
+            log(`Connection lost with ${data.targetId}`);
+            currentToken = null;
+            validTokens.clear();
+            updateAuthStatus(false);
+        });
+    </script>
+</body>
+
+</html>

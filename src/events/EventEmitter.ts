@@ -291,8 +291,8 @@ export class EventEmitter {
         if (this._maxListeners > 0 && listeners.length >= this._maxListeners) {
             throw new Error(
                 `Max listeners (${this._maxListeners}) exceeded for event "${event}". ` +
-                'This likely indicates a memory leak. ' +
-                `Use emitter.setMaxListeners(n) to increase the limit if this is intentional.`
+                    'This likely indicates a memory leak. ' +
+                    `Use emitter.setMaxListeners(n) to increase the limit if this is intentional.`
             );
         }
 

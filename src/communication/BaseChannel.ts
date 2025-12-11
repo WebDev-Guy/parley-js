@@ -124,11 +124,11 @@ export abstract class BaseChannel {
         if (targetOrigin === 'null') {
             this._logger.error(
                 'Cannot send message: origin is null (file:// protocol). ' +
-                'file:// protocol is not supported. Use a proper http/https server in production.'
+                    'file:// protocol is not supported. Use a proper http/https server in production.'
             );
             throw new ConnectionError(
                 'Cannot send message without explicit target origin. The file:// protocol is not supported. ' +
-                'Please use a proper http/https server for production use.',
+                    'Please use a proper http/https server for production use.',
                 undefined,
                 CONNECTION_ERRORS.FAILED
             );
@@ -139,7 +139,7 @@ export abstract class BaseChannel {
             this._logger.error('Cannot send message: targetOrigin cannot be a wildcard');
             throw new ConnectionError(
                 'Target origin must be explicitly specified, not a wildcard. ' +
-                'Wildcard origins are a security risk and violate postMessage safety guidelines.',
+                    'Wildcard origins are a security risk and violate postMessage safety guidelines.',
                 undefined,
                 CONNECTION_ERRORS.FAILED
             );
@@ -220,6 +220,14 @@ export abstract class BaseChannel {
      * Must be implemented by subclasses
      */
     protected abstract _getTargetWindow(): Window | null;
+
+    /**
+     * Get the target origin for sending messages
+     * Must be implemented by subclasses
+     *
+     * @returns Target origin string
+     */
+    public abstract getTargetOrigin(): string;
 
     /**
      * Handle incoming message events

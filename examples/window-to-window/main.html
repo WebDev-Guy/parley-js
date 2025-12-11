@@ -417,6 +417,7 @@
                 const roundTrip = Date.now() - payload.originalTimestamp;
                 log(`Pong received! Round-trip: ${roundTrip}ms`, 'success');
                 showResponse({ pong: true, roundTripMs: roundTrip });
+                respond({ received: true });
             });
 
             // Use SYSTEM_EVENTS constant for type safety
