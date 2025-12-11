@@ -1,6 +1,8 @@
 # Testing Guide
 
-This document provides comprehensive guidance for running, writing, and reviewing tests for parley-js. The test suite is built using Vitest with happy-dom as the DOM environment.
+This document provides comprehensive guidance for running, writing, and
+reviewing tests for parley-js. The test suite is built using Vitest with
+happy-dom as the DOM environment.
 
 ## Table of Contents
 
@@ -38,14 +40,14 @@ npm test
 
 The following npm scripts are available for testing:
 
-| Command | Description |
-|---------|-------------|
-| `npm test` | Run tests in watch mode (default) |
-| `npm run test:run` | Run all tests once and exit |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run test:coverage` | Run tests with coverage report |
-| `npm run test:ui` | Open Vitest UI in browser |
-| `npm run test:debug` | Run tests with debugger attached |
+| Command                 | Description                       |
+| ----------------------- | --------------------------------- |
+| `npm test`              | Run tests in watch mode (default) |
+| `npm run test:run`      | Run all tests once and exit       |
+| `npm run test:watch`    | Run tests in watch mode           |
+| `npm run test:coverage` | Run tests with coverage report    |
+| `npm run test:ui`       | Open Vitest UI in browser         |
+| `npm run test:debug`    | Run tests with debugger attached  |
 
 ### Running Specific Tests
 
@@ -94,17 +96,17 @@ tests/
 
 Each source file has a corresponding test file:
 
-| Source File | Test File |
-|-------------|-----------|
-| `src/core/Parley.ts` | `tests/unit/Parley.test.ts` |
-| `src/events/EventEmitter.ts` | `tests/unit/EventEmitter.test.ts` |
-| `src/core/HeartbeatManager.ts` | `tests/unit/HeartbeatManager.test.ts` |
-| `src/core/MessageRegistry.ts` | `tests/unit/MessageRegistry.test.ts` |
-| `src/core/TargetManager.ts` | `tests/unit/TargetManager.test.ts` |
-| `src/security/OriginValidator.ts` | `tests/unit/OriginValidator.test.ts` |
-| `src/security/SecurityLayer.ts` | `tests/unit/SecurityLayer.test.ts` |
-| `src/validation/SchemaValidator.ts` | `tests/unit/SchemaValidator.test.ts` |
-| `src/communication/BaseChannel.ts` | `tests/unit/BaseChannel.test.ts` |
+| Source File                         | Test File                             |
+| ----------------------------------- | ------------------------------------- |
+| `src/core/Parley.ts`                | `tests/unit/Parley.test.ts`           |
+| `src/events/EventEmitter.ts`        | `tests/unit/EventEmitter.test.ts`     |
+| `src/core/HeartbeatManager.ts`      | `tests/unit/HeartbeatManager.test.ts` |
+| `src/core/MessageRegistry.ts`       | `tests/unit/MessageRegistry.test.ts`  |
+| `src/core/TargetManager.ts`         | `tests/unit/TargetManager.test.ts`    |
+| `src/security/OriginValidator.ts`   | `tests/unit/OriginValidator.test.ts`  |
+| `src/security/SecurityLayer.ts`     | `tests/unit/SecurityLayer.test.ts`    |
+| `src/validation/SchemaValidator.ts` | `tests/unit/SchemaValidator.test.ts`  |
+| `src/communication/BaseChannel.ts`  | `tests/unit/BaseChannel.test.ts`      |
 
 ---
 
@@ -218,8 +220,9 @@ Always test error paths and edge cases:
 ```typescript
 describe('error handling', () => {
     it('should throw ParleyError when target not found', () => {
-        expect(() => instance.send('unknown', { type: 'test' }))
-            .toThrow(ParleyError);
+        expect(() => instance.send('unknown', { type: 'test' })).toThrow(
+            ParleyError
+        );
     });
 
     it('should emit error event on validation failure', async () => {
@@ -376,7 +379,8 @@ Provides standardized test messages with schemas and validation cases:
 import { TEST_MESSAGE_TYPES } from '../fixtures/test-messages';
 
 describe('message validation', () => {
-    const { schema, validPayloads, invalidPayloads } = TEST_MESSAGE_TYPES.USER_UPDATE;
+    const { schema, validPayloads, invalidPayloads } =
+        TEST_MESSAGE_TYPES.USER_UPDATE;
 
     it.each(validPayloads)('should accept valid payload: %j', (payload) => {
         expect(validator.validate(schema, payload).valid).toBe(true);
@@ -395,15 +399,15 @@ describe('message validation', () => {
 
 Available test message types:
 
-| Type | Description |
-|------|-------------|
-| `SIMPLE` | Basic message with single string field |
-| `USER_UPDATE` | User data with required and optional fields |
-| `DOCUMENT_CHANGE` | Nested objects and arrays |
-| `COMPLEX` | Multiple data types including nested structures |
-| `ANALYTICS_EVENT` | Analytics tracking message |
-| `ERROR_REPORT` | Error reporting with stack traces |
-| `FEATURE_FLAG` | Feature toggle configuration |
+| Type              | Description                                     |
+| ----------------- | ----------------------------------------------- |
+| `SIMPLE`          | Basic message with single string field          |
+| `USER_UPDATE`     | User data with required and optional fields     |
+| `DOCUMENT_CHANGE` | Nested objects and arrays                       |
+| `COMPLEX`         | Multiple data types including nested structures |
+| `ANALYTICS_EVENT` | Analytics tracking message                      |
+| `ERROR_REPORT`    | Error reporting with stack traces               |
+| `FEATURE_FLAG`    | Feature toggle configuration                    |
 
 ---
 
@@ -411,12 +415,12 @@ Available test message types:
 
 The project maintains the following coverage thresholds:
 
-| Metric | Threshold |
-|--------|-----------|
-| Lines | 55% |
-| Functions | 55% |
-| Branches | 50% |
-| Statements | 55% |
+| Metric     | Threshold |
+| ---------- | --------- |
+| Lines      | 55%       |
+| Functions  | 55%       |
+| Branches   | 50%       |
+| Statements | 55%       |
 
 ### Running Coverage
 
@@ -685,16 +689,16 @@ describe('BaseChannel', () => {
 
 ```typescript
 it('should reject with specific error', async () => {
-    await expect(instance.failingOperation())
-        .rejects.toThrow('Expected error message');
+    await expect(instance.failingOperation()).rejects.toThrow(
+        'Expected error message'
+    );
 });
 
 it('should reject with error code', async () => {
-    await expect(instance.failingOperation())
-        .rejects.toMatchObject({
-            code: 'ERROR_CODE',
-            message: expect.stringContaining('error'),
-        });
+    await expect(instance.failingOperation()).rejects.toMatchObject({
+        code: 'ERROR_CODE',
+        message: expect.stringContaining('error'),
+    });
 });
 ```
 
@@ -708,7 +712,12 @@ it('should transition through expected states', async () => {
     await instance.connect();
     await instance.disconnect();
 
-    expect(states).toEqual(['connecting', 'connected', 'disconnecting', 'disconnected']);
+    expect(states).toEqual([
+        'connecting',
+        'connected',
+        'disconnecting',
+        'disconnected',
+    ]);
 });
 ```
 
@@ -720,4 +729,5 @@ it('should transition through expected states', async () => {
 - [happy-dom Documentation](https://github.com/capricorn86/happy-dom)
 - [Testing Library Best Practices](https://testing-library.com/docs/guiding-principles)
 
-For questions about testing patterns or to report issues with the test suite, please open an issue in the repository.
+For questions about testing patterns or to report issues with the test suite,
+please open an issue in the repository.
