@@ -190,7 +190,7 @@
         // Global functions for buttons
         window.authenticate = async () => {
             try {
-                const response = await parley.send('auth:request', {
+                await parley.send('auth:request', {
                     username: 'demo_user',
                     password: 'demo_pass'
                 }, { targetId: 'child' });
