@@ -52,7 +52,7 @@ git clone https://github.com/YOUR_USERNAME/parley-js.git
 cd parley-js
 
 # Add upstream remote
-git remote add upstream https://github.com/drew/parley-js.git
+git remote add upstream https://github.com/WebDev-Guy/parley-js.git
 ```
 
 ### 2. Install Dependencies

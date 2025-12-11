@@ -328,7 +328,7 @@ npm run dev          # Watch mode
 
 ## License
 
-MIT © Drew
+MIT © 2025 Ignite Works, LLC
 
 ---
 
