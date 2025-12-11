@@ -33,7 +33,12 @@ import {
     TargetNotFoundError,
     ConnectionError,
 } from '../errors/ErrorTypes';
-import { TIMEOUT_ERRORS, TARGET_ERRORS, CONNECTION_ERRORS } from '../errors/ErrorCodes';
+import {
+    TIMEOUT_ERRORS,
+    TARGET_ERRORS,
+    CONNECTION_ERRORS,
+    VALIDATION_ERRORS,
+} from '../errors/ErrorCodes';
 import { DefaultSecurityLayer, type SecurityLayer } from '../security/SecurityLayer';
 import {
     DEFAULT_HEARTBEAT_CONFIG,
@@ -104,6 +109,13 @@ export class Parley {
     public static readonly VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '1.0.0';
 
     /**
+     * Maximum payload size in bytes (10MB)
+     * Prevents DoS attacks through extremely large payloads
+     * that would cause browser freezes or memory exhaustion
+     */
+    private readonly MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
+
+    /**
      * Resolved configuration
      */
     private _config: ResolvedConfig;
@@ -152,6 +164,11 @@ export class Parley {
      * Heartbeat manager for connection health monitoring
      */
     private _heartbeatManager: HeartbeatManager | null = null;
+
+    /**
+     * Rate limit trackers per target/global
+     */
+    private _rateLimitTrackers: Map<string, { windowStart: number; count: number }> | null = null;
 
     /**
      * Whether the instance has been destroyed
@@ -282,7 +299,8 @@ export class Parley {
      * @param messageType - Registered message type
      * @param payload - Message payload
      * @param options - Send options
-     * @returns Promise that resolves with response (if expectsResponse is true)
+     * @returns Promise that resolves with response if expectsResponse is true,
+     *          or undefined if expectsResponse is false
      *
      * @example
      * ```typescript
@@ -295,8 +313,8 @@ export class Parley {
      *     timeout: 3000
      * });
      *
-     * // Fire and forget (no response expected)
-     * parley.send('analytics:track', { event: 'click' }, {
+     * // Fire and forget (no response expected) - returns undefined
+     * await parley.send('analytics:track', { event: 'click' }, {
      *     expectsResponse: false
      * });
      * ```
@@ -305,17 +323,25 @@ export class Parley {
         messageType: string,
         payload: T,
         options?: SendOptions
-    ): Promise<R> {
+    ): Promise<R | undefined> {
         this._assertNotDestroyed();
+
+        // Check rate limit before processing
+        this._checkRateLimit(options?.targetId);
 
         const expectsResponse = options?.expectsResponse ?? true;
         const targetId = options?.targetId;
 
-        // Validate payload against schema
-        this._registry.validatePayload(messageType, payload);
-
-        // Sanitize payload
+        // Security: Sanitize payload FIRST before validation
+        // This ensures that any prototype pollution or injection attempts are removed
+        // before we validate against the schema. The sanitized payload is what gets sent.
         const sanitizedPayload = this._security.sanitizePayload(payload);
+
+        // DoS prevention: Validate payload size before further processing
+        this._validatePayloadSize(sanitizedPayload);
+
+        // Validate sanitized payload against schema
+        this._registry.validatePayload(messageType, sanitizedPayload);
 
         // Create message
         const message = createMessage({
@@ -362,7 +388,8 @@ export class Parley {
         }
 
         if (!expectsResponse) {
-            return undefined as R;
+            // Fire and forget: return undefined when no response is expected
+            return undefined;
         }
 
         // Wait for response with timeout and retry
@@ -389,9 +416,16 @@ export class Parley {
     public broadcast<T>(messageType: string, payload: T): void {
         this._assertNotDestroyed();
 
-        // Validate and sanitize
-        this._registry.validatePayload(messageType, payload);
+        // Security: Sanitize payload FIRST before validation
+        // This ensures that any prototype pollution or injection attempts are removed
+        // before we validate against the schema. The sanitized payload is what gets sent.
         const sanitizedPayload = this._security.sanitizePayload(payload);
+
+        // DoS prevention: Validate payload size before further processing
+        this._validatePayloadSize(sanitizedPayload);
+
+        // Validate sanitized payload against schema
+        this._registry.validatePayload(messageType, sanitizedPayload);
 
         // Create message (no response expected for broadcasts)
         const message = createMessage({
@@ -544,6 +578,12 @@ export class Parley {
         try {
             // Connect
             await channel.connect(target);
+
+            // Update target origin from channel (now known after handshake)
+            const channelOrigin = channel.getTargetOrigin();
+            if (channelOrigin) {
+                this._targets.updateOrigin(id, channelOrigin);
+            }
 
             // Mark target as connected
             this._targets.markConnected(id);
@@ -814,31 +854,36 @@ export class Parley {
         retries: number,
         targetId?: string
     ): Promise<R> {
-        return new Promise((resolve, reject) => {
-            const resolveUnknown = resolve as (value: unknown) => void;
-            const timeoutHandle = setTimeout(() => {
-                this._handleTimeout(
-                    message._id,
-                    retries,
+        return new Promise<R>((resolve, reject) => {
+            try {
+                const resolveUnknown = resolve as (value: unknown) => void;
+                const timeoutHandle = setTimeout(() => {
+                    this._handleTimeout(
+                        message._id,
+                        retries,
+                        timeout,
+                        targetId,
+                        resolveUnknown,
+                        reject
+                    );
+                }, timeout);
+
+                const pendingRequest: PendingRequest<R> = {
+                    resolve: resolve as (value: unknown) => void,
+                    reject,
+                    timeoutHandle,
                     timeout,
+                    retriesRemaining: retries,
+                    messageType: message._type,
                     targetId,
-                    resolveUnknown,
-                    reject
-                );
-            }, timeout);
+                    sentAt: message._timestamp,
+                };
 
-            const pendingRequest: PendingRequest<R> = {
-                resolve: resolve as (value: unknown) => void,
-                reject,
-                timeoutHandle,
-                timeout,
-                retriesRemaining: retries,
-                messageType: message._type,
-                targetId,
-                sentAt: message._timestamp,
-            };
-
-            this._pendingRequests.set(message._id, pendingRequest as PendingRequest);
+                this._pendingRequests.set(message._id, pendingRequest as PendingRequest);
+            } catch (error) {
+                // If anything goes wrong during setup, reject the promise
+                reject(error);
+            }
         });
     }
 
@@ -993,32 +1038,34 @@ export class Parley {
         source: Window,
         sourceTargetId: string
     ): Promise<void> {
-        // Skip internal messages
-        if (isInternalMessage(message)) {
-            return;
+        const isInternal = isInternalMessage(message);
+
+        // For non-internal messages, emit received event and analytics
+        if (!isInternal) {
+            await this._emitter.emit(SYSTEM_EVENTS.MESSAGE_RECEIVED, {
+                messageId: message._id,
+                messageType: message._type,
+                origin: message._origin,
+                timestamp: getTimestamp(),
+            });
+
+            this._emitAnalyticsEvent({
+                type: 'message_received',
+                messageType: message._type,
+                messageId: message._id,
+                targetId: sourceTargetId,
+                timestamp: getTimestamp(),
+            });
         }
-
-        // Emit received event
-        await this._emitter.emit(SYSTEM_EVENTS.MESSAGE_RECEIVED, {
-            messageId: message._id,
-            messageType: message._type,
-            origin: message._origin,
-            timestamp: getTimestamp(),
-        });
-
-        this._emitAnalyticsEvent({
-            type: 'message_received',
-            messageType: message._type,
-            messageId: message._id,
-            targetId: sourceTargetId,
-            timestamp: getTimestamp(),
-        });
 
         // Get handlers for this message type
         const handlers = this._registry.getHandlers(message._type);
 
         if (handlers.length === 0) {
-            this._logger.warn('No handler for message type', { type: message._type });
+            // Only warn for non-internal messages
+            if (!isInternal) {
+                this._logger.warn('No handler for message type', { type: message._type });
+            }
 
             // Send error response if expected
             if (message._expectsResponse) {
@@ -1030,26 +1077,28 @@ export class Parley {
             return;
         }
 
-        // Validate payload
-        try {
-            this._registry.validatePayload(message._type, message.payload);
-        } catch (error) {
-            if (error instanceof ValidationError) {
-                this._logger.warn('Payload validation failed', {
-                    type: message._type,
-                    errors: error.validationErrors,
-                });
-
-                if (message._expectsResponse) {
-                    this._sendErrorResponse(message, source, sourceTargetId, {
-                        code: error.code,
-                        message: error.message,
-                        details: error.validationErrors,
+        // Validate payload (skip for internal messages)
+        if (!isInternal) {
+            try {
+                this._registry.validatePayload(message._type, message.payload);
+            } catch (error) {
+                if (error instanceof ValidationError) {
+                    this._logger.warn('Payload validation failed', {
+                        type: message._type,
+                        errors: error.validationErrors,
                     });
+
+                    if (message._expectsResponse) {
+                        this._sendErrorResponse(message, source, sourceTargetId, {
+                            code: error.code,
+                            message: error.message,
+                            details: error.validationErrors,
+                        });
+                    }
+                    return;
                 }
-                return;
+                throw error;
             }
-            throw error;
         }
 
         // Create metadata
@@ -1061,18 +1110,18 @@ export class Parley {
             expectsResponse: message._expectsResponse,
         };
 
-        // Track if response was sent
-        let responseSent = false;
+        // Track if response was sent using shared object for atomicity
+        const responseHandled = { sent: false };
 
         // Create respond function
         const respond = (responsePayload: unknown): void => {
-            if (responseSent) {
-                this._logger.warn('Response already sent for message', {
-                    messageId: message._id,
-                });
-                return;
+            if (responseHandled.sent) {
+                throw new Error(
+                    `Response already sent for message ${message._id}. ` +
+                        'Multiple handlers called respond() or respond() called after error.'
+                );
             }
-            responseSent = true;
+            responseHandled.sent = true;
 
             const response = createResponse({
                 requestId: message._id,
@@ -1099,8 +1148,8 @@ export class Parley {
                     timestamp: getTimestamp(),
                 });
 
-                if (message._expectsResponse && !responseSent) {
-                    responseSent = true;
+                if (message._expectsResponse && !responseHandled.sent) {
+                    responseHandled.sent = true;
                     this._sendErrorResponse(message, source, sourceTargetId, {
                         code: 'ERR_HANDLER_ERROR',
                         message: error instanceof Error ? error.message : 'Handler error',
@@ -1181,13 +1230,21 @@ export class Parley {
             return;
         }
 
-        for (const handler of this._analyticsHandlers) {
-            try {
-                handler(event);
-            } catch (error) {
-                this._logger.error('Analytics handler error', error);
-            }
-        }
+        // Convert handlers to promises and run all in parallel
+        const promises = Array.from(this._analyticsHandlers).map((handler) =>
+            Promise.resolve()
+                .then(() => handler(event))
+                .catch((error) => {
+                    this._logger.error('Analytics handler error:', error);
+                    // Don't re-throw - let other handlers continue
+                })
+        );
+
+        // Use allSettled to wait for all, even if some fail
+        Promise.allSettled(promises).catch(() => {
+            // Shouldn't happen, but handle just in case
+            this._logger.error('Analytics event processing failed');
+        });
     }
 
     /**
@@ -1197,6 +1254,83 @@ export class Parley {
         if (this._destroyed) {
             throw new Error('Parley instance has been destroyed');
         }
+    }
+
+    // ========================================================================
+    // Payload Validation Methods
+    // ========================================================================
+
+    /**
+     * Validate that payload does not exceed maximum size
+     * Prevents DoS attacks through extremely large payloads
+     *
+     * @param payload - Payload to validate
+     * @throws ValidationError if payload exceeds maximum size
+     */
+    private _validatePayloadSize(payload: unknown): void {
+        try {
+            const serialized = JSON.stringify(payload);
+            // JSON.stringify returns undefined for undefined values, skip size check in that case
+            if (serialized !== undefined && serialized.length > this.MAX_PAYLOAD_SIZE) {
+                throw new ValidationError(
+                    `Payload size ${serialized.length} bytes exceeds maximum of ${this.MAX_PAYLOAD_SIZE} bytes (10MB). ` +
+                        `This prevents DoS attacks through memory exhaustion and browser freezes.`,
+                    {
+                        size: serialized.length,
+                        maxSize: this.MAX_PAYLOAD_SIZE,
+                        rule: 'payloadSize',
+                    },
+                    VALIDATION_ERRORS.SCHEMA_MISMATCH
+                );
+            }
+        } catch (error) {
+            // If it's already a ValidationError from size check, re-throw it
+            if (error instanceof ValidationError) {
+                throw error;
+            }
+
+            // For other errors (like undefined serialization), let them be caught
+            // by the schema validator which will provide appropriate error handling
+            // This allows the normal error propagation path to continue
+        }
+    }
+
+    /**
+     * Check rate limit for message sending
+     *
+     * @param targetId - Optional target ID for per-target rate limiting
+     * @throws Error if rate limit is exceeded
+     */
+    private _checkRateLimit(targetId?: string): void {
+        if (!this._config.rateLimit?.enabled) {
+            return;
+        }
+
+        const now = Date.now();
+        const window = 1000; // 1 second
+
+        // Track messages per target (or globally if no targetId)
+        const key = targetId || '__global__';
+
+        if (!this._rateLimitTrackers) {
+            this._rateLimitTrackers = new Map();
+        }
+
+        let tracker = this._rateLimitTrackers.get(key);
+
+        if (!tracker || now - tracker.windowStart > window) {
+            // New window
+            tracker = { windowStart: now, count: 0 };
+            this._rateLimitTrackers.set(key, tracker);
+        }
+
+        const limit = this._config.rateLimit.messagesPerSecond ?? 100;
+
+        if (tracker.count >= limit) {
+            throw new Error(`Rate limit exceeded for ${key}: ` + `${limit} messages/sec max`);
+        }
+
+        tracker.count++;
     }
 
     // ========================================================================
@@ -1234,14 +1368,19 @@ export class Parley {
         // Handle heartbeat pongs (responses)
         this._registry.addHandler(
             SYSTEM_MESSAGE_TYPES.HEARTBEAT_PONG,
-            (_payload: HeartbeatPongPayload) => {
-                // Find target by senderId and record successful heartbeat
-                for (const target of this._targets.getAll()) {
-                    // Record heartbeat success for all targets (sender ID matching would be ideal)
-                    if (this._heartbeatManager?.isRunning(target.id)) {
-                        this._heartbeatManager.recordSuccess(target.id);
-                        this._targets.recordHeartbeat(target.id);
-                    }
+            (
+                _payload: HeartbeatPongPayload,
+                _respond: (response: unknown) => void,
+                metadata: MessageMetadata
+            ) => {
+                // Security: Only record success for the target that actually sent this pong
+                // Using metadata.senderId ensures we only reset the heartbeat timer for the sending target
+                // This prevents a malicious target from sending pongs to keep all connections marked as "alive"
+                const senderId = metadata.senderId;
+
+                if (this._heartbeatManager?.isRunning(senderId)) {
+                    this._heartbeatManager.recordSuccess(senderId);
+                    this._targets.recordHeartbeat(senderId);
                 }
             },
             true // internal

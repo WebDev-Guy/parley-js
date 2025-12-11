@@ -1,6 +1,7 @@
 {
     "name": "parley-js",
     "version": "1.0.0",
+    "type": "module",
     "description": "Type-safe, robust framework for window, tab, and iframe communication",
     "main": "./dist/index.js",
     "module": "./dist/index.mjs",
@@ -54,6 +55,6 @@
         "vitest": "^4.0.15"
     },
     "engines": {
-        "node": ">=16"
+        "node": ">=20"
     }
 }

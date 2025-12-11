@@ -66,6 +66,12 @@ export class WindowChannel extends BaseChannel {
     private _handshakeTimeout: ReturnType<typeof setTimeout> | null = null;
 
     /**
+     * Memoized connection promise to prevent race conditions
+     * If connect() is called multiple times, all calls return the same promise
+     */
+    private _connectPromise: Promise<void> | null = null;
+
+    /**
      * Creates a new WindowChannel instance
      *
      * @param options - Channel configuration options
@@ -93,6 +99,31 @@ export class WindowChannel extends BaseChannel {
             );
         }
 
+        // Race condition prevention: if already connecting, return the existing promise
+        // This ensures that multiple rapid connect() calls all wait for the same connection
+        if (this._connectPromise) {
+            return this._connectPromise;
+        }
+
+        // Create and memoize the connection promise
+        this._connectPromise = this._doConnect(target);
+
+        try {
+            await this._connectPromise;
+        } finally {
+            // Clear the memoized promise when complete (success or failure)
+            this._connectPromise = null;
+        }
+    }
+
+    /**
+     * Internal connection logic (separated from public connect for memoization)
+     *
+     * @param target - Target window (opened window or window.opener)
+     * @returns Promise that resolves when connected
+     * @throws ConnectionError if connection fails
+     */
+    private async _doConnect(target: Window): Promise<void> {
         if (this._state === 'connected') {
             this._logger.warn('Already connected');
             return;
@@ -247,7 +278,18 @@ export class WindowChannel extends BaseChannel {
     private async _connectToOpener(opener: Window): Promise<void> {
         this._isOpener = false;
         this._targetWindow = opener;
-        this._targetOrigin = this._options.allowedOrigins[0] ?? '*';
+
+        // Security: Use explicit allowed origin, never use wildcard
+        // See: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_considerations
+        if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
+            throw new ConnectionError(
+                'Cannot establish window connection to opener: no allowedOrigins configured. ' +
+                    'At least one explicit origin must be specified in allowedOrigins array.',
+                undefined,
+                CONNECTION_ERRORS.FAILED
+            );
+        }
+        this._targetOrigin = this._options.allowedOrigins[0]!;
 
         // Send handshake init to opener
         const initMessage = createMessage({
@@ -274,14 +316,31 @@ export class WindowChannel extends BaseChannel {
         // Wait for window to be ready
         await this._waitForWindowReady(opened);
 
-        // Try to determine origin
+        // Security: Determine origin explicitly, never use wildcard
+        // See: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_considerations
+        let origin = '';
+
         try {
             // For same-origin windows, we can access location
-            this._targetOrigin = opened.location.origin;
+            origin = opened.location.origin;
         } catch {
-            // Cross-origin - use first allowed origin or wildcard
-            this._targetOrigin = this._options.allowedOrigins[0] ?? '*';
+            // Cross-origin - cannot directly access location, use allowedOrigins
         }
+
+        if (!origin) {
+            // For cross-origin windows, we must use an explicitly configured allowed origin
+            if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
+                throw new ConnectionError(
+                    'Cannot establish connection to cross-origin window: no allowedOrigins configured. ' +
+                        'For cross-origin window.open communication, at least one explicit origin must be specified.',
+                    undefined,
+                    CONNECTION_ERRORS.FAILED
+                );
+            }
+            origin = this._options.allowedOrigins[0]!;
+        }
+
+        this._targetOrigin = origin;
 
         // Wait for handshake from the opened window
         await this._waitForHandshake();
@@ -439,5 +498,6 @@ export class WindowChannel extends BaseChannel {
         this._teardownMessageListener();
         this._targetWindow = null;
         this._targetOrigin = '';
+        this._connectPromise = null;
     }
 }

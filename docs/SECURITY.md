@@ -1,23 +1,43 @@
 # Security Guide
 
-This document outlines security best practices when using Parley-js.
+Parley-js implements **security-first design** for cross-window communication.
+This document outlines security features, best practices, and testing
+strategies.
 
 ## Overview
 
 Cross-window communication via `postMessage` has inherent security risks.
-Parley-js is designed with security as a primary concern, but proper
-configuration is essential.
+Parley-js is designed with security as a primary concern, implementing multiple
+layers of protection:
 
-## The Threat Model
+- **Origin Validation** - Strict origin whitelist enforcement
+- **Payload Sanitization** - XSS/injection prevention
+- **DoS Prevention** - Size limits, rate limiting, deep nesting protection
+- **Message Validation** - Protocol structure validation
+- **Error Safety** - No sensitive information disclosure
+
+## Table of Contents
+
+1. [Threat Model](#threat-model)
+2. [Core Security Features](#core-security-features)
+3. [Security Best Practices](#security-best-practices)
+4. [Security Testing](#security-testing)
+5. [Attack Prevention](#attack-prevention)
+6. [Reporting Security Issues](#reporting-security-issues)
+
+---
+
+## Threat Model
 
 ### Potential Attack Vectors
 
 1. **Origin Spoofing** - Malicious sites attempting to send messages
-2. **Message Injection** - Injecting malicious payloads
+2. **Message Injection** - Injecting malicious payloads (XSS, code execution)
 3. **Data Exfiltration** - Stealing sensitive data via cross-origin messages
 4. **Clickjacking** - Embedding your app in a malicious iframe
 5. **Replay Attacks** - Re-sending captured messages
-6. **Denial of Service** - Flooding with messages
+6. **Denial of Service** - Flooding with messages, resource exhaustion
+7. **Information Disclosure** - Leaking sensitive data through error messages
 
 ## Core Security Features
 
@@ -45,7 +65,34 @@ allowedOrigins: ['*.com'];
 allowedOrigins: ['*.example.com'];
 ```
 
-### 2. Protocol Enforcement
+**Origin validation features:**
+
+- Protocol matching (https:// vs http://)
+- Port number validation
+- Subdomain bypass prevention
+- Null origin rejection
+
+### 2. Payload Sanitization
+
+Parley automatically sanitizes all payloads:
+
+```typescript
+// Removes dangerous content:
+// - Functions
+// - Symbols
+// - Circular references
+// - __proto__ and constructor properties
+
+const sanitized = sanitizePayload({
+    data: 'safe',
+    dangerous: function () {
+        /* removed */
+    },
+    circular: obj, // handled safely
+});
+```
+
+### 3. Protocol Enforcement
 
 By default, Parley validates message structure:
 
@@ -64,7 +111,47 @@ By default, Parley validates message structure:
 
 Any message not matching this structure is rejected.
 
-### 3. Timestamp Validation
+### 4. DoS Prevention
+
+**Size Limits:**
+
+```typescript
+const parley = Parley.create({
+    allowedOrigins: ['https://trusted.com'],
+    maxPayloadSize: 1024 * 1024, // 1MB limit
+});
+```
+
+**Deep Nesting Protection:**
+
+```typescript
+// Automatically rejects deeply nested objects
+const rejected = {
+    a: {
+        b: {
+            c: {
+                d: {
+                    e: {
+                        f: {
+                            /* too deep */
+                        },
+                    },
+                },
+            },
+        },
+    },
+};
+```
+
+**Listener Limits:**
+
+```typescript
+// Prevents memory leaks from excessive listeners
+const MAX_LISTENERS = 100;
+emitter.setMaxListeners(MAX_LISTENERS);
+```
+
+### 5. Timestamp Validation
 
 Parley can reject stale messages:
 
@@ -76,7 +163,7 @@ const parley = Parley.create({
 });
 ```
 
-### 4. Schema Validation
+### 6. Schema Validation
 
 Validate payloads against JSON Schema:
 
@@ -92,6 +179,20 @@ parley.register('sensitive-action', handler, {
         additionalProperties: false, // Reject unknown properties
     },
 });
+```
+
+### 7. Error Information Disclosure Prevention
+
+Parley sanitizes error messages to prevent information leakage:
+
+```typescript
+// Production mode: Generic error messages
+try {
+    await parley.send('action', data);
+} catch (error) {
+    // User sees: "Validation failed"
+    // Logs contain: Full details for debugging
+}
 ```
 
 ## Security Best Practices
@@ -222,6 +323,138 @@ Before deploying to production:
 - [ ] **X-Frame-Options** - Clickjacking protection
 - [ ] **Testing** - Security tested with various attack payloads
 
+---
+
+## Security Testing
+
+Parley-js includes **comprehensive security tests** to validate protection
+mechanisms. See [TESTING.md](./TESTING.md) for complete testing documentation.
+
+### Security Test Suite
+
+Located in `tests/security/`, these tests verify:
+
+1. **Origin Validation** (`origin-validation.test.ts`)
+    - Unauthorized origin rejection
+    - Protocol matching enforcement
+    - Subdomain bypass prevention
+    - Null origin handling
+
+2. **Payload Sanitization** (`payload-sanitization.test.ts`)
+    - XSS prevention
+    - Code injection prevention
+    - Circular reference handling
+    - Function/symbol removal
+
+3. **PostMessage Security** (`postmessage-security.test.ts`)
+    - Wildcard prevention in targetOrigin
+    - Specific origin enforcement
+    - Null origin handling
+
+4. **Schema Validation DoS** (`schema-validation-dos.test.ts`)
+    - Deep nesting protection
+    - Regex DoS prevention
+    - Resource exhaustion prevention
+
+5. **Payload Size Limits** (`payload-size-limits.test.ts`)
+    - Size limit enforcement
+    - Nested payload calculation
+    - Clear error messaging
+
+6. **Listener Limits** (`listener-limits.test.ts`)
+    - Memory leak prevention
+    - Per-event listener limits
+    - Cleanup on removal
+
+7. **Message Validation** (`message-validation.test.ts`)
+    - Required field validation
+    - Field type validation
+    - Timestamp validation
+
+8. **Error Info Disclosure** (`error-info-disclosure.test.ts`)
+    - Stack trace sanitization
+    - Error code usage
+    - Sensitive information filtering
+
+### Running Security Tests
+
+```bash
+# Run all security tests
+npm test tests/security/
+
+# Run specific security test
+npm test tests/security/origin-validation.test.ts
+
+# Run with coverage
+npm run test:coverage -- tests/security/
+```
+
+### Coverage Requirements
+
+Security layer tests maintain **95%+ coverage** to ensure comprehensive
+protection.
+
+---
+
+## Attack Prevention
+
+### Tested Attack Scenarios
+
+Parley-js has been tested against:
+
+1. **XSS Attacks**
+
+    ```typescript
+    // Automatically sanitized
+    const payload = {
+        xss: '<script>alert("XSS")</script>',
+        dangerous: 'javascript:void(0)',
+    };
+    ```
+
+2. **Code Injection**
+
+    ```typescript
+    // Functions are removed
+    const payload = {
+        callback: function () {
+            maliciousCode();
+        },
+    };
+    ```
+
+3. **Prototype Pollution**
+
+    ```typescript
+    // __proto__ and constructor are blocked
+    const payload = {
+        __proto__: { admin: true },
+        constructor: { prototype: { isAdmin: true } },
+    };
+    ```
+
+4. **DoS via Deep Nesting**
+
+    ```typescript
+    // Rejected if exceeds max depth
+    const payload = createDeeplyNested(1000);
+    ```
+
+5. **DoS via Large Payloads**
+
+    ```typescript
+    // Rejected if exceeds size limit
+    const payload = { data: 'x'.repeat(10_000_000) };
+    ```
+
+6. **Origin Spoofing**
+    ```typescript
+    // Origin validation prevents spoofing
+    event.origin; // validated against allowedOrigins
+    ```
+
+---
+
 ## Content Security Policy (CSP)
 
 Configure CSP to restrict iframe sources:
@@ -339,6 +572,56 @@ function processPayload(payload: unknown) {
 }
 ```
 
+---
+
+## Reporting Security Issues
+
+**Do not report security vulnerabilities through public GitHub issues.**
+
+Instead, please email security issues to: **security@igniteworks.com**
+
+Include:
+
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Any suggested fixes
+
+We will respond within 48 hours and work with you to address the issue.
+
+---
+
+## Security Checklist
+
+Before deploying to production:
+
+- [ ] **Origin validation** configured with explicit allowlist
+- [ ] **HTTPS only** for all communication
+- [ ] **Schema validation** for sensitive message types
+- [ ] **Size limits** configured appropriately
+- [ ] **Error handling** does not expose sensitive information
+- [ ] **CSP headers** configured to restrict iframe sources
+- [ ] **X-Frame-Options** set if embedding not allowed
+- [ ] **Security tests** passing with 95%+ coverage
+- [ ] **Logging/monitoring** configured for security events
+- [ ] **Regular updates** to latest Parley-js version
+
+---
+
+## Resources
+
+- <a href="https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#postmessage" target="_blank">OWASP
+  postMessage Security</a>
+- <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage" target="_blank">MDN:
+  Window.postMessage()</a>
+- <a href="https://content-security-policy.com/" target="_blank">Content
+  Security Policy Reference</a>
+- [Testing Guide](./TESTING.md) - Security testing documentation
+
+---
+
+**Questions?** Open an issue or contact us at security@igniteworks.com
+
 ### 2. eval() and Function()
 
 ```typescript
@@ -407,7 +690,21 @@ class IncidentHandler {
 
 ## Further Reading
 
-- [MDN: Window.postMessage()](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage)
-- [OWASP: Cross-Origin Communication Security](https://owasp.org/www-community/controls/Cross_Origin_Communication)
-- [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
-- [X-Frame-Options](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options)
+- <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage" target="_blank">MDN:
+  Window.postMessage()</a>
+- <a href="https://owasp.org/www-community/controls/Cross_Origin_Communication" target="_blank">OWASP:
+  Cross-Origin Communication Security</a>
+- <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP" target="_blank">Content
+  Security Policy</a>
+- <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options" target="_blank">X-Frame-Options</a>
+
+---
+
+## Related Documentation
+
+- [API Reference](./API.md) - Complete API documentation
+- [Testing Guide](./TESTING.md) - Testing documentation and best practices
+- [Architecture](./ARCHITECTURE.md) - System design and internals
+- [Examples](./EXAMPLES.md) - Code examples and patterns
+- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
+- [README](../README.md) - Project overview

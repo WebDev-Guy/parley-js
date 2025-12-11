@@ -177,15 +177,17 @@ describe('BaseChannel', () => {
             expect(mockWindow.postMessage).toHaveBeenCalledWith(message, 'https://example.com');
         });
 
-        it('should convert null origin to wildcard', () => {
+        it('should throw error for null origin (file:// protocol)', () => {
             const mockWindow = {
                 postMessage: vi.fn(),
             } as unknown as Window;
 
             const message = createTestMessage('test:type', { data: 'test' });
-            channel.send(message, mockWindow, 'null');
 
-            expect(mockWindow.postMessage).toHaveBeenCalledWith(message, '*');
+            // Should throw ConnectionError for null origin (file:// protocol)
+            expect(() => {
+                channel.send(message, mockWindow, 'null');
+            }).toThrow(/Cannot send message without explicit target origin/);
         });
 
         it('should handle null target window gracefully', () => {

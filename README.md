@@ -3,16 +3,18 @@
 <div align="center">
 
 ![Parley-js Logo](https://img.shields.io/badge/Parley--js-postMessage%20Made%20Simple-blue)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io/)
-[![Bundle Size](https://img.shields.io/badge/Bundle-~40KB-green)](https://bundlephobia.com/package/parley-js)
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-success)](https://www.npmjs.com/package/parley-js)
+[![Tests](https://github.com/WebDev-Guy/parley-js/actions/workflows/test.yml/badge.svg)](https://github.com/WebDev-Guy/parley-js/actions/workflows/test.yml)
+<a href="https://www.typescriptlang.org/" target="_blank">![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)</a>
+<a href="https://opensource.org/licenses/MIT" target="_blank">![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)</a>
+<a href="https://prettier.io/" target="_blank">![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)</a>
+<a href="https://bundlephobia.com/package/parley-js" target="_blank">![Bundle Size](https://img.shields.io/badge/Bundle-~54KB-green)</a>
+<a href="https://www.npmjs.com/package/parley-js" target="_blank">![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-success)</a>
 
 **Type-safe, robust framework for window, tab, and iframe communication**
 
 [Getting Started](#getting-started) • [API Reference](./docs/API.md) •
-[Examples](./docs/EXAMPLES.md) • [Security](./docs/SECURITY.md)
+[Examples](./docs/EXAMPLES.md) • [Security](./docs/SECURITY.md) •
+[Testing](./docs/TESTING.md)
 
 </div>
 
@@ -20,16 +22,16 @@
 
 ## Features
 
-- **Security-First Design** - Origin validation, message integrity, configurable
-  security policies
-- **Zero Runtime Dependencies** - Lightweight and minimal footprint
-- **Type-Safe** - Full TypeScript support with strict typing and generics
-- **Request/Response Pattern** - Built-in timeout handling, retries, and
-  response correlation
-- **Analytics Ready** - Hooks for monitoring, debugging, and performance
-  tracking
+- **85%+ Test Coverage** - Comprehensive unit, integration, and security tests
+- **Security-First Design** - Origin validation, payload sanitization, DoS
+  prevention
+- **Type-Safe** - Full TypeScript with JSDoc comments
+- **Zero Dependencies** - Lightweight, portable, and minimal footprint
+- **Heartbeat Monitoring** - Automatic connection health checks
+- **Schema Validation** - JSON Schema support for message validation
+- **Request/Response Pattern** - Built-in timeout handling and retries
+- **Analytics Ready** - Hooks for monitoring and performance tracking
 - **Framework Agnostic** - Works with React, Vue, Angular, or vanilla JS
-- **Schema Validation** - Optional JSON Schema validation for message payloads
 - **Multiple Targets** - Communicate with iframes, popups, and other windows
 
 ## Installation
@@ -293,6 +295,52 @@ parley.onAnalytics((event) => {
 | Safari  | 13.1+   |
 | Edge    | 80+     |
 
+## Testing
+
+Parley-js maintains **85%+ test coverage** across unit, integration, and
+security tests.
+
+### Run Tests
+
+```bash
+npm test                 # Run all tests
+npm run test:coverage    # Run tests with coverage report
+npm run test:ui          # Open Vitest UI
+npm run test:watch       # Watch mode
+```
+
+### Test Structure
+
+- **Unit Tests** (`tests/unit/`) - Test individual components in isolation
+- **Integration Tests** (`tests/integration/`) - Test end-to-end communication
+  flows
+- **Security Tests** (`tests/security/`) - Validate security mechanisms and
+  attack prevention
+
+See [TESTING.md](./docs/TESTING.md) for comprehensive testing documentation.
+
+### Coverage Requirements
+
+- Overall: **85%+** code coverage
+- Core modules: **90%+** coverage
+- Security layer: **95%+** coverage
+
+## Security
+
+Parley-js implements **security-first design** for cross-window communication:
+
+- **Origin Validation** - Strict origin whitelist enforcement with protocol
+  matching
+- **Payload Sanitization** - XSS/injection prevention, circular reference
+  handling
+- **DoS Prevention** - Size limits, rate limiting, deep nesting protection
+- **Message Validation** - Protocol structure validation, required field
+  enforcement
+- **Error Safety** - No sensitive information disclosure in error messages
+
+See [SECURITY.md](./docs/SECURITY.md) for detailed security guidelines and best
+practices.
+
 ## Development
 
 ### Setup
@@ -326,6 +374,7 @@ npm run dev          # Watch mode
 - [API Reference](./docs/API.md) - Complete API documentation
 - [Architecture](./docs/ARCHITECTURE.md) - System design and internals
 - [Security Guide](./docs/SECURITY.md) - Security best practices
+- [Testing Guide](./docs/TESTING.md) - Testing documentation and best practices
 - [Examples](./docs/EXAMPLES.md) - Code examples and patterns
 - [Contributing](./CONTRIBUTING.md) - Contribution guidelines
 - [Roadmap](./docs/FUTURE-ROADMAP.md) - Future plans
@@ -340,7 +389,9 @@ MIT © 2025 Ignite Works, LLC
 
 **Made with care for the JavaScript community**
 
-[Report Bug](https://github.com/WebDev-Guy/parley-js/issues) •
-[Request Feature](https://github.com/WebDev-Guy/parley-js/issues)
+<a href="https://github.com/WebDev-Guy/parley-js/issues" target="_blank">Report
+Bug</a> •
+<a href="https://github.com/WebDev-Guy/parley-js/issues" target="_blank">Request
+Feature</a>
 
 </div>

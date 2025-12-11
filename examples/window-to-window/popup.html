@@ -370,18 +370,24 @@
                 });
             });
 
-            parley.on('ping', (payload, respond, metadata) => {
+            parley.on('ping', async (payload, respond, metadata) => {
                 log('Received ping, sending pong...', 'info');
                 displayReceivedMessage('system', 'Ping received');
 
-                // Send pong back (fire-and-forget)
-                parley.send('popup:pong', {
-                    originalTimestamp: payload.timestamp,
-                    pongTimestamp: Date.now()
-                }, {
-                    targetId: 'opener',
-                    expectsResponse: false
-                });
+                try {
+                    // Send pong back (fire-and-forget)
+                    await parley.send('popup:pong', {
+                        originalTimestamp: payload.timestamp,
+                        pongTimestamp: Date.now()
+                    }, {
+                        targetId: 'opener',
+                        expectsResponse: false
+                    });
+                    respond({ received: true });
+                } catch (error) {
+                    log(`Pong send failed: ${error.message}`, 'error');
+                    respond({ error: error.message });
+                }
             });
 
             parley.on('get-time', (payload, respond, metadata) => {
@@ -407,11 +413,13 @@
             parley.on('announcement', (payload, respond, metadata) => {
                 log(`Announcement: ${payload.message}`, 'info');
                 displayReceivedMessage('broadcast', payload.message);
+                respond({ received: true });
             });
 
             parley.on('close', (payload, respond, metadata) => {
                 log('Close request received, shutting down...', 'warn');
                 // The main window will close us, but we can do cleanup here
+                respond({ acknowledged: true });
             });
 
             // Use SYSTEM_EVENTS constant for type safety

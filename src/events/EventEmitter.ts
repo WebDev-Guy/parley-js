@@ -286,11 +286,13 @@ export class EventEmitter {
             this._listeners.set(event, listeners);
         }
 
-        // Warn if exceeding max listeners (potential memory leak)
+        // Prevent memory leaks by enforcing max listener limit
+        // Follows Node.js EventEmitter pattern of throwing on limit exceeded
         if (this._maxListeners > 0 && listeners.length >= this._maxListeners) {
-            console.warn(
-                `Warning: Event "${event}" has exceeded max listeners (${this._maxListeners}). ` +
-                    'This may indicate a memory leak.'
+            throw new Error(
+                `Max listeners (${this._maxListeners}) exceeded for event "${event}". ` +
+                    'This likely indicates a memory leak. ' +
+                    `Use emitter.setMaxListeners(n) to increase the limit if this is intentional.`
             );
         }
 

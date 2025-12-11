@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>React Child - Parley-js</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', sans-serif;
+            padding: 20px;
+            background: #282c34;
+            color: white;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            color: #61dafb;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .connected {
+            background: #155724;
+        }
+
+        .disconnected {
+            background: #721c24;
+        }
+
+        .counter {
+            font-size: 48px;
+            text-align: center;
+            padding: 20px;
+            background: rgba(97, 218, 251, 0.1);
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .log {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="module">
+        import { Parley, SYSTEM_EVENTS } from '../../dist/index.js';
+        window.Parley = Parley;
+        window.SYSTEM_EVENTS = SYSTEM_EVENTS;
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        function ChildApp() {
+            const [isConnected, setIsConnected] = useState(false);
+            const [counter, setCounter] = useState(0);
+            const [logs, setLogs] = useState([]);
+            const parleyRef = useRef(null);
+
+            const addLog = useCallback((message) => {
+                setLogs(prev => [
+                    ...prev,
+                    {
+                        id: Date.now(),
+                        message,
+                        time: new Date().toLocaleTimeString()
+                    }
+                ]);
+            }, []);
+
+            useEffect(() => {
+                // Initialize Parley
+                parleyRef.current = window.Parley.create({
+                    targetType: 'iframe',
+                    allowedOrigins: [window.location.origin],
+                    debug: true
+                });
+
+                // Connection events
+                parleyRef.current.onSystem(window.SYSTEM_EVENTS.CONNECTED, (data) => {
+                    setIsConnected(true);
+                    addLog(`Connected to ${data.targetId}`);
+                });
+
+                parleyRef.current.onSystem(window.SYSTEM_EVENTS.CONNECTION_LOST, (data) => {
+                    setIsConnected(false);
+                    addLog(`Disconnected from ${data.targetId}`);
+                });
+
+                // Message handlers
+                parleyRef.current.on('ping', async (payload, respond, metadata) => {
+                    addLog(`Received ping: ${JSON.stringify(payload)}`);
+
+                    // Send pong back
+                    await parleyRef.current.send('pong', {
+                        timestamp: Date.now(),
+                        originalTimestamp: payload.timestamp,
+                        roundTrip: Date.now() - payload.timestamp
+                    }, { targetId: 'parent' });
+
+                    respond({ received: true });
+                });
+
+                parleyRef.current.on('getData', async (payload, respond, metadata) => {
+                    addLog(`Data requested: ${payload.query}`);
+
+                    // Simulate data fetch
+                    const mockData = {
+                        userId: '123',
+                        username: 'demo_user',
+                        profile: {
+                            name: 'Demo User',
+                            email: 'demo@example.com'
+                        }
+                    };
+
+                    respond({ data: mockData });
+                });
+
+                parleyRef.current.on('updateCounter', async (payload, respond, metadata) => {
+                    addLog(`Counter update: ${payload.increment}`);
+                    setCounter(prev => prev + payload.increment);
+
+                    // Notify parent of update
+                    await parleyRef.current.send('child:update', {
+                        type: 'counter',
+                        value: counter + payload.increment
+                    }, { targetId: 'parent' });
+
+                    respond({ success: true, newValue: counter + payload.increment });
+                });
+
+                // Connect to parent
+                (async () => {
+                    try {
+                        await parleyRef.current.connect(window.parent, 'parent');
+                    } catch (error) {
+                        addLog(`Connection error: ${error.message}`);
+                    }
+                })();
+
+                // Cleanup
+                return () => {
+                    if (parleyRef.current) {
+                        parleyRef.current.destroy();
+                    }
+                };
+            }, [addLog, counter]);
+
+            return (
+                <div className="container">
+                    <h2>React Child Component</h2>
+
+                    <div className={`status ${isConnected ? 'connected' : 'disconnected'}`}>
+                        {isConnected ? 'Connected to Parent' : 'Not Connected'}
+                    </div>
+
+                    <div className="counter">
+                        Counter: {counter}
+                    </div>
+
+                    <div className="log">
+                        <strong>Activity Log:</strong>
+                        {logs.length === 0 ? (
+                            <div style={{ color: '#999', marginTop: '10px' }}>
+                                No activity yet...
+                            </div>
+                        ) : (
+                            logs.map(log => (
+                                <div key={log.id} style={{ marginTop: '5px' }}>
+                                    [{log.time}] {log.message}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ChildApp />);
+    </script>
+</body>
+
+</html>

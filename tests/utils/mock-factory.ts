@@ -138,17 +138,16 @@ export function createMockIframe(
 ): HTMLIFrameElement {
     const mockWindow = createMockWindow(id);
 
-    const iframe = {
-        id,
-        tagName: 'IFRAME',
-        contentWindow: mockWindow as unknown as Window,
-        src: origin,
-        getAttribute: (attr: string) => {
-            if (attr === 'id') return id;
-            if (attr === 'src') return origin;
-            return null;
-        },
-    } as unknown as HTMLIFrameElement;
+    // Create a real iframe element that will pass instanceof checks
+    const iframe = document.createElement('iframe');
+    iframe.id = id;
+    iframe.src = origin;
+
+    // Override the contentWindow getter to return our mock window
+    Object.defineProperty(iframe, 'contentWindow', {
+        get: () => mockWindow as unknown as Window,
+        configurable: true,
+    });
 
     return iframe;
 }

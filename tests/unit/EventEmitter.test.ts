@@ -533,19 +533,16 @@ describe('EventEmitter', () => {
             expect(emitter.getMaxListeners()).toBe(0);
         });
 
-        it('should warn when exceeding max listeners', () => {
+        it('should throw error when exceeding max listeners', () => {
             emitter.setMaxListeners(2);
 
-            const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
-
             emitter.on('test', vi.fn());
             emitter.on('test', vi.fn());
-            emitter.on('test', vi.fn()); // This should trigger warning
 
-            expect(consoleSpy).toHaveBeenCalled();
-            expect(consoleSpy.mock.calls[0][0]).toContain('exceeded max listeners');
-
-            consoleSpy.mockRestore();
+            // Third listener should exceed limit and throw
+            expect(() => {
+                emitter.on('test', vi.fn());
+            }).toThrow(/Max listeners \(2\) exceeded for event "test"/);
         });
 
         it('should not warn when max listeners is 0 (unlimited)', () => {

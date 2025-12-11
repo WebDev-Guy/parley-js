@@ -9,11 +9,12 @@ guidelines and instructions for contributing.
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
 - [Code Formatting](#code-formatting)
+- [Testing](#testing)
 - [Making Changes](#making-changes)
 - [Coding Standards](#coding-standards)
-- [Testing](#testing)
 - [Documentation](#documentation)
 - [Pull Request Process](#pull-request-process)
+- [Release Process](#release-process)
 
 ## Code of Conduct
 
@@ -32,7 +33,7 @@ uphold this code. Please report unacceptable behavior to the maintainers.
 
 ### Prerequisites
 
-- Node.js 16 or higher
+- Node.js 18 or higher
 - npm, yarn, or pnpm
 - Git
 
@@ -68,7 +69,7 @@ npm install
 npm run build:dev
 
 # Production build
-npm run build:prod
+npm run build
 
 # Watch mode
 npm run dev
@@ -78,6 +79,19 @@ npm run dev
 
 ```bash
 npm run typecheck
+```
+
+### 5. Run Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run specific test file
+npm test tests/unit/EventEmitter.test.ts
 ```
 
 ## Code Formatting
@@ -142,6 +156,64 @@ git commit -m "style: apply Prettier formatting"
 git push
 ```
 
+## Testing
+
+Parley-js maintains **85%+ test coverage**. All contributions must include
+tests.
+
+### Test Requirements
+
+1. **Unit Tests** - Test individual components in isolation
+2. **Integration Tests** - Test end-to-end workflows (if applicable)
+3. **Security Tests** - Test security features (if applicable)
+
+### Writing Tests
+
+```typescript
+describe('ComponentName', () => {
+    let instance: ComponentName;
+
+    beforeEach(() => {
+        instance = new ComponentName();
+    });
+
+    it('should do expected behavior', () => {
+        // Arrange
+        const input = 'test';
+
+        // Act
+        const result = instance.method(input);
+
+        // Assert
+        expect(result).toBe('expected');
+    });
+});
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+npm test tests/unit/EventEmitter.test.ts
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+### Coverage Requirements
+
+- Overall: **85%+**
+- Core modules: **90%+**
+- Security layer: **95%+**
+
+See [TESTING.md](./docs/TESTING.md) for comprehensive testing guidelines.
+
 ## Making Changes
 
 ### 1. Create a Branch
@@ -164,6 +236,7 @@ git checkout -b fix/issue-123
 - `docs/` - Documentation changes
 - `refactor/` - Code refactoring
 - `test/` - Test additions/changes
+- `security/` - Security improvements
 
 ### 2. Make Your Changes
 
@@ -171,6 +244,7 @@ git checkout -b fix/issue-123
 - Follow the coding standards
 - Add tests for new functionality
 - Update documentation as needed
+- Maintain or improve test coverage
 
 ### 3. Commit Your Changes
 
@@ -194,6 +268,7 @@ git commit -m "test(validation): add schema edge cases"
 - `refactor` - Code refactoring
 - `test` - Tests
 - `chore` - Build, tooling, etc.
+- `security` - Security improvements
 
 ### 4. Push and Create PR
 
@@ -332,6 +407,15 @@ export function myFunction(paramName: string): ReturnType {
 
 ## Testing
 
+Parley-js maintains **85%+ test coverage**. All contributions must include
+tests.
+
+### Test Requirements
+
+1. **Unit Tests** - Test individual components in isolation
+2. **Integration Tests** - Test end-to-end workflows (if applicable)
+3. **Security Tests** - Test security features (if applicable)
+
 ### Running Tests
 
 ```bash
@@ -342,16 +426,19 @@ npm test
 npm run test:watch
 
 # Run specific test file
-npm test -- path/to/test.test.ts
+npm test tests/unit/EventEmitter.test.ts
 
 # Run with coverage
 npm run test:coverage
+
+# Run security tests
+npm test tests/security/
 ```
 
 ### Writing Tests
 
 ```typescript
-// tests/core/Parley.test.ts
+// tests/unit/Parley.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Parley } from '../../src/core/Parley';
 
@@ -372,7 +459,7 @@ describe('Parley', () => {
         it('should send message to target', async () => {
             // Arrange
             const mockTarget = createMockTarget();
-            await parley.connect(mockTarget.window, 'test');
+            await parley.connect('test', mockTarget.window);
 
             // Act
             const result = await parley.send(
@@ -386,17 +473,21 @@ describe('Parley', () => {
         });
 
         it('should throw TimeoutError when no response', async () => {
-            // ...
+            await expect(
+                parley.send('message', {}, { targetId: 'test', timeout: 100 })
+            ).rejects.toThrow('Timeout');
         });
     });
 });
 ```
 
-### Test Categories
+### Coverage Requirements
 
-1. **Unit Tests** - Test individual functions/classes
-2. **Integration Tests** - Test component interaction
-3. **E2E Tests** - Test full communication flow
+- Overall: **85%+**
+- Core modules: **90%+**
+- Security layer: **95%+**
+
+See [TESTING.md](./docs/TESTING.md) for comprehensive testing guidelines.
 
 ## Documentation
 
@@ -407,20 +498,146 @@ describe('Parley', () => {
 - Include code examples
 - Update README if needed
 
+### JSDoc Comments
+
+All public APIs must include JSDoc comments:
+
+````typescript
+/**
+ * Sends a message to a connected target.
+ *
+ * @param messageType - The type of message to send
+ * @param payload - The message payload
+ * @param options - Optional configuration
+ * @returns A promise resolving with the response
+ * @throws {TimeoutError} If the request times out
+ * @throws {SecurityError} If the target origin is not allowed
+ * @example
+ * ```typescript
+ * const response = await parley.send('greeting', { name: 'World' });
+ * console.log(response);
+ * ```
+ */
+async send<T = unknown>(
+    messageType: string,
+    payload: unknown,
+    options?: SendOptions
+): Promise<T>
+````
+
 ### Documentation Files
 
 - `README.md` - Quick start and overview
 - `docs/API.md` - Complete API reference
 - `docs/ARCHITECTURE.md` - Internal architecture
 - `docs/SECURITY.md` - Security guide
+- `docs/TESTING.md` - Testing documentation
 - `docs/EXAMPLES.md` - Usage examples
 - `docs/FUTURE-ROADMAP.md` - Planned features
+- `CHANGELOG.md` - Version history
 
 ## Pull Request Process
 
 ### Before Submitting
 
 - [ ] Code is formatted (`npm run format`)
+- [ ] Tests pass (`npm test`)
+- [ ] Coverage maintained/improved (`npm run test:coverage`)
+- [ ] Type check passes (`npm run typecheck`)
+- [ ] Build succeeds (`npm run build`)
+- [ ] Documentation updated
+- [ ] CHANGELOG.md updated (under Unreleased)
+- [ ] PR template filled out completely
+
+### PR Guidelines
+
+1. **Title Format**
+
+    ```
+    feat(scope): add new feature
+    fix(scope): resolve issue #123
+    docs(scope): update API documentation
+    test(scope): add security tests
+    ```
+
+2. **Description**
+    - Clear description of changes
+    - Link to related issues
+    - Breaking changes clearly marked
+    - Screenshots/examples if applicable
+
+3. **Checklist**
+    - [ ] Tests added/updated
+    - [ ] Documentation updated
+    - [ ] Code formatted
+    - [ ] Type checking passes
+    - [ ] All tests pass
+    - [ ] Coverage maintained/improved (85%+)
+    - [ ] CHANGELOG.md updated
+    - [ ] No security vulnerabilities introduced
+
+### Review Process
+
+1. **Automated Checks** - CI must pass
+2. **Code Review** - At least one maintainer approval required
+3. **Testing** - Manual testing if needed
+4. **Merge** - Maintainer will merge when approved
+
+### After Merge
+
+- Your branch will be deleted automatically
+- Update your fork:
+    ```bash
+    git checkout main
+    git pull upstream main
+    git push origin main
+    ```
+
+## Release Process
+
+Releases are handled by maintainers:
+
+1. **Version Bump**
+
+    ```bash
+    npm version major|minor|patch
+    ```
+
+2. **Update CHANGELOG.md**
+    - Move Unreleased changes to new version
+    - Add release date
+    - List breaking changes
+    - Credit contributors
+
+3. **Tag Release**
+
+    ```bash
+    git tag v1.x.x
+    git push --tags
+    ```
+
+4. **Publish to npm**
+
+    ```bash
+    npm publish
+    ```
+
+5. **Create GitHub Release**
+    - Add release notes
+    - Highlight breaking changes
+    - Credit contributors
+
+---
+
+## Questions?
+
+- Open a [discussion](https://github.com/WebDev-Guy/parley-js/discussions)
+- Check [existing issues](https://github.com/WebDev-Guy/parley-js/issues)
+- Review [documentation](./docs/API.md)
+- Email: hello@igniteworks.com
+
+Thank you for contributing to Parley-js!
+
 - [ ] Tests pass (`npm test`)
 - [ ] Types check (`npm run typecheck`)
 - [ ] Code follows standards
@@ -473,7 +690,17 @@ Describe how to test the changes.
 ## Questions?
 
 - Open a GitHub Discussion for questions
-- Join our Discord for community chat
 - Check existing issues for similar problems
 
 Thank you for contributing!
+
+---
+
+## Related Documentation
+
+- [API Reference](./docs/API.md) - Complete API documentation
+- [Testing Guide](./docs/TESTING.md) - Testing documentation and best practices
+- [Security Guide](./docs/SECURITY.md) - Security best practices
+- [Architecture](./docs/ARCHITECTURE.md) - System design and internals
+- [Examples](./docs/EXAMPLES.md) - Code examples and patterns
+- [README](./README.md) - Project overview
