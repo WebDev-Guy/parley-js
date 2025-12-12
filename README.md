@@ -12,9 +12,9 @@
 
 **Type-safe, robust framework for window, tab, and iframe communication**
 
-[Getting Started](#getting-started) • [API Reference](./docs/API.md) •
-[Examples](./docs/EXAMPLES.md) • [Security](./docs/SECURITY.md) •
-[Testing](./docs/TESTING.md)
+[Quick Start](#quick-start) • [Documentation](./docs/README.md) •
+[How-To Guides](./docs/guides/README.md) • [API Reference](./docs/api-reference/README.md) •
+[Examples](./docs/EXAMPLES.md)
 
 </div>
 
@@ -190,6 +190,50 @@ const response = await parley.send<RequestType, ResponseType>(
 // Send to all connected targets
 await parley.broadcast('update', { timestamp: Date.now() });
 ```
+
+---
+
+## Documentation
+
+**[Complete Documentation Hub](./docs/README.md)** - Start here for organized access to all documentation
+
+### Quick Start
+
+New to ParleyJS? Start here:
+
+- **[Getting Started](./docs/getting-started/README.md)** - Installation, first example, and core concepts
+- **[Framework Reference](./docs/FRAMEWORK_REFERENCE.md)** - Quick reference guide with common patterns
+- **[Examples](./docs/EXAMPLES.md)** - Real-world code examples to learn from
+
+### How-To Guides
+
+Choose the guide that matches your scenario:
+
+- **[iFrame Communication](./docs/guides/iframe-communication.md)** - Embedding and communicating with iframes
+- **[Popup Window Communication](./docs/guides/popup-communication.md)** - Parent and popup window patterns
+- **[Multi-Window Communication](./docs/guides/multi-window-communication.md)** - Coordinating multiple windows
+- **[All Guides](./docs/guides/README.md)** - Complete list of implementation guides
+
+### Reference Documentation
+
+- **[API Reference](./docs/api-reference/README.md)** - Complete API documentation with methods, types, and error codes
+- **[Code Patterns](./docs/patterns/README.md)** - Reusable patterns for request-response, error handling, and state sync
+- **[Security Guide](./docs/security/README.md)** - Security best practices and origin validation
+- **[Performance](./docs/performance/README.md)** - Optimization techniques and profiling
+
+### Advanced Topics
+
+- **[Architecture](./docs/ARCHITECTURE.md)** - Internal design and architecture
+- **[Testing Guide](./docs/TESTING.md)** - Comprehensive testing documentation
+- **[Testing Patterns](./docs/TESTING_PATTERNS.md)** - Testing strategies and patterns
+
+### Help & Resources
+
+- **[Troubleshooting](./docs/troubleshooting/README.md)** - Common issues and debugging strategies
+- **[Contributing](./CONTRIBUTING.md)** - How to contribute to ParleyJS
+- **[Changelog](./CHANGELOG.md)** - Version history and changes
+
+---
 
 ### System Events
 
@@ -368,16 +412,6 @@ npm run build        # Production build
 npm run build:dev    # Development build with source maps
 npm run dev          # Watch mode
 ```
-
-## Documentation
-
-- [API Reference](./docs/API.md) - Complete API documentation
-- [Architecture](./docs/ARCHITECTURE.md) - System design and internals
-- [Security Guide](./docs/SECURITY.md) - Security best practices
-- [Testing Guide](./docs/TESTING.md) - Testing documentation and best practices
-- [Examples](./docs/EXAMPLES.md) - Code examples and patterns
-- [Contributing](./CONTRIBUTING.md) - Contribution guidelines
-- [Roadmap](./docs/FUTURE-ROADMAP.md) - Future plans
 
 ## License
 

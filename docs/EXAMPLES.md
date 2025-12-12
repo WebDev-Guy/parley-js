@@ -1,3 +1,5 @@
+[Home](../README.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Examples
+
 # Examples
 
 Practical examples and patterns for using Parley-js.
@@ -18,6 +20,8 @@ Practical examples and patterns for using Parley-js.
 ---
 
 ## Basic Communication
+
+For reusable patterns and best practices, see [Code Patterns](./CODE_PATTERNS.md).
 
 ### Simple Request/Response
 
@@ -94,6 +98,8 @@ await parley.broadcast('config-update', {
 ---
 
 ## Iframe Communication
+
+For complete iframe setup guide, see [iFrame Communication Guide](./guides/iframe-communication.md).
 
 ### Embedding a Widget
 
@@ -1006,11 +1012,18 @@ Each example includes:
 
 ---
 
-## Related Documentation
+## Navigation
 
+### Related Documentation
+
+- [Code Patterns](./CODE_PATTERNS.md) - Common coding patterns
 - [API Reference](./API.md) - Complete API documentation
-- [Testing Guide](./TESTING.md) - Testing documentation and best practices
-- [Security Guide](./SECURITY.md) - Security best practices
-- [Architecture](./ARCHITECTURE.md) - System design and internals
-- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
-- [README](../README.md) - Project overview
+- [Framework Reference](./FRAMEWORK_REFERENCE.md) - Quick reference guide
+
+### See Also
+
+- [Security Guide](./SECURITY.md) - Secure coding practices
+- [Testing Patterns](./TESTING_PATTERNS.md) - Testing these examples
+- [Live Examples](../examples/) - Working code examples
+
+**Back to**: [Documentation Home](../README.md)

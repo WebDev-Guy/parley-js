@@ -1,3 +1,5 @@
+[Home](../README.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Architecture
+
 # Architecture
 
 This document describes the internal architecture of Parley-js.
@@ -6,6 +8,8 @@ This document describes the internal architecture of Parley-js.
 
 Parley-js is designed with a modular, layered architecture that separates
 concerns and enables extensibility.
+
+For implementation patterns based on this architecture, see [Code Patterns](./CODE_PATTERNS.md). For API documentation, see [API Reference](./API.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -791,11 +795,18 @@ const CONNECTION_ERRORS = {
 
 ---
 
-## Related Documentation
+## Navigation
+
+### Related Documentation
 
 - [API Reference](./API.md) - Complete API documentation
-- [Testing Guide](./TESTING.md) - Testing documentation and best practices
-- [Security Guide](./SECURITY.md) - Security best practices
-- [Examples](./EXAMPLES.md) - Code examples and patterns
-- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
-- [README](../README.md) - Project overview
+- [Framework Reference](./FRAMEWORK_REFERENCE.md) - Quick reference guide
+- [Security Guide](./SECURITY.md) - Security layer design
+
+### See Also
+
+- [Testing Guide](./TESTING.md) - Testing the architecture
+- [Examples](./EXAMPLES.md) - Implementation examples
+- [Contributing](../CONTRIBUTING.md) - Contributing to the codebase
+
+**Back to**: [Documentation Home](../README.md)

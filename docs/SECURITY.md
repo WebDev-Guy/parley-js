@@ -1,3 +1,5 @@
+[Home](../README.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Security Guide
+
 # Security Guide
 
 Parley-js implements **security-first design** for cross-window communication.
@@ -40,6 +42,8 @@ layers of protection:
 7. **Information Disclosure** - Leaking sensitive data through error messages
 
 ## Core Security Features
+
+For secure coding patterns, see [Code Patterns](./CODE_PATTERNS.md). For security testing, see [Testing Patterns](./TESTING_PATTERNS.md).
 
 ### 1. Origin Validation
 
@@ -700,11 +704,18 @@ class IncidentHandler {
 
 ---
 
-## Related Documentation
+## Navigation
+
+### Related Documentation
 
 - [API Reference](./API.md) - Complete API documentation
-- [Testing Guide](./TESTING.md) - Testing documentation and best practices
-- [Architecture](./ARCHITECTURE.md) - System design and internals
-- [Examples](./EXAMPLES.md) - Code examples and patterns
-- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
-- [README](../README.md) - Project overview
+- [Code Patterns](./CODE_PATTERNS.md) - Secure coding patterns
+- [Testing Guide](./TESTING.md) - Security testing strategies
+- [Examples](./EXAMPLES.md) - Secure implementation examples
+
+### See Also
+
+- [Troubleshooting](./TROUBLESHOOTING.md) - Common security issues
+- [Architecture](./ARCHITECTURE.md) - Security layer design
+
+**Back to**: [Documentation Home](../README.md)
