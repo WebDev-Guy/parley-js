@@ -1,497 +1,670 @@
-[Home](../../README.md) > [Documentation](../FRAMEWORK_REFERENCE.md) > [Guides](./README.md) > iFrame Communication
+[Home](../../README.md) > [Guides](./README.md) > iFrame Communication
 
 # iFrame Communication Guide
 
-Complete guide to embedding and communicating with iframes using ParleyJS.
+This guide shows you how to implement secure, bidirectional communication between a parent page and embedded iframes using ParleyJS.
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Basic Setup](#basic-setup)
-3. [Common Patterns](#common-patterns)
-4. [Security Considerations](#security-considerations)
-5. [Troubleshooting](#troubleshooting)
-6. [Complete Example](#complete-example)
-
----
+2. [Prerequisites](#prerequisites)
+3. [Basic Setup](#basic-setup)
+4. [Step-by-Step Implementation](#step-by-step-implementation)
+5. [Complete Code Example](#complete-code-example)
+6. [Explanation](#explanation)
+7. [Common Mistakes](#common-mistakes)
+8. [Advanced Patterns](#advanced-patterns)
+9. [Next Steps](#next-steps)
+10. [Related Guides](#related-guides)
 
 ## Overview
 
-iFrames are one of the most common use cases for postMessage communication. ParleyJS simplifies iframe communication by handling connection management, origin validation, and request-response patterns.
+iFrame communication enables you to embed third-party content, widgets, or isolated components while maintaining secure communication between the parent page and iframe. Common use cases include widget embedding, configuration passing, event forwarding, and dynamic resizing.
 
-**Use cases**:
-- Embedding third-party widgets
-- Sandboxed components
-- Cross-origin content
-- Micro-frontend integration
+ParleyJS simplifies iframe communication by handling origin validation, connection management, and message routing automatically.
 
----
+## Prerequisites
+
+Before starting this guide:
+- Complete [Your First ParleyJS Example](../getting-started/first-example.md)
+- Understand [Core Concepts](../getting-started/concepts.md)
+- Basic knowledge of iframes and postMessage API
+- Local web server (ParleyJS requires HTTP/HTTPS, not file://)
+
+If you need help with setup, see [Installation](../getting-started/installation.md).
 
 ## Basic Setup
 
-### Parent Window (Host)
+The simplest iframe communication setup requires two files: a parent page and a child page embedded in an iframe.
 
-```typescript
+### Minimal Parent Setup
+
+```javascript
 import { Parley } from 'parley-js';
 
 // Create Parley instance
 const parley = Parley.create({
-  allowedOrigins: ['https://child-iframe.example.com']
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.example.com']
 });
 
 // Get iframe element
-const iframe = document.querySelector<HTMLIFrameElement>('#my-iframe');
+const iframe = document.getElementById('my-iframe');
 
-// Wait for iframe to load
-iframe?.addEventListener('load', async () => {
-  // Connect to iframe
-  await parley.connect(iframe.contentWindow!, 'child');
-
-  // Now you can send messages
-  const response = await parley.send('hello', { name: 'Parent' }, {
-    targetId: 'child'
-  });
-
-  console.log('Child responded:', response);
+// Wait for iframe to load, then connect
+iframe.addEventListener('load', async () => {
+    await parley.connect(iframe, 'child');
+    console.log('Connected to iframe');
 });
 ```
 
-### Child Window (iFrame)
+### Minimal Child Setup
 
-```typescript
+```javascript
 import { Parley } from 'parley-js';
 
 // Create Parley instance
 const parley = Parley.create({
-  allowedOrigins: ['https://parent.example.com']
+    targetType: 'iframe',
+    allowedOrigins: ['https://parent.example.com']
 });
 
-// Register message handler
-parley.on('hello', (payload, respond) => {
-  console.log('Received from parent:', payload.name);
-  respond({ message: 'Hello from child!' });
-});
-
-// Connect to parent
+// Connect to parent window
 await parley.connect(window.parent, 'parent');
+console.log('Connected to parent');
 ```
 
----
+This basic setup establishes a secure communication channel between parent and child.
 
-## Common Patterns
+## Step-by-Step Implementation
 
-### Pattern: Configuration on Load
+Follow these steps to implement complete iframe communication.
 
-Send configuration to iframe when it loads.
+### Step 1: Create the Parent Page
 
-**Parent**:
-```typescript
+Create `parent.html` with ParleyJS initialization:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Parent Page</title>
+</head>
+<body>
+    <h1>Parent Window</h1>
+    <iframe id="child-iframe" src="child.html" width="800" height="600"></iframe>
+
+    <script type="module">
+        import { Parley } from 'parley-js';
+
+        const parley = Parley.create({
+            targetType: 'iframe',
+            allowedOrigins: [window.location.origin],
+            timeout: 5000,
+            heartbeat: {
+                enabled: true,
+                interval: 3000,
+                timeout: 2000,
+                maxMissed: 3
+            }
+        });
+
+        // Register message handler
+        parley.on('widget:ready', (payload, respond, metadata) => {
+            console.log('Widget is ready:', payload);
+            respond({ status: 'acknowledged' });
+        });
+
+        // Connect when iframe loads
+        const iframe = document.getElementById('child-iframe');
+        iframe.addEventListener('load', async () => {
+            await parley.connect(iframe, 'child');
+
+            // Send initial configuration
+            await parley.send('config:initialize', {
+                theme: 'dark',
+                apiKey: 'abc123'
+            }, { targetId: 'child' });
+        });
+    </script>
+</body>
+</html>
+```
+
+### Step 2: Create the Child Page
+
+Create `child.html` that runs inside the iframe:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Child Iframe</title>
+</head>
+<body>
+    <h2>Child Widget</h2>
+
+    <script type="module">
+        import { Parley } from 'parley-js';
+
+        const parley = Parley.create({
+            targetType: 'iframe',
+            allowedOrigins: [window.location.origin]
+        });
+
+        // Register configuration handler
+        parley.on('config:initialize', (payload, respond, metadata) => {
+            console.log('Received config:', payload);
+
+            // Apply configuration
+            document.body.style.backgroundColor =
+                payload.theme === 'dark' ? '#333' : '#fff';
+
+            respond({ success: true });
+        });
+
+        // Connect to parent
+        await parley.connect(window.parent, 'parent');
+
+        // Notify parent we're ready
+        await parley.send('widget:ready', {
+            timestamp: Date.now()
+        }, { targetId: 'parent' });
+    </script>
+</body>
+</html>
+```
+
+### Step 3: Add Message Handlers
+
+Register handlers for bidirectional communication:
+
+```javascript
+// Parent: Listen for events from child
+parley.on('widget:event', (payload, respond, metadata) => {
+    console.log('Widget event:', payload.eventType);
+
+    if (payload.eventType === 'user-click') {
+        // Handle user interaction
+        respond({ received: true });
+    }
+});
+
+// Child: Send events to parent
+async function notifyParent(eventType, data) {
+    await parley.send('widget:event', {
+        eventType,
+        data,
+        timestamp: Date.now()
+    }, { targetId: 'parent' });
+}
+
+// Example: Notify parent of user click
+document.addEventListener('click', () => {
+    notifyParent('user-click', { x: event.clientX, y: event.clientY });
+});
+```
+
+### Step 4: Implement Error Handling
+
+Add proper error handling for robust communication:
+
+```javascript
+// Parent: Handle connection errors
+try {
+    await parley.connect(iframe, 'child');
+} catch (error) {
+    console.error('Failed to connect to iframe:', error.message);
+    // Show error UI to user
+}
+
+// Parent: Handle message timeouts
+try {
+    const response = await parley.send('data:request', { id: 123 }, {
+        targetId: 'child',
+        timeout: 3000
+    });
+} catch (error) {
+    if (error.code === 'ERR_TIMEOUT_NO_RESPONSE') {
+        console.error('Iframe did not respond in time');
+    }
+}
+
+// Child: Handle disconnection
+parley.onSystem(Parley.SYSTEM_EVENTS.DISCONNECTED, (event) => {
+    console.log('Disconnected from parent:', event.reason);
+    // Attempt reconnection or show offline state
+});
+```
+
+## Complete Code Example
+
+This example demonstrates a complete iframe integration with configuration, event handling, and error recovery.
+
+### Parent Page (parent.html)
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Widget Container</title>
+</head>
+<body>
+    <h1>Widget Container</h1>
+    <div id="status">Connecting...</div>
+    <iframe id="widget" src="widget.html" width="800" height="600"></iframe>
+
+    <script type="module">
+        import { Parley } from 'parley-js';
+
+        const parley = Parley.create({
+            targetType: 'iframe',
+            allowedOrigins: [window.location.origin],
+            timeout: 5000,
+            heartbeat: { enabled: true, interval: 3000 }
+        });
+
+        const statusEl = document.getElementById('status');
+
+        // Listen for widget events
+        parley.on('widget:resize', (payload, respond) => {
+            const iframe = document.getElementById('widget');
+            iframe.style.height = `${payload.height}px`;
+            respond({ resized: true });
+        });
+
+        parley.on('widget:error', (payload) => {
+            console.error('Widget error:', payload.message);
+            statusEl.textContent = 'Widget Error';
+        });
+
+        // System event handlers
+        parley.onSystem(Parley.SYSTEM_EVENTS.CONNECTED, () => {
+            statusEl.textContent = 'Connected';
+            initializeWidget();
+        });
+
+        parley.onSystem(Parley.SYSTEM_EVENTS.CONNECTION_LOST, () => {
+            statusEl.textContent = 'Connection Lost';
+        });
+
+        // Initialize widget with configuration
+        async function initializeWidget() {
+            try {
+                const response = await parley.send('widget:init', {
+                    theme: 'dark',
+                    locale: 'en-US',
+                    features: ['analytics', 'notifications']
+                }, { targetId: 'widget' });
+
+                console.log('Widget initialized:', response);
+            } catch (error) {
+                console.error('Initialization failed:', error);
+                statusEl.textContent = 'Initialization Failed';
+            }
+        }
+
+        // Connect when iframe loads
+        const iframe = document.getElementById('widget');
+        iframe.addEventListener('load', async () => {
+            try {
+                await parley.connect(iframe, 'widget');
+            } catch (error) {
+                console.error('Connection failed:', error);
+                statusEl.textContent = 'Connection Failed';
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+### Child Widget (widget.html)
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Widget</title>
+</head>
+<body>
+    <h2>Widget Content</h2>
+    <div id="content">Loading...</div>
+
+    <script type="module">
+        import { Parley } from 'parley-js';
+
+        const parley = Parley.create({
+            targetType: 'iframe',
+            allowedOrigins: [window.location.origin]
+        });
+
+        let config = {};
+
+        // Handle initialization
+        parley.on('widget:init', (payload, respond) => {
+            config = payload;
+
+            // Apply theme
+            document.body.style.backgroundColor =
+                payload.theme === 'dark' ? '#333' : '#fff';
+            document.body.style.color =
+                payload.theme === 'dark' ? '#fff' : '#333';
+
+            document.getElementById('content').textContent =
+                `Initialized with locale: ${payload.locale}`;
+
+            respond({
+                success: true,
+                version: '1.0.0'
+            });
+
+            // Auto-resize based on content
+            requestResize();
+        });
+
+        // Auto-resize function
+        async function requestResize() {
+            const height = document.body.scrollHeight;
+
+            try {
+                await parley.send('widget:resize', {
+                    height,
+                    timestamp: Date.now()
+                }, { targetId: 'parent' });
+            } catch (error) {
+                console.error('Resize request failed:', error);
+            }
+        }
+
+        // Report errors to parent
+        window.addEventListener('error', (event) => {
+            parley.send('widget:error', {
+                message: event.message,
+                filename: event.filename,
+                lineno: event.lineno
+            }, {
+                targetId: 'parent',
+                expectsResponse: false
+            });
+        });
+
+        // Connect to parent
+        await parley.connect(window.parent, 'parent');
+    </script>
+</body>
+</html>
+```
+
+## Explanation
+
+### Connection Flow
+
+1. Parent creates Parley instance with iframe target type and allowed origins.
+2. Child creates Parley instance with matching origin configuration.
+3. Parent waits for iframe load event to ensure child is ready.
+4. Parent calls connect() with iframe element and target ID.
+5. Child calls connect() with window.parent reference.
+6. Handshake completes and both sides can send messages.
+
+The handshake happens automatically when both sides call connect(). ParleyJS handles the protocol internally.
+
+### Origin Validation
+
+ParleyJS validates every message against the allowedOrigins list. For same-origin iframes, use window.location.origin. For cross-origin iframes, specify the exact iframe origin including protocol, hostname, and port.
+
+See [Origin Validation](../security/origin-validation.md) for detailed security guidance.
+
+### Message Routing
+
+Messages sent with targetId are routed to that specific connection. Use broadcast() to send to all connected targets. Each message includes metadata with origin, targetId, and messageId for tracking.
+
+See [send() in API Reference](../api-reference/methods.md#send) for complete send options.
+
+### Heartbeat Monitoring
+
+The heartbeat configuration monitors connection health. If the iframe becomes unresponsive (browser tab suspended), ParleyJS detects it and emits SYSTEM_EVENTS.CONNECTION_LOST. You can then show an offline indicator or attempt reconnection.
+
+See [System Events in API Reference](../api-reference/README.md#system-events) for all available events.
+
+## Common Mistakes
+
+### Mistake 1: Connecting Before Iframe Loads
+
+**Problem**: Calling parley.connect() before the iframe is fully loaded causes connection failures.
+
+**Wrong**:
+```javascript
+const iframe = document.getElementById('my-iframe');
+await parley.connect(iframe, 'child'); // iframe might not be loaded yet
+```
+
+**Correct**:
+```javascript
+const iframe = document.getElementById('my-iframe');
 iframe.addEventListener('load', async () => {
-  await parley.connect(iframe.contentWindow!, 'child');
-
-  // Send initial configuration
-  await parley.send('configure', {
-    theme: 'dark',
-    apiKey: 'abc123',
-    userId: 'user-456'
-  }, {
-    targetId: 'child',
-    expectsResponse: false
-  });
+    await parley.connect(iframe, 'child');
 });
 ```
 
-**Child**:
-```typescript
-parley.on('configure', (config) => {
-  // Apply configuration
-  setTheme(config.theme);
-  initializeAPI(config.apiKey);
-  loadUserData(config.userId);
-});
+Wait for the load event to ensure the iframe's window object is ready.
 
-await parley.connect(window.parent, 'parent');
+### Mistake 2: Mismatched Origins
+
+**Problem**: Parent and child have different origins configured, preventing communication.
+
+**Wrong**:
+```javascript
+// Parent
+allowedOrigins: ['https://example.com']
+
+// Child (running on localhost)
+allowedOrigins: ['http://localhost:3000']
 ```
 
-### Pattern: Ready Signal
+**Correct**:
+```javascript
+// Both parent and child for same-origin
+allowedOrigins: [window.location.origin]
 
-Child signals when fully initialized.
+// Cross-origin: Each side allows the other's origin
+// Parent
+allowedOrigins: ['https://child.example.com']
 
-**Child**:
-```typescript
-// Connect to parent
-await parley.connect(window.parent, 'parent');
-
-// Do initialization
-await initialize();
-
-// Signal ready
-await parley.send('ready', { version: '1.0.0' }, {
-  targetId: 'parent',
-  expectsResponse: false
-});
+// Child
+allowedOrigins: ['https://parent.example.com']
 ```
 
-**Parent**:
-```typescript
-parley.on('ready', (payload) => {
-  console.log('Child is ready, version:', payload.version);
-  // Now safe to send messages
-});
+Origins must match exactly including protocol (http/https), hostname, and port.
+
+### Mistake 3: Not Handling Connection Errors
+
+**Problem**: Connection failures are not caught, leaving the UI in an undefined state.
+
+**Wrong**:
+```javascript
+await parley.connect(iframe, 'child');
+// Assumes success, no error handling
 ```
 
-### Pattern: Data Fetching
-
-Parent fetches data through iframe.
-
-**Parent**:
-```typescript
-async function getUserData(userId: string) {
-  const response = await parley.send('get-user', { userId }, {
-    targetId: 'child',
-    timeout: 10000
-  });
-
-  if (response.success) {
-    return response.user;
-  } else {
-    throw new Error(response.error);
-  }
+**Correct**:
+```javascript
+try {
+    await parley.connect(iframe, 'child');
+    statusEl.textContent = 'Connected';
+} catch (error) {
+    console.error('Connection failed:', error.message);
+    statusEl.textContent = 'Connection Failed - Retrying...';
+    // Implement retry logic or show error UI
 }
 ```
 
-**Child**:
-```typescript
-parley.on('get-user', async (payload, respond) => {
-  try {
-    const user = await api.fetchUser(payload.userId);
-    respond({ success: true, user });
-  } catch (error) {
-    respond({ success: false, error: error.message });
-  }
+Always handle connection errors with try-catch blocks.
+
+### Mistake 4: Forgetting to Respond
+
+**Problem**: Child receives a message expecting a response but doesn't call respond(), causing timeout in parent.
+
+**Wrong**:
+```javascript
+parley.on('config:set', (payload) => {
+    applyConfig(payload);
+    // Forgot to call respond()
 });
 ```
 
-### Pattern: Event Forwarding
-
-Forward UI events from iframe to parent.
-
-**Child**:
-```typescript
-// Forward button clicks to parent
-document.querySelector('#my-button')?.addEventListener('click', () => {
-  parley.send('button-clicked', {
-    buttonId: 'my-button',
-    timestamp: Date.now()
-  }, {
-    targetId: 'parent',
-    expectsResponse: false
-  });
+**Correct**:
+```javascript
+parley.on('config:set', (payload, respond) => {
+    applyConfig(payload);
+    respond({ success: true });
 });
 ```
 
-**Parent**:
-```typescript
-parley.on('button-clicked', (payload) => {
-  console.log('Button clicked in iframe:', payload.buttonId);
-  trackEvent('iframe_button_click', payload);
-});
+When the sender uses send() (default expects response), always call respond() in your handler.
+
+### Mistake 5: Using Same Target ID for Multiple Iframes
+
+**Problem**: Multiple iframes are connected with the same targetId, causing message routing errors.
+
+**Wrong**:
+```javascript
+await parley.connect(iframe1, 'child');
+await parley.connect(iframe2, 'child'); // Same ID - error!
 ```
 
-### Pattern: Resizing iframe
+**Correct**:
+```javascript
+await parley.connect(iframe1, 'child-1');
+await parley.connect(iframe2, 'child-2');
 
-Iframe reports height changes to parent.
-
-**Child**:
-```typescript
-// Observe content height changes
-const resizeObserver = new ResizeObserver((entries) => {
-  const height = entries[0].contentRect.height;
-
-  parley.send('resize', { height }, {
-    targetId: 'parent',
-    expectsResponse: false
-  });
-});
-
-resizeObserver.observe(document.body);
+// Send to specific iframe
+await parley.send('message', data, { targetId: 'child-1' });
 ```
 
-**Parent**:
-```typescript
-parley.on('resize', (payload) => {
-  iframe.style.height = `${payload.height}px`;
-});
-```
+Each target must have a unique targetId.
 
----
+## Advanced Patterns
 
-## Security Considerations
+### Dynamic Iframe Resizing
 
-### Always Validate Origins
+Automatically resize iframe based on content height:
 
-```typescript
-// Wrong - accepts any origin
-const parley = Parley.create({
-  allowedOrigins: ['*'] // DANGEROUS!
-});
-
-// Correct - specific origin
-const parley = Parley.create({
-  allowedOrigins: ['https://trusted-iframe.example.com']
-});
-```
-
-### Use HTTPS in Production
-
-```typescript
-// Development
-const parley = Parley.create({
-  allowedOrigins: ['http://localhost:3000']
-});
-
-// Production
-const parley = Parley.create({
-  allowedOrigins: ['https://iframe.example.com']
-});
-```
-
-### Don't Send Sensitive Data
-
-```typescript
-// Wrong - sending sensitive data
-await parley.send('auth', {
-  password: 'secret123' // Don't send passwords!
-}, { targetId: 'child' });
-
-// Correct - send tokens or session IDs
-await parley.send('auth', {
-  sessionToken: 'token-abc-123' // OK
-}, { targetId: 'child' });
-```
-
-### Validate iframe Content
-
-```typescript
-// Verify iframe loads expected content
-iframe.addEventListener('load', () => {
-  try {
-    // Check iframe origin (same-origin only)
-    const iframeOrigin = iframe.contentWindow?.location.origin;
-    if (iframeOrigin !== expectedOrigin) {
-      console.error('Unexpected iframe origin!');
-      return;
-    }
-  } catch (e) {
-    // Cross-origin iframe - this is expected
-  }
-
-  // Proceed with connection
-  parley.connect(iframe.contentWindow!, 'child');
-});
-```
-
-For more security guidance, see [Security Guide](../SECURITY.md).
-
----
-
-## Troubleshooting
-
-### iframe Not Connecting
-
-**Problem**: Connection times out
-
-**Solutions**:
-1. Wait for iframe load event
-2. Check that both parent and child call `connect()`
-3. Verify origins match exactly
-4. Check browser console for errors
-
-```typescript
-// Debugging
-parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
-  console.log('Connected to:', event.targetId);
-});
-
-parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
-  console.error('Connection error:', event.error);
-});
-```
-
-### Messages Not Received
-
-**Problem**: Handler not called
-
-**Solutions**:
-1. Register handlers before sending messages
-2. Verify message type strings match exactly
-3. Enable debug mode to see message flow
-
-```typescript
-const parley = Parley.create({
-  allowedOrigins: ['https://child.com'],
-  debug: true // See all messages in console
-});
-```
-
-### iframe Crashes or Reloads
-
-**Problem**: Connection lost when iframe navigates
-
-**Solution**: Detect disconnection and reconnect
-
-```typescript
-parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, async (event) => {
-  console.log('iframe disconnected:', event.targetId);
-
-  // Wait for reload
-  await new Promise(resolve => {
-    iframe.addEventListener('load', resolve, { once: true });
-  });
-
-  // Reconnect
-  await parley.connect(iframe.contentWindow!, 'child');
-});
-```
-
-For more troubleshooting, see [Troubleshooting Guide](../TROUBLESHOOTING.md).
-
----
-
-## Complete Example
-
-### Parent HTML
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Parent Window</title>
-</head>
-<body>
-  <h1>Parent Window</h1>
-  <iframe
-    id="child-iframe"
-    src="https://child.example.com/iframe.html"
-    width="600"
-    height="400"
-  ></iframe>
-
-  <script type="module">
-    import { Parley, SYSTEM_EVENTS } from 'parley-js';
-
-    const parley = Parley.create({
-      allowedOrigins: ['https://child.example.com']
-    });
-
-    const iframe = document.getElementById('child-iframe');
-
-    iframe.addEventListener('load', async () => {
-      // Connect to iframe
-      await parley.connect(iframe.contentWindow, 'child');
-
-      // Register handlers
-      parley.on('iframe-ready', (payload) => {
-        console.log('iframe ready:', payload);
-      });
-
-      // Send initial data
-      await parley.send('config', {
-        theme: 'dark',
-        userId: 'user-123'
-      }, {
-        targetId: 'child',
+```javascript
+// Child (iframe): Send height updates
+const observer = new ResizeObserver(() => {
+    const height = document.body.scrollHeight;
+    parley.send('iframe:resize', { height }, {
+        targetId: 'parent',
         expectsResponse: false
-      });
-
-      // Request data
-      const user = await parley.send('get-user', { id: '123' }, {
-        targetId: 'child'
-      });
-      console.log('User data:', user);
     });
-  </script>
-</body>
-</html>
+});
+observer.observe(document.body);
+
+// Parent: Apply height updates
+parley.on('iframe:resize', (payload) => {
+    iframe.style.height = `${payload.height}px`;
+});
 ```
 
-### Child HTML
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Child iFrame</title>
-</head>
-<body>
-  <h1>Child iFrame</h1>
+### Configuration Updates
 
-  <script type="module">
-    import { Parley } from 'parley-js';
+Update iframe configuration after initial load:
 
-    const parley = Parley.create({
-      allowedOrigins: ['https://parent.example.com']
-    });
+```javascript
+// Parent: Send configuration update
+async function updateTheme(theme) {
+    await parley.send('config:update', {
+        theme,
+        timestamp: Date.now()
+    }, { targetId: 'widget' });
+}
 
-    // Register handlers
-    parley.on('config', (payload) => {
-      console.log('Received config:', payload);
-      applyTheme(payload.theme);
-      loadUser(payload.userId);
-    });
-
-    parley.on('get-user', async (payload, respond) => {
-      const user = await fetchUser(payload.id);
-      respond(user);
-    });
-
-    // Connect to parent
-    await parley.connect(window.parent, 'parent');
-
-    // Signal ready
-    await parley.send('iframe-ready', {
-      version: '1.0.0'
-    }, {
-      targetId: 'parent',
-      expectsResponse: false
-    });
-
-    // Helper functions
-    function applyTheme(theme) {
-      document.body.className = theme;
-    }
-
-    function loadUser(userId) {
-      console.log('Loading user:', userId);
-    }
-
-    async function fetchUser(id) {
-      // Simulate API call
-      return {
-        id,
-        name: 'John Doe',
-        email: 'john@example.com'
-      };
-    }
-  </script>
-</body>
-</html>
+// Child: Apply configuration update
+parley.on('config:update', (payload, respond) => {
+    applyTheme(payload.theme);
+    respond({ applied: true });
+});
 ```
 
-For complete working examples, see [examples/basic/](../../examples/basic/).
+### Multiple Iframe Management
+
+Manage multiple iframes with a registry:
+
+```javascript
+const iframes = new Map();
+
+async function addIframe(id, src) {
+    const iframe = document.createElement('iframe');
+    iframe.src = src;
+    document.body.appendChild(iframe);
+
+    await new Promise(resolve => {
+        iframe.addEventListener('load', resolve);
+    });
+
+    await parley.connect(iframe, id);
+    iframes.set(id, iframe);
+}
+
+// Broadcast to all iframes
+await parley.broadcast('global:update', {
+    timestamp: Date.now()
+});
+
+// Send to specific iframe
+await parley.send('specific:update', data, {
+    targetId: 'iframe-2'
+});
+```
+
+See [Multi-Window Communication](./multi-window-communication.md) for coordinating multiple targets.
+
+## Next Steps
+
+Now that you understand iframe communication:
+
+**Learn More Patterns**:
+- [Request-Response Pattern](../patterns/request-response.md) - Structured request-response communication
+- [Error Handling Pattern](../patterns/error-handling.md) - Robust error handling strategies
+- [State Synchronization](../patterns/state-synchronization.md) - Keep state in sync across windows
+
+**Explore Other Communication Types**:
+- [Popup Window Communication](./popup-communication.md) - OAuth flows and dialogs
+- [Multi-Window Communication](./multi-window-communication.md) - Coordinate multiple windows
+
+**Security**:
+- [Origin Validation](../security/origin-validation.md) - Secure your iframe communication
+- [Message Validation](../security/message-validation.md) - Validate message structure
+
+**Testing**:
+- [Testing Guide](../TESTING.md) - Test iframe communication
+- [Testing Patterns](../TESTING_PATTERNS.md) - Unit and integration testing strategies
+
+## Related Guides
+
+- **[Popup Window Communication](./popup-communication.md)** - Parent and popup patterns
+- **[Multi-Window Communication](./multi-window-communication.md)** - Multiple window coordination
+- **[Security Guide](../security/README.md)** - Security best practices
+
+## See Also
+
+**API Methods**:
+- [connect()](../api-reference/methods.md#connect) - Establish iframe connection
+- [send()](../api-reference/methods.md#send) - Send messages to iframe
+- [on()](../api-reference/methods.md#on) - Register message handlers
+- [broadcast()](../api-reference/methods.md#broadcast) - Send to all connected targets
+
+**Code Patterns**:
+- [Request-Response Pattern](../patterns/request-response.md)
+- [Error Handling Pattern](../patterns/error-handling.md)
 
 ---
 
-## Navigation
-
-### Related Guides
-
-- [Popup Communication](./popup-communication.md) - Parent and popup windows
-- [Web Worker Communication](./worker-communication.md) - Workers
-- [Multi-Window Communication](./multi-window-communication.md) - Multiple windows
-
-### Related Documentation
-
-- [API Reference](../API.md) - Complete API docs
-- [Code Patterns](../CODE_PATTERNS.md) - Common patterns
-- [Security Guide](../SECURITY.md) - Security best practices
-
-**Back to**: [Use Case Guides](./README.md) | [Documentation Home](../../README.md)
+**Previous**: [Use Case Guides](./README.md)
+**Next**: [Popup Window Communication](./popup-communication.md)
+**Back to**: [Documentation Home](../README.md)
