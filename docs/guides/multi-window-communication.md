@@ -1,4 +1,4 @@
-[Home](../../README.md) > [Documentation](../FRAMEWORK_REFERENCE.md) > [Guides](./README.md) > Multi-Window Communication
+[Home](../../README.md) > [Documentation](../README.md) > [Guides](./README.md) > Multi-Window Communication
 
 # Multi-Window Communication Guide
 
@@ -60,6 +60,8 @@ await parley.send('update', { data: 'value' }, {
 await parley.broadcast('global-update', { data: 'value' });
 ```
 
+For individual iframe setup details, see [iFrame Communication Guide](./iframe-communication.md). For broadcast() API details, see [broadcast() method reference](../api-reference/methods.md#broadcast).
+
 ---
 
 ## Broadcasting to Multiple Windows
@@ -75,6 +77,8 @@ await parley.broadcast('theme-change', {
 
 // All connected windows receive the message
 ```
+
+For state synchronization across windows using broadcast, see [State Synchronization Pattern](../patterns/state-synchronization.md).
 
 ### Selective Broadcasting
 
@@ -111,11 +115,13 @@ for (const targetId of ['widget-1', 'widget-2', 'widget-3']) {
 console.log('All responses:', results);
 ```
 
+For error handling strategies when collecting responses, see [Error Handling Pattern](../patterns/error-handling.md#timeout-errors).
+
 ---
 
 ## Hub-and-Spoke Pattern
 
-Main window acts as central hub coordinating all child windows.
+Main window acts as central hub coordinating all child windows. For ParleyJS architectural patterns, see [Architecture Guide](../ARCHITECTURE.md).
 
 ### Hub (Main Window)
 
@@ -195,6 +201,8 @@ parley.on('forwarded-message', (payload) => {
   console.log(`Message from ${payload.from}:`, payload.data);
 });
 ```
+
+For request-response messaging patterns in hub-and-spoke architecture, see [Request-Response Pattern](../patterns/request-response.md).
 
 ---
 
@@ -389,7 +397,7 @@ function displayMessage(text) {
 }
 ```
 
-For complete working examples, see [examples/](../../examples/).
+For complete working examples, see [examples/](../../examples/). For system event monitoring in multi-window scenarios, see [System Events documentation](../api-reference/system-events.md).
 
 ---
 
@@ -406,5 +414,10 @@ For complete working examples, see [examples/](../../examples/).
 - [API Reference](../API.md) - Complete API docs
 - [Code Patterns](../CODE_PATTERNS.md) - Broadcasting patterns
 - [Examples](../EXAMPLES.md) - Multi-window examples
+
+### Testing
+
+- [Testing Guide](../TESTING.md) - Testing multi-window scenarios
+- [Testing Patterns](../TESTING_PATTERNS.md) - Unit and integration testing strategies
 
 **Back to**: [Use Case Guides](./README.md) | [Documentation Home](../../README.md)

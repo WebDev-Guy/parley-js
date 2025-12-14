@@ -101,7 +101,7 @@ function processData(items) {
 
 ### Request-Response Pattern with Workers
 
-Implement request-response pattern similar to ParleyJS:
+Implement request-response pattern similar to ParleyJS. For ParleyJS's window-based request-response pattern, see [Request-Response Pattern](../patterns/request-response.md).
 
 ```javascript
 // Main thread: Request-response helper
@@ -372,6 +372,8 @@ parley.on('analysis:complete', (payload) => {
     visualizeData(payload.result);
 });
 ```
+
+For combining workers with iframe communication, see [iFrame Communication Guide](./iframe-communication.md). For error handling when coordinating workers and windows, see [Error Handling Pattern](../patterns/error-handling.md).
 
 ## Next Steps
 

@@ -33,6 +33,8 @@ Use the request-response pattern when:
 
 This pattern is ideal for RPC-style communication, data fetching, form validation, and any operation where you need feedback.
 
+For implementing request-response in iframes, see [iFrame Communication Guide](../guides/iframe-communication.md). For request-response in popups (OAuth flows), see [Popup Communication Guide](../guides/popup-communication.md).
+
 ## When NOT to Use It
 
 Avoid request-response when:
@@ -80,6 +82,8 @@ iframe.addEventListener('load', async () => {
     }
 });
 ```
+
+For complete send() options and error codes, see [send() API reference](../api-reference/methods.md#send). For troubleshooting timeout errors, see [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors).
 
 **Responder Side (Child Iframe)**:
 ```javascript
@@ -253,6 +257,8 @@ parley.on<GetUserRequest>('getUserData', async (payload, respond) => {
 });
 ```
 
+For type validation errors and solutions, see [Type Validation Errors](../troubleshooting/common-errors.md#type-validation-errors). For schema registration, see [register() method](../api-reference/methods.md#register).
+
 ## Explanation
 
 ### How It Works
@@ -418,6 +424,8 @@ const users = await fetchMultipleUsers([1, 2, 3, 4, 5]);
 console.log('Fetched users:', users);
 ```
 
+For performance considerations when sending many messages, see [Performance Issues troubleshooting](../troubleshooting/common-errors.md#performance-issues).
+
 ### Variation 4: Request-Response with Retry
 
 Add automatic retry logic for failed requests:
@@ -564,7 +572,7 @@ describe('Request-Response Responder', () => {
 });
 ```
 
-For comprehensive testing strategies, see [Testing Patterns](../TESTING_PATTERNS.md) and [Testing Guide](../TESTING.md).
+For comprehensive testing strategies, see [Testing Patterns](../TESTING_PATTERNS.md) and [Testing Guide](../TESTING.md). For mocking request-response in tests, see [Testing Request-Response](../TESTING_PATTERNS.md#request-response).
 
 ## Related Patterns
 

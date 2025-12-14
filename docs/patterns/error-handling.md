@@ -92,7 +92,11 @@ async function fetchUserData(userId) {
         throw error;
     }
 }
+```
 
+For common error solutions and error code details, see [Common Errors Reference](../troubleshooting/common-errors.md).
+
+```javascript
 // Usage
 try {
     const user = await fetchUserData(123);
@@ -736,7 +740,7 @@ describe('Error Handling - Fallbacks', () => {
 });
 ```
 
-For comprehensive testing strategies, see [Testing Patterns](../TESTING_PATTERNS.md).
+For comprehensive testing strategies, see [Testing Patterns](../TESTING_PATTERNS.md). For testing error scenarios, see [Testing Error Scenarios](../TESTING_PATTERNS.md#error-scenarios).
 
 ## Related Patterns
 
@@ -749,10 +753,13 @@ For comprehensive testing strategies, see [Testing Patterns](../TESTING_PATTERNS
 **API Methods**:
 - [send()](../api-reference/methods.md#send) - Send messages with timeout configuration
 - [onSystem()](../api-reference/methods.md#onsystem) - Listen for system errors
-- [Error Codes Reference](../api-reference/error-codes.md) - Complete error code documentation
+- [System Events](../api-reference/system-events.md) - System event documentation
 
 **Guides**:
 - [Troubleshooting](../troubleshooting/README.md) - Common issues and solutions
+- [Common Errors](../troubleshooting/common-errors.md) - Quick error solutions
+- [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors) - Diagnose and fix timeouts
+- [Connection Errors](../troubleshooting/common-errors.md#channel-closed-errors) - Handle disconnections
 - [Testing Guide](../TESTING.md) - Testing error scenarios
 - [iFrame Communication](../guides/iframe-communication.md) - Error handling in iframes
 

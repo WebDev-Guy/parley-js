@@ -600,13 +600,13 @@ The popup window is referenced via the return value of window.open() in the main
 
 For same-origin popups, use window.location.origin in both windows. For cross-origin popups (rare), specify exact origins in allowedOrigins. Most popup scenarios use same-origin communication.
 
-See [Origin Validation](../security/origin-validation.md) for security best practices.
+For complete origin validation for popups, see [Origin Validation](../security/origin-validation.md). For troubleshooting origin errors, see [Origin Mismatch Errors](../troubleshooting/common-errors.md#origin-mismatch-errors).
 
 ### Popup Lifecycle Management
 
 Unlike iframes, popups can be closed by the user at any time. Monitor popup.closed property to detect unexpected closure. Always clean up resources when the popup closes.
 
-The popup can close itself using window.close(). The main window can close the popup using popup.close().
+The popup can close itself using window.close(). The main window can close the popup using popup.close(). For detecting closed popups and cleanup strategies, see [Dead Window References](../troubleshooting/common-errors.md#dead-window-references). For preventing memory leaks when closing popups, see [Memory Leaks](../troubleshooting/common-errors.md#memory-leaks).
 
 ### Preventing Popup Blockers
 
@@ -634,7 +634,7 @@ button.addEventListener('click', () => {
 });
 ```
 
-Always open popups immediately in event handlers, not in asynchronous callbacks.
+Always open popups immediately in event handlers, not in asynchronous callbacks. For complete popup troubleshooting, see [Cross-Origin Errors](../troubleshooting/common-errors.md#cross-origin-errors).
 
 ### Mistake 2: Not Checking if Popup Was Blocked
 
@@ -897,6 +897,11 @@ Now that you understand popup communication:
 **Testing**:
 - [Testing Guide](../TESTING.md) - Test popup flows
 - [Testing Patterns](../TESTING_PATTERNS.md) - Unit and integration testing
+
+**Troubleshooting**:
+- [Common Errors](../troubleshooting/common-errors.md) - Quick solutions
+- [Dead Window References](../troubleshooting/common-errors.md#dead-window-references) - Fix popup closure issues
+- [Memory Leaks](../troubleshooting/common-errors.md#memory-leaks) - Prevent resource leaks
 
 ## Related Guides
 

@@ -123,9 +123,9 @@ See [Common Mistakes](../TROUBLESHOOTING.md#common-mistakes) for details.
 ## Error Reference
 
 For complete error documentation, see:
-- [Error Codes](../api-reference/error-codes.md) - All error codes
-- [Common Errors](./common-errors.md) - Frequent error solutions
-- [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - Debugging guide
+- [Common Errors](./common-errors.md) - Frequent error solutions with fixes
+- [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - Complete debugging guide
+- [Error Handling Pattern](../patterns/error-handling.md) - Error handling strategies
 
 ## Still Having Issues?
 
@@ -144,7 +144,7 @@ If you're still stuck:
 
 - **[Common Errors](./common-errors.md)** - Quick error solutions
 - **[TROUBLESHOOTING.md](../TROUBLESHOOTING.md)** - Complete guide
-- **[Error Codes](../api-reference/error-codes.md)** - Error reference
+- **[Error Handling Pattern](../patterns/error-handling.md)** - Error patterns
 - **[Examples](../examples/README.md)** - Working code
 - **[Security](../security/README.md)** - Security issues
 
@@ -157,6 +157,6 @@ If you're still stuck:
 
 **Related**:
 - [Complete Troubleshooting](../TROUBLESHOOTING.md)
-- [Error Codes](../api-reference/error-codes.md)
+- [Error Handling Pattern](../patterns/error-handling.md)
 
 **Back to**: [Documentation Home](../README.md) | [Project Home](../../README.md)

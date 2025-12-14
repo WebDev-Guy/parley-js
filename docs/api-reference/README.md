@@ -14,8 +14,8 @@ For quick examples and common patterns, see [Framework Reference](../FRAMEWORK_R
 
 ### Core Documentation
 - **[Methods](./methods.md)** - All ParleyJS methods with parameters and return types
-- **[Types](./types.md)** - TypeScript types and interfaces
-- **[Error Codes](./error-codes.md)** - Complete error reference
+- **[System Events](./system-events.md)** - System event reference
+- **[Common Errors](../troubleshooting/common-errors.md)** - Error reference and solutions
 
 ### Complete API Documentation
 - **[API.md](../API.md)** - Comprehensive API documentation with examples
@@ -54,15 +54,15 @@ For more details, see [Methods](./methods.md).
 
 The API documentation is organized by:
 - **Methods** - Grouped by functionality (connection, messaging, events)
-- **Types** - Organized by purpose (configuration, messages, events)
-- **Errors** - Listed alphabetically with solutions
+- **System Events** - Lifecycle and monitoring events
+- **Errors** - Common errors with solutions
 
 ## Using This Reference
 
 **If you want to**:
 - Find a specific method: See [Methods](./methods.md)
-- Understand TypeScript types: See [Types](./types.md)
-- Debug an error: See [Error Codes](./error-codes.md)
+- Understand system events: See [System Events](./system-events.md)
+- Debug an error: See [Common Errors](../troubleshooting/common-errors.md)
 - See complete examples: See [API.md](../API.md)
 
 **If you're looking for**:
@@ -81,7 +81,7 @@ The API documentation is organized by:
 
 ParleyJS is written in TypeScript and provides complete type definitions. All methods support generic types for request and response payloads.
 
-For details on using TypeScript with ParleyJS, see [Types](./types.md).
+For details on TypeScript usage, see [Installation Guide](../getting-started/installation.md#typescript-support).
 
 ---
 
@@ -89,7 +89,7 @@ For details on using TypeScript with ParleyJS, see [Types](./types.md).
 
 **Sections**:
 - [Methods](./methods.md) - Method reference
-- [Types](./types.md) - Type definitions
-- [Error Codes](./error-codes.md) - Error reference
+- [System Events](./system-events.md) - Event reference
+- [Common Errors](../troubleshooting/common-errors.md) - Error reference
 
 **Back to**: [Documentation Home](../README.md) | [Project Home](../../README.md)

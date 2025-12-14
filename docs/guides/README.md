@@ -85,7 +85,7 @@ Before following these guides:
 
 If you're stuck:
 1. Check [Troubleshooting](../troubleshooting/README.md) for common issues
-2. Review [Error Codes](../api-reference/error-codes.md) for error messages
+2. Review [Common Errors](../troubleshooting/common-errors.md) for error messages
 3. See [Examples](../examples/README.md) for working code
 4. Open an issue on [GitHub](https://github.com/WebDev-Guy/parley-js/issues)
 

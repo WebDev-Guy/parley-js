@@ -158,6 +158,8 @@ const parley = Parley.create({
 });
 ```
 
+For troubleshooting wildcard origin errors, see [Common Errors: Security Vulnerabilities](../troubleshooting/common-errors.md#security-vulnerabilities).
+
 ### Mistake 2: Mixing HTTP and HTTPS
 
 **WRONG - Wrong Scheme**:
@@ -177,7 +179,7 @@ const parley = Parley.create({
 });
 ```
 
-Always use HTTPS in production for both parent and child windows.
+Always use HTTPS in production for both parent and child windows. For troubleshooting protocol mismatch errors, see [Origin Mismatch Errors](../troubleshooting/common-errors.md#origin-mismatch-errors).
 
 ### Mistake 3: Forgetting Port Numbers
 
@@ -198,7 +200,7 @@ const parley = Parley.create({
 });
 ```
 
-Note: Default ports (80 for HTTP, 443 for HTTPS) are implicit and don't need to be specified.
+Note: Default ports (80 for HTTP, 443 for HTTPS) are implicit and don't need to be specified. For troubleshooting port-related origin errors, see [Origin Mismatch Errors](../troubleshooting/common-errors.md#origin-mismatch-errors).
 
 ### Mistake 4: Using Subdomains Incorrectly
 
@@ -223,6 +225,8 @@ const parley = Parley.create({
 });
 ```
 
+For troubleshooting subdomain-related origin errors, see [Origin Mismatch Errors](../troubleshooting/common-errors.md#origin-mismatch-errors).
+
 ### Mistake 5: Localhost in Production
 
 **WRONG - Localhost in Production**:
@@ -246,6 +250,8 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
 const parley = Parley.create({ allowedOrigins });
 ```
 
+For troubleshooting localhost configuration issues, see [Common Errors: Origin Mismatch](../troubleshooting/common-errors.md#origin-mismatch-errors).
+
 ### Mistake 6: Empty Allowed Origins
 
 **WRONG - No Origins Specified**:
@@ -263,6 +269,8 @@ const parley = Parley.create({
     allowedOrigins: ['https://trusted-domain.com']
 });
 ```
+
+For troubleshooting connection issues caused by origin configuration, see [Connection Errors](../troubleshooting/common-errors.md#connection-errors).
 
 ### Mistake 7: Relying Only on Origin Validation
 
@@ -299,7 +307,7 @@ parley.on('executeAction', (payload, respond) => {
 });
 ```
 
-Origin validation is necessary but not sufficient. Always validate message content.
+Origin validation is necessary but not sufficient. Always validate message content. For comprehensive message validation strategies, see [Message Validation Guide](./message-validation.md).
 
 ## Real-World Examples
 
@@ -348,7 +356,7 @@ parley.on('configure', (payload, respond) => {
 await parley.connect(window.parent, 'parent');
 ```
 
-Both sides validate the other's origin. Parent only accepts messages from widget.example.com, and widget only accepts messages from myapp.example.com.
+Both sides validate the other's origin. Parent only accepts messages from widget.example.com, and widget only accepts messages from myapp.example.com. For complete iframe implementation guide, see [iFrame Communication](../guides/iframe-communication.md).
 
 ### Popup Window Communication
 
@@ -388,6 +396,8 @@ await parley.send('auth:success', {
 await parley.connect(window.opener, 'main');
 ```
 
+For complete popup communication and OAuth flow examples, see [Popup Communication Guide](../guides/popup-communication.md).
+
 ### Multi-Window Dashboard
 
 **Dashboard (Hub)**:
@@ -425,6 +435,8 @@ parley.on('theme:change', (payload) => {
 
 await parley.connect(window.parent, 'dashboard');
 ```
+
+For managing multiple window connections and broadcasting, see [Multi-Window Communication Guide](../guides/multi-window-communication.md).
 
 ### Cross-Origin Widget with Fallback
 

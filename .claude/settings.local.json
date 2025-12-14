@@ -4,7 +4,8 @@
       "Bash(wc:*)",
       "Bash(ls:*)",
       "Bash(grep:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(done)"
     ]
   }
 }

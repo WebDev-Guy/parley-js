@@ -417,7 +417,7 @@ The handshake happens automatically when both sides call connect(). ParleyJS han
 
 ParleyJS validates every message against the allowedOrigins list. For same-origin iframes, use window.location.origin. For cross-origin iframes, specify the exact iframe origin including protocol, hostname, and port.
 
-See [Origin Validation](../security/origin-validation.md) for detailed security guidance.
+For complete origin validation guide, see [Origin Validation](../security/origin-validation.md). For troubleshooting origin errors, see [Origin Mismatch Errors](../troubleshooting/common-errors.md#origin-mismatch-errors).
 
 ### Message Routing
 
@@ -451,7 +451,7 @@ iframe.addEventListener('load', async () => {
 });
 ```
 
-Wait for the load event to ensure the iframe's window object is ready.
+Wait for the load event to ensure the iframe's window object is ready. For more iframe timing issues, see [Dead Window References](../troubleshooting/common-errors.md#dead-window-references).
 
 ### Mistake 2: Mismatched Origins
 
@@ -479,7 +479,7 @@ allowedOrigins: ['https://child.example.com']
 allowedOrigins: ['https://parent.example.com']
 ```
 
-Origins must match exactly including protocol (http/https), hostname, and port.
+Origins must match exactly including protocol (http/https), hostname, and port. For complete origin validation guide, see [Origin Validation](../security/origin-validation.md). For debugging origin mismatches, see [Origin Mismatch Errors](../troubleshooting/common-errors.md#origin-mismatch-errors).
 
 ### Mistake 3: Not Handling Connection Errors
 
@@ -571,6 +571,8 @@ parley.on('iframe:resize', (payload) => {
 });
 ```
 
+For fire-and-forget messaging pattern, see [Request-Response: When NOT to Use It](../patterns/request-response.md#when-not-to-use-it).
+
 ### Configuration Updates
 
 Update iframe configuration after initial load:
@@ -590,6 +592,8 @@ parley.on('config:update', (payload, respond) => {
     respond({ applied: true });
 });
 ```
+
+For complete request-response pattern with variations, see [Request-Response Pattern](../patterns/request-response.md).
 
 ### Multiple Iframe Management
 
@@ -622,7 +626,7 @@ await parley.send('specific:update', data, {
 });
 ```
 
-See [Multi-Window Communication](./multi-window-communication.md) for coordinating multiple targets.
+For state synchronization across multiple iframes, see [State Synchronization Pattern](../patterns/state-synchronization.md). For coordinating multiple targets, see [Multi-Window Communication](./multi-window-communication.md).
 
 ## Next Steps
 
@@ -644,6 +648,15 @@ Now that you understand iframe communication:
 **Testing**:
 - [Testing Guide](../TESTING.md) - Test iframe communication
 - [Testing Patterns](../TESTING_PATTERNS.md) - Unit and integration testing strategies
+
+**Framework Integration**:
+- [destroy() method](../api-reference/methods.md#destroy) - React/Vue/Angular cleanup examples
+- [Testing Patterns: Framework Integration](../TESTING_PATTERNS.md#framework-integration) - Framework-specific patterns
+
+**Troubleshooting**:
+- [Common Errors](../troubleshooting/common-errors.md) - Quick solutions to frequent issues
+- [Messages Not Received](../troubleshooting/common-errors.md#messages-not-being-received) - Debug silent failures
+- [Dead Window References](../troubleshooting/common-errors.md#dead-window-references) - Fix iframe timing issues
 
 ## Related Guides
 

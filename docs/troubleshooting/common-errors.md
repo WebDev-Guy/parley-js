@@ -1605,7 +1605,7 @@ const parley = Parley.create({
 
 **Troubleshooting**:
 - [Complete Troubleshooting Guide](../TROUBLESHOOTING.md) - Debugging strategies
-- [Error Codes Reference](../api-reference/error-codes.md) - All error codes
+- [Error Handling Pattern](../patterns/error-handling.md) - Error handling strategies
 
 **Guides**:
 - [iFrame Communication](../guides/iframe-communication.md#common-mistakes) - iframe mistakes

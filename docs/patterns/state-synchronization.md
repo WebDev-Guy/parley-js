@@ -594,6 +594,8 @@ window.addEventListener('scroll', () => {
 });
 ```
 
+Debouncing is essential for high-frequency updates like scroll events. For more performance optimization strategies, see [Performance Issues troubleshooting](../troubleshooting/common-errors.md#performance-issues).
+
 ### Variation 2: State Persistence
 
 **Persist State to localStorage**:
@@ -660,6 +662,8 @@ class DiffSyncedState extends SyncedState {
     }
 }
 ```
+
+For broadcasting state updates to multiple windows, see [Multi-Window Communication](../guides/multi-window-communication.md). For broadcast() API details, see [broadcast() method](../api-reference/methods.md#broadcast). For error handling when state updates fail, see [Error Handling: Rollback Pattern](./error-handling.md#fallback-pattern).
 
 ## Testing
 

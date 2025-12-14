@@ -85,6 +85,8 @@ Create a file called `parent.html`:
 - `parley.connect()` establishes the communication channel with the iframe
 - `parley.send()` sends a message and waits for a response
 
+For complete configuration options, see [Parley.create() API reference](../api-reference/methods.md#parleycreate). For origin validation security, see [Origin Validation Guide](../security/origin-validation.md).
+
 ## Step 2: Create the Child Page
 
 Create a file called `child.html`:
@@ -158,6 +160,8 @@ The handler receives three parameters:
 
 For fire-and-forget messages (no response needed), simply don't call `respond()`.
 
+For detailed comparison of fire-and-forget vs request-response patterns, see [Request-Response Pattern](../patterns/request-response.md#when-to-use-it). For all send() options including timeout and retries, see [send() method reference](../api-reference/methods.md#send).
+
 ## Step 4: Test Your Communication
 
 Start a local web server in your project directory:
@@ -203,6 +207,8 @@ If you see these messages, congratulations! Your ParleyJS communication is worki
 
 **Solution:** Use a local web server like `npx serve .` or `python -m http.server`.
 
+For troubleshooting origin errors in development, see [Common Errors: Origin Mismatch](../troubleshooting/common-errors.md#origin-mismatch-errors).
+
 ### Mistake 2: Connecting Before Iframe Loads
 
 **Problem:** Calling `parley.connect()` before the iframe is ready causes connection failures.
@@ -219,6 +225,8 @@ iframe.addEventListener('load', async () => {
     await parley.connect(iframe, 'child');
 });
 ```
+
+For more iframe timing issues, see [Dead Window References](../troubleshooting/common-errors.md#dead-window-references).
 
 ### Mistake 3: Mismatched Origins
 
@@ -239,6 +247,8 @@ allowedOrigins: ['http://localhost:3000']
 allowedOrigins: [window.location.origin]
 ```
 
+For complete origin validation guide, see [Origin Validation](../security/origin-validation.md). For debugging origin mismatches, see [Origin Mismatch Errors](../troubleshooting/common-errors.md#origin-mismatch-errors).
+
 ### Mistake 4: Not Calling `respond()`
 
 **Problem:** Parent waits for a response, but child handler doesn't call `respond()`.
@@ -252,6 +262,8 @@ parley.on('greeting', (payload, respond) => {
     respond({ status: 'received' }); // Don't forget this
 });
 ```
+
+For handling timeout errors when respond() is not called, see [Troubleshooting: Timeout Errors](../troubleshooting/common-errors.md#timeout-errors).
 
 ### Mistake 5: Wrong Message Type Names
 
@@ -293,6 +305,14 @@ Now that you have basic communication working, explore these topics:
 **Security:**
 - [Origin Validation](../security/origin-validation.md) - Secure your communication channels
 - [Security Best Practices](../security/README.md) - Complete security guide
+
+**Testing:**
+- [Testing Request-Response](../patterns/request-response.md#testing) - How to test message handlers
+- [Common Test Patterns](../TESTING_PATTERNS.md) - Mocking and integration tests
+
+**Troubleshooting:**
+- [Common Errors](../troubleshooting/common-errors.md) - Quick solutions to frequent issues
+- [Messages Not Received](../troubleshooting/common-errors.md#messages-not-being-received) - Debug silent failures
 
 ## Complete Working Example
 

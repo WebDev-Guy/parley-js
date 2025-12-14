@@ -53,7 +53,7 @@ No prior knowledge of postMessage API is required.
 ## Need Help?
 
 - **Common issues**: See [Troubleshooting](../troubleshooting/README.md)
-- **Error messages**: See [Error Codes](../api-reference/error-codes.md)
+- **Error messages**: See [Common Errors](../troubleshooting/common-errors.md)
 - **Questions**: Open an issue on [GitHub](https://github.com/WebDev-Guy/parley-js/issues)
 
 ---

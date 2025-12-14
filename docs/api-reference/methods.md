@@ -258,6 +258,8 @@ await parley.send('user:data', { id: 123 });  // Works
 - [on()](#on)
 - [send()](#send)
 - [Schema Validation Guide](../EXAMPLES.md#schema-validation)
+- [Message Validation](../security/message-validation.md) - Schema validation security
+- [Type Validation Errors](../troubleshooting/common-errors.md#type-validation-errors) - Debug schema issues
 - [JSON Schema Documentation](https://json-schema.org/)
 
 ---
@@ -382,7 +384,11 @@ parley.on('getData', async (payload, respond) => {
 - [register()](#register)
 - [send()](#send)
 - [MessageMetadata type](./types.md#messagemetadata)
-- [Request-Response Pattern](../patterns/request-response.md)
+- [Request-Response Pattern](../patterns/request-response.md) - Request-response workflows
+- [Message Handlers](../getting-started/first-example.md#step-3-set-up-message-handlers) - Handler basics
+- [Error Handling in Handlers](../patterns/error-handling.md#handler-errors) - Robust handler patterns
+- [Testing Handlers](../patterns/request-response.md#testing-the-responder) - How to test message handlers
+- [Messages Not Received](../troubleshooting/common-errors.md#messages-not-being-received) - Debug handler issues
 
 ---
 
@@ -521,9 +527,13 @@ await parley.send('notify', {}, { expectsResponse: false });
 **See Also:**
 - [on()](#on)
 - [broadcast()](#broadcast)
-- [Error Codes Reference](./error-codes.md)
-- [Request-Response Pattern](../patterns/request-response.md)
-- [Error Handling Pattern](../patterns/error-handling.md)
+- [Common Errors](../troubleshooting/common-errors.md) - Error reference and solutions
+- [Request-Response Pattern](../patterns/request-response.md) - Send/receive workflows
+- [Error Handling Pattern](../patterns/error-handling.md#timeout-errors) - Handle send() failures
+- [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors) - Common send() issues
+- [Performance: Message Batching](../patterns/request-response.md#batch-request-response) - Optimize multiple sends
+- [iFrame Communication](../guides/iframe-communication.md) - Send to iframes
+- [Popup Communication](../guides/popup-communication.md) - Send to popups
 
 ---
 
@@ -594,7 +604,9 @@ const responses = await Promise.all(
 **See Also:**
 - [send()](#send)
 - [getConnectedTargets()](#getconnectedtargets)
-- [Multi-Window Communication Guide](../guides/multi-window-communication.md)
+- [Multi-Window Communication Guide](../guides/multi-window-communication.md) - Broadcast to multiple windows
+- [State Synchronization Pattern](../patterns/state-synchronization.md) - Sync state across windows
+- [Performance: Batching](../troubleshooting/common-errors.md#performance-issues) - Optimize broadcasts
 
 ---
 
@@ -700,8 +712,10 @@ try {
 - [disconnect()](#disconnect)
 - [isConnected()](#isconnected)
 - [onSystem()](#onsystem)
-- [iFrame Communication Guide](../guides/iframe-communication.md)
-- [Popup Communication Guide](../guides/popup-communication.md)
+- [iFrame Communication Guide](../guides/iframe-communication.md) - Connect to iframes
+- [Popup Communication Guide](../guides/popup-communication.md) - Connect to popups
+- [Connection Errors](../troubleshooting/common-errors.md#channel-closed-errors) - Troubleshoot connections
+- [Dead Window References](../troubleshooting/common-errors.md#dead-window-references) - Handle invalid windows
 
 ---
 
@@ -1032,7 +1046,22 @@ export default {
         this.parley.destroy();  // Clean up
     }
 };
+
+// Angular example
+export class MyComponent implements OnDestroy {
+    private parley: Parley;
+
+    ngOnInit() {
+        this.parley = Parley.create({ /* config */ });
+    }
+
+    ngOnDestroy() {
+        this.parley.destroy();  // Clean up
+    }
+}
 ```
+
+Framework cleanup is critical to prevent memory leaks. For framework-specific integration patterns, see [Testing Patterns: Framework Integration](../TESTING_PATTERNS.md#framework-integration).
 
 **Common Mistakes:**
 
@@ -1053,6 +1082,8 @@ await newParley.send('message', {});
 **See Also:**
 - [disconnect()](#disconnect)
 - [React Integration Example](../EXAMPLES.md#react-integration)
+- [Memory Leaks Prevention](../troubleshooting/common-errors.md#memory-leaks) - Why cleanup matters
+- [Popup Lifecycle](../guides/popup-communication.md#lifecycle-management) - Managing popup cleanup
 
 ---
 
@@ -1112,11 +1143,11 @@ console.log(parley.targetType);  // "iframe"
 ## Navigation
 
 **Previous**: [API Reference Overview](./README.md)
-**Next**: [Types Reference](./types.md)
+**Next**: [System Events](./system-events.md)
 **Back to**: [API Reference](./README.md)
 
 **Related**:
-- [Error Codes Reference](./error-codes.md)
-- [Types Reference](./types.md)
+- [System Events](./system-events.md) - System event reference
+- [Common Errors](../troubleshooting/common-errors.md) - Error reference
 - [Code Patterns](../patterns/README.md)
 - [Examples](../EXAMPLES.md)

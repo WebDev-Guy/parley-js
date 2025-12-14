@@ -389,7 +389,7 @@ parley.on('process', async (payload, respond) => {
 - Use async/await for slow operations
 - Consider debouncing frequent updates
 
-For more details, see [Performance Best Practices](./ARCHITECTURE.md#performance-considerations).
+For more details, see [Performance Best Practices](./ARCHITECTURE.md#performance-considerations). For batching messages in request-response pattern, see [Batch Request-Response](./patterns/request-response.md#batch-request-response).
 
 ---
 
