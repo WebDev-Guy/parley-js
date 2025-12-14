@@ -491,12 +491,38 @@ See [TESTING.md](./docs/TESTING.md) for comprehensive testing guidelines.
 
 ## Documentation
 
-### Updating Docs
+Documentation is as important as code. ParleyJS maintains comprehensive documentation that follows strict quality standards to ensure clarity, consistency, and professionalism.
 
-- Update relevant docs when adding/changing features
-- Add JSDoc comments to all public APIs
-- Include code examples
-- Update README if needed
+### Documentation Standards
+
+All documentation contributions must follow:
+
+- **[DOCUMENTATION_STYLE_GUIDE.md](./docs/DOCUMENTATION_STYLE_GUIDE.md)** - Writing style, language standards, and quality requirements
+- **[DOCUMENTATION_NAVIGATION_STRATEGY.md](./docs/DOCUMENTATION_NAVIGATION_STRATEGY.md)** - Cross-linking, breadcrumbs, and navigation patterns
+- **[.cursorrules](./.cursorrules)** - AI assistant guidelines (also useful for human contributors)
+
+### Key Documentation Principles
+
+**No Emojis - Ever**
+- Never use emojis in documentation, code comments, commit messages, or error messages
+- Use clear, descriptive text instead
+
+**Single Source of Truth**
+- Document each concept once in its canonical location
+- Reference that location from elsewhere rather than duplicating
+- Maintain consistency through cross-references
+
+**Active Voice & Clear Language**
+- Write naturally: "ParleyJS validates the origin" not "the origin is validated"
+- Keep paragraphs short (maximum 5 sentences)
+- Use professional but friendly tone
+- Explain technical terms when first introduced
+
+**Complete Navigation**
+- Include breadcrumb navigation at top of each file
+- Add table of contents for files with 5+ sections
+- Include footer navigation (Previous/Next/Related/Back to)
+- Use descriptive link text, not "click here"
 
 ### JSDoc Comments
 
@@ -525,16 +551,88 @@ async send<T = unknown>(
 ): Promise<T>
 ````
 
-### Documentation Files
+### Documentation Quality Checklist
 
-- `README.md` - Quick start and overview
-- `docs/API.md` - Complete API reference
-- `docs/ARCHITECTURE.md` - Internal architecture
-- `docs/SECURITY.md` - Security guide
-- `docs/TESTING.md` - Testing documentation
-- `docs/EXAMPLES.md` - Usage examples
-- `docs/FUTURE-ROADMAP.md` - Planned features
-- `CHANGELOG.md` - Version history
+Before submitting documentation changes, verify:
+
+- [ ] No emojis used anywhere
+- [ ] Active voice used (passive only when justified)
+- [ ] Paragraphs are 5 sentences or less
+- [ ] No duplicate content (use cross-references)
+- [ ] Breadcrumb navigation at top
+- [ ] Table of contents for long pages
+- [ ] Footer navigation with Previous/Next/Related
+- [ ] All cross-reference links use descriptive text
+- [ ] All code examples are tested and working
+- [ ] Grammar and spelling checked
+- [ ] Links verified and working
+
+### When to Update Documentation
+
+Update documentation when you:
+
+- Add or change public APIs
+- Modify security behavior
+- Change error codes or messages
+- Add new features or patterns
+- Fix bugs that affect documented behavior
+- Improve performance in ways users should know about
+
+### Documentation File Structure
+
+```
+docs/
+├── README.md                          # Documentation hub
+├── getting-started/                   # Installation and first steps
+│   ├── README.md
+│   ├── installation.md
+│   ├── concepts.md
+│   └── first-example.md
+├── guides/                            # Use-case specific guides
+│   ├── README.md
+│   ├── iframe-communication.md
+│   ├── popup-communication.md
+│   ├── multi-window-communication.md
+│   └── micro-frontends.md
+├── patterns/                          # Common coding patterns
+│   ├── README.md
+│   ├── request-response.md
+│   ├── error-handling.md
+│   └── state-synchronization.md
+├── api-reference/                     # Complete API docs
+│   ├── README.md
+│   ├── methods.md
+│   └── system-events.md
+├── security/                          # Security guidelines
+│   ├── README.md
+│   ├── origin-validation.md
+│   └── message-validation.md
+├── troubleshooting/                   # Common issues
+│   ├── README.md
+│   └── common-errors.md
+├── DOCUMENTATION_STYLE_GUIDE.md       # Writing standards
+├── DOCUMENTATION_NAVIGATION_STRATEGY.md # Navigation patterns
+└── examples/                          # Code examples
+    └── basic-example.md
+```
+
+### AI Assistant Support
+
+If you use AI assistants (Cursor, GitHub Copilot, Claude):
+
+- Review `.cursorrules` for ParleyJS-specific guidelines
+- AI assistants should follow the same documentation standards
+- Generated documentation must pass the quality checklist
+- Always verify AI-generated content for accuracy
+
+### Resources
+
+- **Style Guide**: [DOCUMENTATION_STYLE_GUIDE.md](./docs/DOCUMENTATION_STYLE_GUIDE.md)
+- **Navigation Guide**: [DOCUMENTATION_NAVIGATION_STRATEGY.md](./docs/DOCUMENTATION_NAVIGATION_STRATEGY.md)
+- **AI Guidelines**: [.cursorrules](./.cursorrules)
+- **Example**: [basic-example.md](./docs/examples/basic-example.md) - Shows all standards applied
+
+For detailed documentation contribution guidelines, see [CONTRIBUTING_DOCUMENTATION.md](./docs/CONTRIBUTING_DOCUMENTATION.md).
 
 ## Pull Request Process
 
