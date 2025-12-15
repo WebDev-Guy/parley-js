@@ -55,7 +55,7 @@ features:
 
     - title: Battle Tested
       details:
-          85 percent test coverage with comprehensive security and reliability
+          85% test coverage with comprehensive security and reliability
           testing.
 ---
 
