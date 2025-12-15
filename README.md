@@ -12,9 +12,10 @@
 
 **Type-safe, robust framework for window, tab, and iframe communication**
 
-[Getting Started](#getting-started) • [API Reference](./docs/API.md) •
-[Examples](./docs/EXAMPLES.md) • [Security](./docs/SECURITY.md) •
-[Testing](./docs/TESTING.md)
+[Quick Start](#quick-start) • [Documentation](https://www.parleyjs.com/docs/) •
+[How-To Guides](https://www.parleyjs.com/docs/guides/) •
+[API Reference](https://www.parleyjs.com/docs/api-reference/) •
+[Examples](https://www.parleyjs.com/docs/examples/)
 
 </div>
 
@@ -191,6 +192,66 @@ const response = await parley.send<RequestType, ResponseType>(
 await parley.broadcast('update', { timestamp: Date.now() });
 ```
 
+---
+
+## Documentation
+
+**[Complete Documentation Hub](https://www.parleyjs.com/docs/)** - Start here
+for organized access to all documentation
+
+### Quick Start
+
+New to ParleyJS? Start here:
+
+- **[Getting Started](https://www.parleyjs.com/docs/getting-started/)** -
+  Installation, first example, and core concepts
+- **[Framework Reference](https://www.parleyjs.com/docs/framework-reference)** -
+  Quick reference guide with common patterns
+- **[Examples](https://www.parleyjs.com/docs/examples/)** - Real-world code
+  examples to learn from
+
+### How-To Guides
+
+Choose the guide that matches your scenario:
+
+- **[iFrame Communication](https://www.parleyjs.com/docs/guides/iframe-communication)** -
+  Embedding and communicating with iframes
+- **[Popup Window Communication](https://www.parleyjs.com/docs/guides/popup-communication)** -
+  Parent and popup window patterns
+- **[Multi-Window Communication](https://www.parleyjs.com/docs/guides/multi-window-communication)** -
+  Coordinating multiple windows
+- **[All Guides](https://www.parleyjs.com/docs/guides/)** - Complete list of
+  implementation guides
+
+### Reference Documentation
+
+- **[API Reference](https://www.parleyjs.com/docs/api-reference/)** - Complete
+  API documentation with methods, types, and error codes
+- **[Code Patterns](https://www.parleyjs.com/docs/patterns/)** - Reusable
+  patterns for request-response, error handling, and state sync
+- **[Security Guide](https://www.parleyjs.com/docs/security/)** - Security best
+  practices and origin validation
+- **[Performance](https://www.parleyjs.com/docs/performance/)** - Optimization
+  techniques and profiling
+
+### Advanced Topics
+
+- **[Architecture](https://www.parleyjs.com/docs/architecture)** - Internal
+  design and architecture
+- **[Testing Guide](https://www.parleyjs.com/docs/testing)** - Comprehensive
+  testing documentation
+- **[Testing Patterns](https://www.parleyjs.com/docs/testing-patterns)** -
+  Testing strategies and patterns
+
+### Help & Resources
+
+- **[Troubleshooting](https://www.parleyjs.com/docs/troubleshooting/)** - Common
+  issues and debugging strategies
+- **[Contributing](./CONTRIBUTING.md)** - How to contribute to ParleyJS
+- **[Changelog](./CHANGELOG.md)** - Version history and changes
+
+---
+
 ### System Events
 
 ```typescript
@@ -317,7 +378,8 @@ npm run test:watch       # Watch mode
 - **Security Tests** (`tests/security/`) - Validate security mechanisms and
   attack prevention
 
-See [TESTING.md](./docs/TESTING.md) for comprehensive testing documentation.
+See [Testing Guide](https://www.parleyjs.com/docs/testing) for comprehensive
+testing documentation.
 
 ### Coverage Requirements
 
@@ -338,8 +400,8 @@ Parley-js implements **security-first design** for cross-window communication:
   enforcement
 - **Error Safety** - No sensitive information disclosure in error messages
 
-See [SECURITY.md](./docs/SECURITY.md) for detailed security guidelines and best
-practices.
+See [Security Guide](https://www.parleyjs.com/docs/security/) for detailed
+security guidelines and best practices.
 
 ## Development
 
@@ -368,16 +430,6 @@ npm run build        # Production build
 npm run build:dev    # Development build with source maps
 npm run dev          # Watch mode
 ```
-
-## Documentation
-
-- [API Reference](./docs/API.md) - Complete API documentation
-- [Architecture](./docs/ARCHITECTURE.md) - System design and internals
-- [Security Guide](./docs/SECURITY.md) - Security best practices
-- [Testing Guide](./docs/TESTING.md) - Testing documentation and best practices
-- [Examples](./docs/EXAMPLES.md) - Code examples and patterns
-- [Contributing](./CONTRIBUTING.md) - Contribution guidelines
-- [Roadmap](./docs/FUTURE-ROADMAP.md) - Future plans
 
 ## License
 

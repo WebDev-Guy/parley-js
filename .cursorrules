@@ -1,0 +1,405 @@
+# ParleyJS Development Rules
+
+This file provides AI assistants (Cursor, Copilot, Claude) with ParleyJS development standards.
+
+## Project Overview
+
+ParleyJS is a type-safe, robust framework for window/tab/iframe communication using the postMessage API. The framework prioritizes security, simplicity, and reliability.
+
+Key features:
+- 85%+ test coverage
+- Security-first design (origin validation, sanitization, DoS prevention)
+- Full TypeScript support
+- Zero dependencies
+- Heartbeat monitoring and schema validation
+
+## Critical Rules
+
+### 1. No Emojis - Ever
+
+Never use emojis in any context:
+- Code comments
+- Documentation
+- Error messages
+- Commit messages
+- Log output
+
+```
+Bad:  "✓ Test passed"
+Good: "Test passed"
+
+Bad:  "Error in origin validation"
+Good: "Origin validation failed"
+```
+
+### 2. Follow Documentation Standards
+
+All documentation must follow:
+- `docs/DOCUMENTATION_STYLE_GUIDE.md` - Writing and formatting standards
+- `docs/DOCUMENTATION_NAVIGATION_STRATEGY.md` - Cross-linking and navigation
+
+Key principles:
+- Write naturally in active voice
+- Single source of truth (no duplication)
+- Cross-reference instead of repeating
+- Include breadcrumb navigation
+- Add working code examples
+
+### 3. Always Run Tests After Changes
+
+```bash
+# After any code modification
+npm test
+
+# Fix any failing tests immediately
+# Add tests for new functionality
+# Minimum 80% coverage required
+```
+
+### 4. Clean Up Temporary Files
+
+- Delete any markdown checklists or plans created during work
+- Remove test artifacts and build outputs
+- Leave repository in production-ready state
+- Exception: Only create .md files when explicitly requested
+
+### 5. Add Tests for New Features
+
+Every new feature requires:
+- Happy path tests
+- Error case tests
+- Edge case tests
+- Security validation tests
+
+Follow patterns in `docs/TESTING_PATTERNS.md`
+
+## Code Quality Standards
+
+### Security (Critical)
+
+Always validate in postMessage handlers:
+```typescript
+// Good - validates origin
+parley.on('message', (data, context) => {
+  // Origin already validated by ParleyJS
+  processData(data);
+});
+
+// Bad - never use wildcard origins in production
+allowedOrigins: ['*'] // Only for development
+```
+
+Security checklist:
+- [ ] Validate origin explicitly
+- [ ] Validate message structure and content
+- [ ] No sensitive data in messages
+- [ ] Proper error handling
+- [ ] HTTPS in production examples
+
+### TypeScript
+
+- Maintain strict mode
+- Provide complete type definitions
+- No `any` types without justification
+- Document interfaces with JSDoc
+
+### Linting
+
+```bash
+npm run lint
+# Fix all warnings and errors before committing
+```
+
+## Documentation Standards
+
+### Writing Style
+
+```markdown
+Good: "ParleyJS validates the origin before processing messages"
+Bad:  "The origin is validated by ParleyJS before messages are processed"
+
+Good: "Use connect() to establish a channel"
+Bad:  "A channel can be established using connect()"
+
+Good: "See [Origin Validation](docs/security/origin-validation.md)"
+Bad:  "Origin validation is when you check if the message..."
+```
+
+### Navigation Requirements
+
+Every documentation file must include:
+1. Breadcrumb navigation at top
+2. Table of contents for long pages
+3. Footer navigation with related links
+
+Example:
+```markdown
+[Home](../README.md) > [Documentation](./README.md) > Security
+
+# Security Guide
+
+[Content here]
+
+---
+
+## Navigation
+
+**Related**:
+- [Origin Validation](./origin-validation.md)
+- [API Reference](../api-reference/README.md)
+
+**Back to**: [Documentation Home](./README.md)
+```
+
+### Cross-Reference Pattern
+
+```markdown
+Good: "For timeout handling, see [Request-Response Pattern](../patterns/request-response.md#timeout-handling)"
+Bad:  "See the patterns documentation for timeout handling"
+Bad:  "Timeout handling is when you set a maximum wait time..."
+```
+
+## Common Patterns
+
+### Message Sending
+
+```typescript
+// Fire-and-forget (no response expected)
+await parley.send('notification', { message: 'Update available' }, {
+  targetId: 'child',
+  expectsResponse: false
+});
+
+// Request-response (wait for reply)
+const response = await parley.send('getData', { id: 123 }, {
+  targetId: 'child',
+  timeout: 5000
+});
+```
+
+### Error Handling
+
+```typescript
+// Always handle errors
+try {
+  const result = await parley.send('query', data, { targetId: 'child' });
+  processResult(result);
+} catch (error) {
+  if (error.code === 'TIMEOUT') {
+    // Handle timeout
+  } else if (error.code === 'ORIGIN_MISMATCH') {
+    // Handle security error
+  }
+  logError(error);
+}
+```
+
+### Cleanup
+
+```typescript
+// Always clean up when done
+function cleanup() {
+  parley.destroy(); // Removes all listeners
+}
+
+// Or remove specific listeners
+const unsubscribe = parley.on('message', handler);
+unsubscribe(); // Remove this listener only
+```
+
+## File Locations
+
+- Source code: `/src`
+- Tests: `/tests`
+- Documentation: `/docs`
+- Examples: `/examples`
+- GitHub Pages: `/docs-site`
+
+## Workflow for Changes
+
+1. Create/checkout branch
+2. Make code changes
+3. Update/add tests
+4. Run test suite: `npm test`
+5. Run linter: `npm run lint`
+6. Update documentation if API changed
+7. Delete temporary files
+8. Commit with descriptive message
+
+## Commit Message Format
+
+```
+<type>: <brief description>
+
+<detailed explanation if needed>
+
+Tests: <which tests added/updated>
+```
+
+Types: `feat`, `fix`, `refactor`, `test`, `docs`, `security`
+
+Examples:
+```
+feat: add heartbeat monitoring with configurable intervals
+
+Added HEARTBEAT_SENT and HEARTBEAT_MISSED system events.
+Configurable via heartbeatInterval option.
+
+Tests: Added heartbeat.test.ts with interval and missed beat tests
+```
+
+```
+docs: improve origin validation examples in security guide
+
+Added common mistakes section and HTTPS examples.
+Cross-referenced from troubleshooting guide.
+```
+
+## Performance Considerations
+
+- Keep message payloads small (< 1MB recommended)
+- Batch multiple updates instead of sending individually
+- Debounce frequent messages (scroll, resize events)
+- Clean up listeners to prevent memory leaks
+- Use fire-and-forget for notifications
+
+```typescript
+// Bad - sends 1000 separate messages
+for (let i = 0; i < 1000; i++) {
+  await parley.send('update', { index: i });
+}
+
+// Good - batch into single message
+await parley.send('batch-update', {
+  items: Array.from({ length: 1000 }, (_, i) => ({ index: i }))
+});
+```
+
+## Testing Requirements
+
+- Minimum 80% code coverage
+- 100% coverage for security-critical code
+- All public APIs must have tests
+- Test error paths and edge cases
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+npm test -- tests/security.test.ts
+
+# Coverage report
+npm test -- --coverage
+```
+
+## Reference Documentation
+
+Before making changes, review:
+- `docs/FRAMEWORK_REFERENCE.md` - Core concepts and quick start
+- `docs/CODE_PATTERNS.md` - Common coding patterns
+- `docs/TESTING_PATTERNS.md` - Testing strategies
+- `docs/SECURITY.md` - Security best practices
+- `docs/API.md` - Complete API reference
+
+## Success Criteria
+
+A task is complete when:
+1. [ ] All tests pass
+2. [ ] Linter passes with no warnings
+3. [ ] New features have test coverage
+4. [ ] Documentation updated if API changed
+5. [ ] No temporary files remain
+6. [ ] Security guidelines followed
+7. [ ] Code follows existing patterns
+
+## Questions and Ambiguity
+
+When uncertain:
+1. Check existing code patterns first
+2. Review `docs/FRAMEWORK_REFERENCE.md`
+3. Look at test examples in `/tests`
+4. Default to security and clarity
+5. Add comments explaining non-obvious decisions
+6. Ask for clarification if security-related
+
+## Example: Good vs Bad Documentation
+
+### Bad Documentation
+```markdown
+# Using ParleyJS
+
+ParleyJS is cool! Just call connect() and you're good to go!
+
+```typescript
+parley.connect(target);
+```
+
+That's it!
+```
+
+### Good Documentation
+```markdown
+[Home](../README.md) > [Documentation](./README.md) > Getting Started
+
+# Getting Started with ParleyJS
+
+This guide walks you through your first ParleyJS implementation.
+
+## Prerequisites
+
+- Node.js 16 or higher
+- Basic understanding of postMessage API
+- HTTPS setup for production (required for security)
+
+## Installation
+
+```bash
+npm install parley-js
+```
+
+## Basic Example
+
+```typescript
+import { Parley } from 'parley-js';
+
+// Create instance with origin validation
+const parley = Parley.create({
+  allowedOrigins: ['https://child.example.com']
+});
+
+// Wait for iframe to load
+const iframe = document.getElementById('myFrame');
+iframe.addEventListener('load', async () => {
+  // Establish connection
+  await parley.connect(iframe.contentWindow, 'child');
+
+  // Send message and wait for response
+  try {
+    const response = await parley.send('getData', { id: 123 }, {
+      targetId: 'child',
+      timeout: 5000
+    });
+    console.log('Received:', response);
+  } catch (error) {
+    console.error('Request failed:', error);
+  }
+});
+```
+
+For complete examples, see [Examples](./EXAMPLES.md).
+
+## Next Steps
+
+- [Learn core concepts](./getting-started/concepts.md)
+- [Review security best practices](./security/README.md)
+- [Explore common patterns](./patterns/README.md)
+
+---
+
+**Related**:
+- [API Reference](./api-reference/README.md)
+- [Security Guide](./security/README.md)
+
+**Back to**: [Documentation Home](./README.md)
+```

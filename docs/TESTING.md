@@ -1,8 +1,13 @@
+[Home](./index.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Testing Guide
+
 # Testing Guide
 
 Parley-js maintains **85%+ test coverage** with comprehensive unit, integration,
 and security tests using
 <a href="https://vitest.dev/" target="_blank">Vitest</a>.
+
+For testing patterns and strategies, see
+[Testing Patterns](./TESTING_PATTERNS.md).
 
 ## Table of Contents
 
@@ -1035,11 +1040,18 @@ please open an issue in the repository.
 
 ---
 
-## Related Documentation
+## Navigation
 
-- [API Reference](./API.md) - Complete API documentation
-- [Security Guide](./SECURITY.md) - Security best practices
-- [Architecture](./ARCHITECTURE.md) - System design and internals
-- [Examples](./EXAMPLES.md) - Code examples and patterns
-- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
-- [README](../README.md) - Project overview
+### Related Documentation
+
+- [Testing Patterns](./TESTING_PATTERNS.md) - Testing patterns and strategies
+- [API Reference](./API.md) - Methods to test
+- [Code Patterns](./CODE_PATTERNS.md) - Patterns to test
+
+### See Also
+
+- [Security Guide](./SECURITY.md) - Security testing
+- [Examples](./EXAMPLES.md) - Examples to test
+- [Contributing](../CONTRIBUTING.md) - Contributing tests
+
+**Back to**: [Documentation Home](./index.md)

@@ -1,3 +1,5 @@
+[Home](./index.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > API Reference
+
 # API Reference
 
 Complete API documentation for Parley-js.
@@ -23,6 +25,13 @@ Complete API documentation for Parley-js.
 ## Parley Class
 
 The main class for inter-window communication.
+
+**Quick Links**:
+
+- [Framework Reference](./FRAMEWORK_REFERENCE.md) - Quick start guide
+- [Code Patterns](./CODE_PATTERNS.md) - Usage patterns
+- [Examples](./EXAMPLES.md) - Complete examples
+- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues
 
 ### Static Methods
 
@@ -1197,9 +1206,23 @@ parley.onSystem(
 
 ## Related Documentation
 
-- [Testing Guide](./TESTING.md) - Testing documentation and best practices
+---
+
+## Navigation
+
+### Related Documentation
+
+- [Framework Reference](./FRAMEWORK_REFERENCE.md) - Quick reference guide
+- [Code Patterns](./CODE_PATTERNS.md) - Common coding patterns
+- [Testing Patterns](./TESTING_PATTERNS.md) - Testing strategies
+- [Examples](./EXAMPLES.md) - Code examples and use cases
 - [Security Guide](./SECURITY.md) - Security best practices
 - [Architecture](./ARCHITECTURE.md) - System design and internals
-- [Examples](./EXAMPLES.md) - Code examples and patterns
-- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
-- [README](../README.md) - Project overview
+- [Testing Guide](./TESTING.md) - Comprehensive testing documentation
+
+### See Also
+
+- [Troubleshooting](./TROUBLESHOOTING.md) - FAQ and debugging
+- [Contributing](../CONTRIBUTING.md) - How to contribute
+
+**Back to**: [Documentation Home](./index.md)

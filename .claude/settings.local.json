@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(tree:*)",
+      "Bash(done)",
+      "Bash(npm audit:*)",
+      "Bash(npm view:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm install)",
+      "Bash(npm run docs:build:*)",
+      "Bash(npx vitepress:*)",
+      "Bash(cat:*)",
+      "Bash(python link-validator.py:*)",
+      "Bash(python3:*)",
+      "Bash(py link-validator.py:*)",
+      "Bash(chmod:*)",
+      "Bash(bash validate-links.sh:*)",
+      "Bash(for:*)",
+      "Bash(do if [ -f \"$file\" ])",
+      "Bash(then echo \"EXISTS: $file\")",
+      "Bash(else echo \"MISSING: $file\")",
+      "Bash(fi)",
+      "Bash(do if [ -f \"c:/Users/drew/source/repos/WebDev-Guy/parley-js/$file\" ])",
+      "Bash(find:*)"
+    ]
+  }
+}

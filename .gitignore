@@ -39,3 +39,8 @@ coverage/
 # Temporary files
 tmp/
 temp/
+
+# VitePress build output
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+docs-site/docs/
