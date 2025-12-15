@@ -41,6 +41,9 @@ jobs:
       - name: Build library
         run: npm run build
 
+      - name: Build VitePress documentation
+        run: npm run docs:build
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
