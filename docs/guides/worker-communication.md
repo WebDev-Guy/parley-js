@@ -1,8 +1,9 @@
-[Home](../../README.md) > [Guides](./README.md) > Web Worker Communication
+[Home](../../index.md) > [Guides](./index.md) > Web Worker Communication
 
 # Web Worker Communication Guide
 
-This guide explains ParleyJS's scope and provides guidance for Web Worker communication.
+This guide explains ParleyJS's scope and provides guidance for Web Worker
+communication.
 
 ## Table of Contents
 
@@ -16,41 +17,52 @@ This guide explains ParleyJS's scope and provides guidance for Web Worker commun
 
 ## Overview
 
-Web Workers provide a way to run JavaScript in background threads, enabling true parallel execution. However, Web Workers use a different communication API than window-based communication.
+Web Workers provide a way to run JavaScript in background threads, enabling true
+parallel execution. However, Web Workers use a different communication API than
+window-based communication.
 
-ParleyJS is specifically designed for window, iframe, and popup communication using the postMessage API. Web Workers use a separate worker-specific messaging API that is fundamentally different.
+ParleyJS is specifically designed for window, iframe, and popup communication
+using the postMessage API. Web Workers use a separate worker-specific messaging
+API that is fundamentally different.
 
 ## ParleyJS and Web Workers
 
-ParleyJS does not support Web Worker communication. This is an intentional design decision.
+ParleyJS does not support Web Worker communication. This is an intentional
+design decision.
 
 ### Why ParleyJS Doesn't Support Workers
 
 ParleyJS is built for window-to-window communication which involves:
+
 - Origin validation for security
 - Window references (parent, opener, iframe.contentWindow)
 - Cross-origin messaging with origin checks
 - Window lifecycle management
 
 Web Workers have a different communication model:
+
 - Workers use their own postMessage API (not window.postMessage)
 - No origin concept (workers are same-origin by definition)
 - Different reference model (worker objects vs window references)
 - Different lifecycle and termination semantics
 
-Combining these two different communication patterns into one library would create complexity without providing meaningful benefits.
+Combining these two different communication patterns into one library would
+create complexity without providing meaningful benefits.
 
 ### Recommended Approach
 
-For Web Worker communication, use the native Worker API directly. It is simple, well-supported, and designed specifically for worker communication.
+For Web Worker communication, use the native Worker API directly. It is simple,
+well-supported, and designed specifically for worker communication.
 
 ## Native Web Worker Communication
 
-Web Workers provide a straightforward communication API. Here's how to use it effectively.
+Web Workers provide a straightforward communication API. Here's how to use it
+effectively.
 
 ### Basic Worker Setup
 
 **Main Thread (main.js)**:
+
 ```javascript
 // Create worker
 const worker = new Worker('worker.js');
@@ -58,7 +70,7 @@ const worker = new Worker('worker.js');
 // Send message to worker
 worker.postMessage({
     type: 'process-data',
-    data: { items: [1, 2, 3, 4, 5] }
+    data: { items: [1, 2, 3, 4, 5] },
 });
 
 // Receive messages from worker
@@ -77,6 +89,7 @@ worker.addEventListener('error', (error) => {
 ```
 
 **Worker Thread (worker.js)**:
+
 ```javascript
 // Receive messages from main thread
 self.addEventListener('message', (event) => {
@@ -88,7 +101,7 @@ self.addEventListener('message', (event) => {
         // Send result back to main thread
         self.postMessage({
             type: 'result',
-            result
+            result,
         });
     }
 });
@@ -101,7 +114,9 @@ function processData(items) {
 
 ### Request-Response Pattern with Workers
 
-Implement request-response pattern similar to ParleyJS. For ParleyJS's window-based request-response pattern, see [Request-Response Pattern](../patterns/request-response.md).
+Implement request-response pattern similar to ParleyJS. For ParleyJS's
+window-based request-response pattern, see
+[Request-Response Pattern](../patterns/request-response.md).
 
 ```javascript
 // Main thread: Request-response helper
@@ -145,7 +160,7 @@ class WorkerChannel {
                 reject: (error) => {
                     clearTimeout(timeoutId);
                     reject(error);
-                }
+                },
             });
 
             this.worker.postMessage({ type, data, requestId });
@@ -171,6 +186,7 @@ try {
 ```
 
 **Worker side**:
+
 ```javascript
 self.addEventListener('message', async (event) => {
     const { type, data, requestId } = event.data;
@@ -204,10 +220,13 @@ for (let i = 0; i < array.length; i++) {
 }
 
 // Transfer ownership to worker (zero-copy)
-worker.postMessage({
-    type: 'process-buffer',
-    buffer: buffer
-}, [buffer]);
+worker.postMessage(
+    {
+        type: 'process-buffer',
+        buffer: buffer,
+    },
+    [buffer]
+);
 
 // Note: buffer is now unusable in main thread
 
@@ -221,10 +240,13 @@ self.addEventListener('message', (event) => {
         const result = processArray(array);
 
         // Transfer back to main thread
-        self.postMessage({
-            type: 'result',
-            buffer: buffer
-        }, [buffer]);
+        self.postMessage(
+            {
+                type: 'result',
+                buffer: buffer,
+            },
+            [buffer]
+        );
     }
 });
 ```
@@ -241,7 +263,7 @@ sharedWorker.port.start();
 
 sharedWorker.port.postMessage({
     type: 'register',
-    tabId: Math.random().toString(36)
+    tabId: Math.random().toString(36),
 });
 
 sharedWorker.port.addEventListener('message', (event) => {
@@ -260,10 +282,10 @@ self.addEventListener('connect', (event) => {
 
         if (type === 'broadcast') {
             // Broadcast to all connected tabs
-            connections.forEach(connection => {
+            connections.forEach((connection) => {
                 connection.postMessage({
                     type: 'broadcast-message',
-                    data
+                    data,
                 });
             });
         }
@@ -297,14 +319,14 @@ import * as Comlink from 'comlink';
 const api = {
     calculate(...numbers) {
         return numbers.reduce((a, b) => a + b, 0);
-    }
+    },
 };
 
 Comlink.expose(api);
 ```
 
-Install: `npm install comlink`
-Documentation: https://github.com/GoogleChromeLabs/comlink
+Install: `npm install comlink` Documentation:
+https://github.com/GoogleChromeLabs/comlink
 
 ### Threads.js
 
@@ -321,14 +343,14 @@ console.log(result);
 await Thread.terminate(worker);
 ```
 
-Install: `npm install threads`
-Documentation: https://threads.js.org/
+Install: `npm install threads` Documentation: https://threads.js.org/
 
 ## When to Use Workers vs Windows
 
 Choose the right tool for your use case.
 
 ### Use Web Workers When:
+
 - Running CPU-intensive computations (image processing, data analysis, etc.)
 - Processing large datasets without blocking the UI
 - Performing background tasks (indexing, compression, etc.)
@@ -336,6 +358,7 @@ Choose the right tool for your use case.
 - All code is in your control (same origin, no third-party content)
 
 ### Use Windows/iframes (ParleyJS) When:
+
 - Embedding third-party content securely
 - Isolating untrusted code in sandboxed iframes
 - Cross-origin communication is required
@@ -344,6 +367,7 @@ Choose the right tool for your use case.
 - Need visual content in separate windows/iframes
 
 ### Use Both When:
+
 You can combine ParleyJS and Web Workers for complex applications:
 
 **Example**: Heavy computation in worker, results sent via ParleyJS to iframe
@@ -352,7 +376,7 @@ You can combine ParleyJS and Web Workers for complex applications:
 // Main window
 const worker = new Worker('compute-worker.js');
 const parley = Parley.create({
-    allowedOrigins: [window.location.origin]
+    allowedOrigins: [window.location.origin],
 });
 
 // Get result from worker
@@ -361,9 +385,13 @@ worker.postMessage({ type: 'analyze', data: bigDataset });
 worker.addEventListener('message', async (event) => {
     if (event.data.type === 'result') {
         // Send worker result to iframe via ParleyJS
-        await parley.send('analysis:complete', {
-            result: event.data.result
-        }, { targetId: 'visualization-iframe' });
+        await parley.send(
+            'analysis:complete',
+            {
+                result: event.data.result,
+            },
+            { targetId: 'visualization-iframe' }
+        );
     }
 });
 
@@ -373,54 +401,69 @@ parley.on('analysis:complete', (payload) => {
 });
 ```
 
-For combining workers with iframe communication, see [iFrame Communication Guide](./iframe-communication.md). For error handling when coordinating workers and windows, see [Error Handling Pattern](../patterns/error-handling.md).
+For combining workers with iframe communication, see
+[iFrame Communication Guide](./iframe-communication.md). For error handling when
+coordinating workers and windows, see
+[Error Handling Pattern](../patterns/error-handling.md).
 
 ## Next Steps
 
 For Web Worker communication:
 
 **Learn Native APIs**:
+
 - [MDN: Web Workers API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API)
 - [MDN: Worker.postMessage()](https://developer.mozilla.org/en-US/docs/Web/API/Worker/postMessage)
 - [MDN: Transferable Objects](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects)
 
 **Libraries for Worker Communication**:
-- [Comlink](https://github.com/GoogleChromeLabs/comlink) - RPC-style worker communication
+
+- [Comlink](https://github.com/GoogleChromeLabs/comlink) - RPC-style worker
+  communication
 - [Threads.js](https://threads.js.org/) - Complete threading solution
-- [Greenlet](https://github.com/developit/greenlet) - Move async functions to workers
+- [Greenlet](https://github.com/developit/greenlet) - Move async functions to
+  workers
 
 For window communication with ParleyJS:
 
 **Learn More ParleyJS Patterns**:
-- [iFrame Communication](./iframe-communication.md) - Embed and communicate with iframes
+
+- [iFrame Communication](./iframe-communication.md) - Embed and communicate with
+  iframes
 - [Popup Communication](./popup-communication.md) - OAuth flows and dialogs
-- [Multi-Window Communication](./multi-window-communication.md) - Coordinate multiple windows
+- [Multi-Window Communication](./multi-window-communication.md) - Coordinate
+  multiple windows
 
 **Core Concepts**:
-- [API Reference](../api-reference/README.md) - Complete ParleyJS API
-- [Code Patterns](../patterns/README.md) - Reusable ParleyJS patterns
-- [Security Guide](../security/README.md) - Security best practices
+
+- [API Reference](../api-reference/index.md) - Complete ParleyJS API
+- [Code Patterns](../patterns/index.md) - Reusable ParleyJS patterns
+- [Security Guide](../security/index.md) - Security best practices
 
 ## Related Guides
 
-- **[iFrame Communication](./iframe-communication.md)** - Window-based communication
+- **[iFrame Communication](./iframe-communication.md)** - Window-based
+  communication
 - **[Popup Communication](./popup-communication.md)** - Popup window patterns
-- **[Multi-Window Communication](./multi-window-communication.md)** - Multiple window coordination
+- **[Multi-Window Communication](./multi-window-communication.md)** - Multiple
+  window coordination
 
 ## See Also
 
 **External Resources**:
+
 - [MDN: Using Web Workers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers)
 - [Web Workers Specification](https://html.spec.whatwg.org/multipage/workers.html)
 - [Shared Workers](https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker)
 
 **ParleyJS Documentation**:
-- [Getting Started](../getting-started/README.md) - Introduction to ParleyJS
+
+- [Getting Started](../getting-started/index.md) - Introduction to ParleyJS
 - [Core Concepts](../getting-started/concepts.md) - Understanding ParleyJS
 - [Examples](../EXAMPLES.md) - Complete code examples
 
 ---
 
-**Previous**: [Popup Window Communication](./popup-communication.md)
-**Next**: [Multi-Window Communication](./multi-window-communication.md)
-**Back to**: [Documentation Home](../README.md)
+**Previous**: [Popup Window Communication](./popup-communication.md) **Next**:
+[Multi-Window Communication](./multi-window-communication.md) **Back to**:
+[Documentation Home](./index.md)

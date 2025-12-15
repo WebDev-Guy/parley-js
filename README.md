@@ -12,9 +12,10 @@
 
 **Type-safe, robust framework for window, tab, and iframe communication**
 
-[Quick Start](#quick-start) • [Documentation](./docs/README.md) •
-[How-To Guides](./docs/guides/README.md) • [API Reference](./docs/api-reference/README.md) •
-[Examples](./docs/EXAMPLES.md)
+[Quick Start](#quick-start) • [Documentation](https://www.parleyjs.com/docs/) •
+[How-To Guides](https://www.parleyjs.com/docs/guides/) •
+[API Reference](https://www.parleyjs.com/docs/api-reference/) •
+[Examples](https://www.parleyjs.com/docs/examples/)
 
 </div>
 
@@ -195,41 +196,57 @@ await parley.broadcast('update', { timestamp: Date.now() });
 
 ## Documentation
 
-**[Complete Documentation Hub](./docs/README.md)** - Start here for organized access to all documentation
+**[Complete Documentation Hub](https://www.parleyjs.com/docs/)** - Start here
+for organized access to all documentation
 
 ### Quick Start
 
 New to ParleyJS? Start here:
 
-- **[Getting Started](./docs/getting-started/README.md)** - Installation, first example, and core concepts
-- **[Framework Reference](./docs/FRAMEWORK_REFERENCE.md)** - Quick reference guide with common patterns
-- **[Examples](./docs/EXAMPLES.md)** - Real-world code examples to learn from
+- **[Getting Started](https://www.parleyjs.com/docs/getting-started/)** -
+  Installation, first example, and core concepts
+- **[Framework Reference](https://www.parleyjs.com/docs/framework-reference)** -
+  Quick reference guide with common patterns
+- **[Examples](https://www.parleyjs.com/docs/examples/)** - Real-world code
+  examples to learn from
 
 ### How-To Guides
 
 Choose the guide that matches your scenario:
 
-- **[iFrame Communication](./docs/guides/iframe-communication.md)** - Embedding and communicating with iframes
-- **[Popup Window Communication](./docs/guides/popup-communication.md)** - Parent and popup window patterns
-- **[Multi-Window Communication](./docs/guides/multi-window-communication.md)** - Coordinating multiple windows
-- **[All Guides](./docs/guides/README.md)** - Complete list of implementation guides
+- **[iFrame Communication](https://www.parleyjs.com/docs/guides/iframe-communication)** -
+  Embedding and communicating with iframes
+- **[Popup Window Communication](https://www.parleyjs.com/docs/guides/popup-communication)** -
+  Parent and popup window patterns
+- **[Multi-Window Communication](https://www.parleyjs.com/docs/guides/multi-window-communication)** -
+  Coordinating multiple windows
+- **[All Guides](https://www.parleyjs.com/docs/guides/)** - Complete list of
+  implementation guides
 
 ### Reference Documentation
 
-- **[API Reference](./docs/api-reference/README.md)** - Complete API documentation with methods, types, and error codes
-- **[Code Patterns](./docs/patterns/README.md)** - Reusable patterns for request-response, error handling, and state sync
-- **[Security Guide](./docs/security/README.md)** - Security best practices and origin validation
-- **[Performance](./docs/performance/README.md)** - Optimization techniques and profiling
+- **[API Reference](https://www.parleyjs.com/docs/api-reference/)** - Complete
+  API documentation with methods, types, and error codes
+- **[Code Patterns](https://www.parleyjs.com/docs/patterns/)** - Reusable
+  patterns for request-response, error handling, and state sync
+- **[Security Guide](https://www.parleyjs.com/docs/security/)** - Security best
+  practices and origin validation
+- **[Performance](https://www.parleyjs.com/docs/performance/)** - Optimization
+  techniques and profiling
 
 ### Advanced Topics
 
-- **[Architecture](./docs/ARCHITECTURE.md)** - Internal design and architecture
-- **[Testing Guide](./docs/TESTING.md)** - Comprehensive testing documentation
-- **[Testing Patterns](./docs/TESTING_PATTERNS.md)** - Testing strategies and patterns
+- **[Architecture](https://www.parleyjs.com/docs/architecture)** - Internal
+  design and architecture
+- **[Testing Guide](https://www.parleyjs.com/docs/testing)** - Comprehensive
+  testing documentation
+- **[Testing Patterns](https://www.parleyjs.com/docs/testing-patterns)** -
+  Testing strategies and patterns
 
 ### Help & Resources
 
-- **[Troubleshooting](./docs/troubleshooting/README.md)** - Common issues and debugging strategies
+- **[Troubleshooting](https://www.parleyjs.com/docs/troubleshooting/)** - Common
+  issues and debugging strategies
 - **[Contributing](./CONTRIBUTING.md)** - How to contribute to ParleyJS
 - **[Changelog](./CHANGELOG.md)** - Version history and changes
 
@@ -361,7 +378,8 @@ npm run test:watch       # Watch mode
 - **Security Tests** (`tests/security/`) - Validate security mechanisms and
   attack prevention
 
-See [TESTING.md](./docs/TESTING.md) for comprehensive testing documentation.
+See [Testing Guide](https://www.parleyjs.com/docs/testing) for comprehensive
+testing documentation.
 
 ### Coverage Requirements
 
@@ -382,8 +400,8 @@ Parley-js implements **security-first design** for cross-window communication:
   enforcement
 - **Error Safety** - No sensitive information disclosure in error messages
 
-See [SECURITY.md](./docs/SECURITY.md) for detailed security guidelines and best
-practices.
+See [Security Guide](https://www.parleyjs.com/docs/security/) for detailed
+security guidelines and best practices.
 
 ## Development
 

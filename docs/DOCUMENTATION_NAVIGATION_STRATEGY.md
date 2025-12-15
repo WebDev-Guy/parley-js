@@ -1,12 +1,16 @@
-[Home](../README.md) > [Documentation](./README.md) > Documentation Navigation Strategy
+[Home](./index.md) > [Documentation](./index.md) > Documentation Navigation
+Strategy
 
 # ParleyJS Documentation Navigation Strategy
 
-Complete strategy for cross-linking and navigation within documentation to ensure users never get lost and always have a clear way to return to their original location.
+Complete strategy for cross-linking and navigation within documentation to
+ensure users never get lost and always have a clear way to return to their
+original location.
 
 ## Problem Statement
 
 Users navigating through documentation may:
+
 - Click a reference and forget where they came from
 - Get lost in deep documentation hierarchies
 - Have to use browser back button repeatedly
@@ -17,7 +21,8 @@ This strategy ensures navigation is always clear and users never feel lost.
 
 ## Navigation Approach: Hybrid Model
 
-Rather than relying on a single approach, use a combination of techniques based on context:
+Rather than relying on a single approach, use a combination of techniques based
+on context:
 
 1. Breadcrumb trails for hierarchy awareness
 2. Explicit "back" navigation for related content
@@ -44,31 +49,34 @@ Home > Getting Started > Basic Concepts > Message Handlers
 Each markdown file starts with breadcrumb navigation:
 
 ```markdown
-[Home](../README.md) > [Getting Started](./getting-started.md) > Basic Concepts
+[Home](./index.md) > [Getting Started](./getting-started.md) > Basic Concepts
 
 # Message Handlers
 ```
 
 **HTML Rendering** (for websites):
+
 ```html
 <nav class="breadcrumb">
-  <a href="/">Home</a>
-  <span>/</span>
-  <a href="/getting-started">Getting Started</a>
-  <span>/</span>
-  <a href="/getting-started/concepts">Basic Concepts</a>
-  <span>/</span>
-  <span>Message Handlers</span>
+    <a href="/">Home</a>
+    <span>/</span>
+    <a href="/getting-started">Getting Started</a>
+    <span>/</span>
+    <a href="/getting-started/concepts">Basic Concepts</a>
+    <span>/</span>
+    <span>Message Handlers</span>
 </nav>
 ```
 
 **Benefits**:
+
 - Shows location in hierarchy
 - Quick navigation to parent sections
 - Clear context about where user is
 - Works in any documentation system
 
 **Limitations**:
+
 - Doesn't show all available options
 - Requires consistent file structure
 
@@ -79,8 +87,10 @@ Every major document has a table of contents at the top showing all sections.
 **Location**: Immediately after breadcrumb, before introduction
 
 **Format**:
+
 ```markdown
 ## Table of Contents
+
 1. [Introduction](#introduction)
 2. [Creating Channels](#creating-channels)
 3. [Sending Messages](#sending-messages)
@@ -89,12 +99,14 @@ Every major document has a table of contents at the top showing all sections.
 ```
 
 **Benefits**:
+
 - Users know what's available in current document
 - Can jump to relevant section immediately
 - Searchable structure
 - Shows document scope
 
 **Implementation**:
+
 - For long documents (5+ sections): Required
 - For medium documents (3-4 sections): Optional but recommended
 - For short documents (1-2 sections): Not necessary
@@ -111,16 +123,18 @@ When referring to related information that helps complete the current task:
 
 **Approach**: External link in same tab (user's browser history captures it)
 
-**Example**:
-"To understand origin validation requirements, see [Security: Origin Validation](../security/origin-validation.md)."
+**Example**: "To understand origin validation requirements, see
+[Security: Origin Validation](../security/origin-validation.md)."
 
-**Why same tab**: User is pursuing the same goal (learning about the current feature)
+**Why same tab**: User is pursuing the same goal (learning about the current
+feature)
 
 #### Type B: References to Detailed API Information
 
 When referring to complete API documentation:
 
-**Pattern**: "The complete method reference is available in [API Reference: channel.send()](../api-reference.md#channelsend)"
+**Pattern**: "The complete method reference is available in
+[API Reference: channel.send()](../api-reference.md#channelsend)"
 
 **Approach**: External link in same tab with anchor to specific method
 
@@ -130,23 +144,27 @@ When referring to complete API documentation:
 
 When referring to advanced/optional information not required for current task:
 
-**Pattern**: "[Advanced: Performance Optimization for High-Frequency Messages](../advanced/performance.md) {target='_blank'}"
+**Pattern**:
+"[Advanced: Performance Optimization for High-Frequency Messages](../advanced/performance.md)
+{target='\_blank'}"
 
 **Approach**: Link that opens in new tab (preserves original context)
 
-**Why new tab**: User might be satisfied without this information and wants to return immediately
+**Why new tab**: User might be satisfied without this information and wants to
+return immediately
 
 #### Type D: Alternative Approaches
 
 When showing different ways to accomplish the same thing:
 
-**Pattern**:
-"Alternative approaches:
+**Pattern**: "Alternative approaches:
+
 - [Pattern: Request-Response](../patterns/request-response.md)
 - [Pattern: Event Emitter](../patterns/event-emitter.md)
 - [Pattern: State Synchronization](../patterns/state-sync.md)"
 
-**Approach**: Links in same tab, but within a clearly marked "alternatives" section
+**Approach**: Links in same tab, but within a clearly marked "alternatives"
+section
 
 **Why same tab**: User is choosing between options for same task
 
@@ -169,6 +187,7 @@ At the bottom of pages, provide context-aware back navigation:
 ```
 
 **Benefits**:
+
 - Clear navigation to related content
 - Shows document position
 - Multiple return paths
@@ -182,10 +201,12 @@ For long documents, provide navigation between major sections:
 ```markdown
 ## Timeout Handling
 
-[Back to Error Handling](#error-handling) | [Next: Custom Error Codes](#custom-error-codes)
+[Back to Error Handling](#error-handling) |
+[Next: Custom Error Codes](#custom-error-codes)
 ```
 
 **Benefits**:
+
 - Quick navigation within document
 - Smaller visual footprint
 - Good for reference documents
@@ -201,6 +222,7 @@ Back to: [Use Cases](../use-cases.md)
 ```
 
 **Benefits**:
+
 - Clear parent-child relationships
 - One-click return to parent
 
@@ -212,16 +234,20 @@ For website implementations, include a subtle "return" button:
 
 ```html
 <div class="breadcrumb-return">
-  <a href="javascript:history.back()" class="return-button">Return to Previous Page</a>
+    <a href="javascript:history.back()" class="return-button"
+        >Return to Previous Page</a
+    >
 </div>
 ```
 
 **Benefits**:
+
 - Relies on user's browser history
 - Non-intrusive
 - Universal (works everywhere)
 
 **Limitations**:
+
 - Doesn't work if documentation accessed via direct link
 - Doesn't work in PDF
 
@@ -230,6 +256,7 @@ For website implementations, include a subtle "return" button:
 When to open links in new tabs:
 
 **Use new tab (`target="_blank"`) for**:
+
 - Supplementary examples in external repositories
 - References to external libraries or standards
 - Advanced/optional topics while reading basics
@@ -237,22 +264,26 @@ When to open links in new tabs:
 - External tools or services
 
 **Don't use new tab for**:
+
 - Links between documentation pages
 - Links to related concepts in same guide
 - Sequential learning paths
 - Hierarchical navigation
 
 **Implementation in Markdown**:
+
 ```markdown
 [Advanced Topic](../advanced/topic.md) (opens in new tab)
 ```
 
 **Implementation in HTML**:
+
 ```html
 <a href="/advanced/topic" target="_blank">Advanced Topic</a>
 ```
 
-**Note**: Avoid making new-tab-opening automatic. Instead, explicitly note "(opens in new tab)" when you intend this behavior.
+**Note**: Avoid making new-tab-opening automatic. Instead, explicitly note
+"(opens in new tab)" when you intend this behavior.
 
 ## Documentation Structure for Navigation
 
@@ -310,23 +341,27 @@ docs/
 ## Breadcrumb Examples by Page Type
 
 ### Getting Started Page
+
 ```
-[Home](../../README.md) > [Getting Started](./README.md) > Installation
+[Home](../../index.md) > [Getting Started](./index.md) > Installation
 ```
 
 ### API Reference Page
+
 ```
-[Home](../../README.md) > [API Reference](./README.md) > Channel Methods > send()
+[Home](../../index.md) > [API Reference](./index.md) > Channel Methods > send()
 ```
 
 ### Pattern Page
+
 ```
-[Home](../../README.md) > [Code Patterns](./README.md) > Error Handling
+[Home](../../index.md) > [Code Patterns](./index.md) > Error Handling
 ```
 
 ### Nested Example
+
 ```
-[Home](../../README.md) > [Examples](./README.md) > [Basic Setup](./basic-setup/README.md) > Parent-Child Communication
+[Home](../../index.md) > [Examples](./index.md) > [Basic Setup](./basic-setup/index.md) > Parent-Child Communication
 ```
 
 ## Footer Navigation Template
@@ -334,18 +369,20 @@ docs/
 Every documentation page should include appropriate footer navigation:
 
 ### For Sequential Pages (tutorials, guides)
+
 ```markdown
 ---
 
 ### Navigation
 
-**Previous Section**: [Basic Concepts](./concepts.md)
-**Next Section**: [Creating Your First Channel](./first-channel.md)
-**Parent Guide**: [Getting Started](./README.md)
-**API Reference**: [See API Docs](../api-reference/channel.md)
+**Previous Section**: [Basic Concepts](./concepts.md) **Next Section**:
+[Creating Your First Channel](./first-channel.md) **Parent Guide**:
+[Getting Started](./index.md) **API Reference**:
+[See API Docs](../api-reference/channel.md)
 ```
 
 ### For Reference Pages (API docs)
+
 ```markdown
 ---
 
@@ -355,10 +392,11 @@ Every documentation page should include appropriate footer navigation:
 - [Error Codes](./error-codes.md)
 - [Type Definitions](./types.md)
 
-**Back to**: [API Reference](./README.md)
+**Back to**: [API Reference](./index.md)
 ```
 
 ### For Pattern Pages
+
 ```markdown
 ---
 
@@ -372,10 +410,11 @@ Every documentation page should include appropriate footer navigation:
 - [Testing Pattern](../../testing/patterns.md)
 - [Error Handling Guide](../../guides/error-handling.md)
 
-**Back to**: [Code Patterns](./README.md)
+**Back to**: [Code Patterns](./index.md)
 ```
 
 ### For How-To Guides
+
 ```markdown
 ---
 
@@ -389,7 +428,7 @@ Every documentation page should include appropriate footer navigation:
 - [Request-Response](../patterns/request-response.md)
 - [Error Handling](../patterns/error-handling.md)
 
-**Back to**: [All Guides](./README.md)
+**Back to**: [All Guides](./index.md)
 ```
 
 ## Link Destination Standards
@@ -397,21 +436,24 @@ Every documentation page should include appropriate footer navigation:
 When creating a cross-reference link, ensure it points to:
 
 1. **The most specific relevant section** (not generic parent)
-   - Wrong: "See the API reference"
-   - Correct: "See [channel.send() in API Reference](../api-reference/channel.md#send)"
+    - Wrong: "See the API reference"
+    - Correct: "See
+      [channel.send() in API Reference](../api-reference/channel.md#send)"
 
 2. **A section that answers the user's question** (not just "related")
-   - Wrong: "For more information, see Security"
-   - Correct: "To validate incoming messages, see [Message Validation](../security/message-validation.md)"
+    - Wrong: "For more information, see Security"
+    - Correct: "To validate incoming messages, see
+      [Message Validation](../security/message-validation.md)"
 
 3. **Anchor to specific subsection** when possible
-   - Wrong: `[Link](../api-reference.md)`
-   - Correct: `[Link](../api-reference.md#error-codes)`
+    - Wrong: `[Link](../api-reference.md)`
+    - Correct: `[Link](../api-reference.md#error-codes)`
 
 4. **With descriptive link text** that indicates where it goes
-   - Wrong: "click here"
-   - Wrong: "../security.md"
-   - Correct: "[Origin Validation Best Practices](../security/origin-validation.md)"
+    - Wrong: "click here"
+    - Wrong: "../security.md"
+    - Correct:
+      "[Origin Validation Best Practices](../security/origin-validation.md)"
 
 ## Navigation for Different Documentation Types
 
@@ -420,6 +462,7 @@ When creating a cross-reference link, ensure it points to:
 Structure: Linear progression through topics
 
 Navigation strategy:
+
 - Breadcrumbs at top
 - "Previous/Next" links at bottom
 - Table of contents if longer than 5 sections
@@ -430,6 +473,7 @@ Navigation strategy:
 Structure: Organized by topic, not sequential
 
 Navigation strategy:
+
 - Breadcrumbs at top
 - Table of contents with all entries
 - Quick reference section
@@ -441,6 +485,7 @@ Navigation strategy:
 Structure: Task-focused, can be read independently
 
 Navigation strategy:
+
 - Clear problem statement up front
 - Breadcrumbs at top
 - Prerequisites section
@@ -453,6 +498,7 @@ Navigation strategy:
 Structure: Alphabetical or grouped by category
 
 Navigation strategy:
+
 - Breadcrumbs at top
 - Alphabetical index or category grouping
 - Each method has "See also" links
@@ -465,6 +511,7 @@ Navigation strategy:
 Structure: Problem-solution pairs
 
 Navigation strategy:
+
 - Table of contents listing all problems
 - Related problems section for each answer
 - Links to relevant documentation sections
@@ -475,8 +522,9 @@ Navigation strategy:
 When users navigate to a document 3+ levels deep, provide multiple return paths:
 
 **Example - Deep Page**:
+
 ```
-[Home](../../README.md) > [Security](../README.md) > [Best Practices](./README.md) > Origin Validation
+[Home](../../index.md) > [Security](./index.md) > [Best Practices](./index.md) > Origin Validation
 
 # Origin Validation
 
@@ -486,8 +534,8 @@ When users navigate to a document 3+ levels deep, provide multiple return paths:
 
 ### Quick Navigation
 
-- Back to: [Security Best Practices](./README.md)
-- Up to: [Security Guide](../README.md)
+- Back to: [Security Best Practices](./index.md)
+- Up to: [Security Guide](./index.md)
 - Related: [Message Validation](./message-validation.md)
 - API: [channel.on() Origin Check](../../api-reference/channel.md#origin-check)
 ```
@@ -509,8 +557,8 @@ For more about the postMessage API, see
 When referencing deprecated features:
 
 ```markdown
-**Note**: This approach is deprecated in ParleyJS 2.0+.
-For the current method, see [Modern Approach](./modern-approach.md).
+**Note**: This approach is deprecated in ParleyJS 2.0+. For the current method,
+see [Modern Approach](./modern-approach.md).
 ```
 
 ### Version-Specific Content
@@ -518,8 +566,8 @@ For the current method, see [Modern Approach](./modern-approach.md).
 When content varies by version:
 
 ```markdown
-This feature requires ParleyJS 1.5 or later.
-For version compatibility, see [Version Guide](../../version-compatibility.md).
+This feature requires ParleyJS 1.5 or later. For version compatibility, see
+[Version Guide](../../version-compatibility.md).
 ```
 
 ## Navigation in Code Examples
@@ -542,29 +590,29 @@ code example here...
 Before publishing, verify navigation quality:
 
 1. **Follow every cross-reference**
-   - Does it point to relevant content?
-   - Is the destination helpful?
-   - Can you easily return?
+    - Does it point to relevant content?
+    - Is the destination helpful?
+    - Can you easily return?
 
 2. **Check breadcrumbs**
-   - Are they present on every page?
-   - Do they accurately show location?
-   - Do the links work?
+    - Are they present on every page?
+    - Do they accurately show location?
+    - Do the links work?
 
 3. **Verify anchor links**
-   - Do they point to correct sections?
-   - Do they land in the right place?
-   - Are headings clearly marked?
+    - Do they point to correct sections?
+    - Do they land in the right place?
+    - Are headings clearly marked?
 
 4. **Test return navigation**
-   - Are "Previous/Next" links present?
-   - Do they make sense sequentially?
-   - Are parent links available?
+    - Are "Previous/Next" links present?
+    - Do they make sense sequentially?
+    - Are parent links available?
 
 5. **Check for orphaned pages**
-   - Is every page reachable from navigation?
-   - Are there multiple ways to reach it?
-   - Is there a way to return to home?
+    - Is every page reachable from navigation?
+    - Are there multiple ways to reach it?
+    - Is there a way to return to home?
 
 ## Implementation Checklist
 
@@ -587,6 +635,7 @@ When creating new documentation:
 ### Markdown in Repository
 
 Users reading raw markdown in GitHub:
+
 - Use relative links: `[Link](../other/page.md)`
 - Breadcrumbs shown as text (manual navigation)
 - Rely on browser back button and relative links
@@ -594,6 +643,7 @@ Users reading raw markdown in GitHub:
 ### Static Documentation Site
 
 Users reading on hosted documentation site:
+
 - Use absolute paths: `/docs/path/page`
 - Breadcrumbs rendered as HTML nav
 - Footer navigation prominent
@@ -602,6 +652,7 @@ Users reading on hosted documentation site:
 ### PDF Export
 
 Users with PDF documentation:
+
 - Include full table of contents
 - Print breadcrumbs visually
 - Print "See page X" references
@@ -610,6 +661,7 @@ Users with PDF documentation:
 ### IDE/Editor Integration
 
 Users reading in code editor (Copilot, etc.):
+
 - Use simple relative links
 - Clear section headers for anchor navigation
 - Short paragraphs for readability
@@ -671,6 +723,7 @@ For documentation sites (Docusaurus, VitePress, etc.), configure:
 6. **Edit Link**: For contributions (optional)
 
 Example sidebar structure:
+
 ```
 Getting Started
   - Installation
@@ -716,4 +769,18 @@ Troubleshooting
 9. **No orphaned pages** - all pages reachable from navigation
 10. **Tested links** - verify all cross-references work
 
-This hybrid approach ensures users never get lost while maintaining clean, professional documentation.
+This hybrid approach ensures users never get lost while maintaining clean,
+professional documentation.
+
+---
+
+## Navigation
+
+**Related Documentation**:
+
+- [Documentation Style Guide](./DOCUMENTATION_STYLE_GUIDE.md) - Writing
+  standards and style
+- [Architecture](./ARCHITECTURE.md) - Documentation architecture
+- [Contributing Guide](../CONTRIBUTING.md) - How to contribute
+
+**Back to**: [Documentation Home](./index.md)

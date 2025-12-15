@@ -1,4 +1,4 @@
-[Home](../README.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Architecture
+[Home](./index.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Architecture
 
 # Architecture
 
@@ -9,7 +9,9 @@ This document describes the internal architecture of Parley-js.
 Parley-js is designed with a modular, layered architecture that separates
 concerns and enables extensibility.
 
-For implementation patterns based on this architecture, see [Code Patterns](./CODE_PATTERNS.md). For API documentation, see [API Reference](./API.md).
+For implementation patterns based on this architecture, see
+[Code Patterns](./CODE_PATTERNS.md). For API documentation, see
+[API Reference](./API.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -809,4 +811,4 @@ const CONNECTION_ERRORS = {
 - [Examples](./EXAMPLES.md) - Implementation examples
 - [Contributing](../CONTRIBUTING.md) - Contributing to the codebase
 
-**Back to**: [Documentation Home](../README.md)
+**Back to**: [Documentation Home](./index.md)

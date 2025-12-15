@@ -1,4 +1,4 @@
-[Home](../../README.md) > [API Reference](./README.md) > Methods
+[Home](../../index.md) > [API Reference](./index.md) > Methods
 
 # ParleyJS API Methods
 
@@ -7,11 +7,13 @@ Complete reference for all ParleyJS public methods and APIs.
 ## Table of Contents
 
 ### Static Methods
+
 - [Parley.create()](#parleycreate) - Create a new Parley instance
 - [Parley.VERSION](#parleyversion) - Get library version
 - [SYSTEM_EVENTS](#system_events) - System event constants
 
 ### Instance Methods
+
 - [register()](#register) - Register a message type with optional schema
 - [on()](#on) - Listen for incoming messages
 - [send()](#send) - Send a message to a target
@@ -25,6 +27,7 @@ Complete reference for all ParleyJS public methods and APIs.
 - [destroy()](#destroy) - Destroy instance and clean up resources
 
 ### Instance Properties
+
 - [instanceId](#instanceid) - Get the instance identifier
 - [targetType](#targettype) - Get the configured target type
 
@@ -37,37 +40,41 @@ Complete reference for all ParleyJS public methods and APIs.
 Creates a new Parley instance with the specified configuration.
 
 **Signature:**
+
 ```typescript
 static create(config: ParleyConfig): Parley
 ```
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| config | `ParleyConfig` | Yes | Configuration options for the instance |
-| config.targetType | `'iframe' \| 'window'` | Yes | Type of communication target |
-| config.allowedOrigins | `string[]` | Yes | List of allowed origins for security validation |
-| config.timeout | `number` | No | Default timeout in milliseconds (default: 5000) |
-| config.retries | `number` | No | Default number of retries (default: 0) |
-| config.logLevel | `'none' \| 'error' \| 'warn' \| 'info' \| 'debug'` | No | Logging level (default: 'none') |
-| config.heartbeat | `HeartbeatConfig` | No | Heartbeat configuration for connection monitoring |
-| config.instanceId | `string` | No | Custom instance identifier |
+| Name                  | Type                                               | Required | Description                                       |
+| --------------------- | -------------------------------------------------- | -------- | ------------------------------------------------- |
+| config                | `ParleyConfig`                                     | Yes      | Configuration options for the instance            |
+| config.targetType     | `'iframe' \| 'window'`                             | Yes      | Type of communication target                      |
+| config.allowedOrigins | `string[]`                                         | Yes      | List of allowed origins for security validation   |
+| config.timeout        | `number`                                           | No       | Default timeout in milliseconds (default: 5000)   |
+| config.retries        | `number`                                           | No       | Default number of retries (default: 0)            |
+| config.logLevel       | `'none' \| 'error' \| 'warn' \| 'info' \| 'debug'` | No       | Logging level (default: 'none')                   |
+| config.heartbeat      | `HeartbeatConfig`                                  | No       | Heartbeat configuration for connection monitoring |
+| config.instanceId     | `string`                                           | No       | Custom instance identifier                        |
 
 **Returns:**
+
 - `Parley` - New Parley instance
 
 **Throws:**
+
 - None (configuration validation happens during usage)
 
 **Example:**
+
 ```typescript
 import { Parley } from 'parley-js';
 
 // Basic configuration
 const parley = Parley.create({
     targetType: 'iframe',
-    allowedOrigins: ['https://child.example.com']
+    allowedOrigins: ['https://child.example.com'],
 });
 
 // Advanced configuration with heartbeat
@@ -81,30 +88,33 @@ const parley = Parley.create({
         enabled: true,
         interval: 5000,
         timeout: 2000,
-        maxMissed: 3
-    }
+        maxMissed: 3,
+    },
 });
 ```
 
 **Common Mistakes:**
 
 **Mistake:** Not specifying `allowedOrigins`
+
 ```typescript
 // Wrong - allowedOrigins defaults to current origin only
 const parley = Parley.create({
-    targetType: 'iframe'
+    targetType: 'iframe',
 });
 ```
 
 **Correct:**
+
 ```typescript
 const parley = Parley.create({
     targetType: 'iframe',
-    allowedOrigins: ['https://child.example.com']
+    allowedOrigins: ['https://child.example.com'],
 });
 ```
 
 **See Also:**
+
 - [ParleyConfig type](./types.md#parleyconfig)
 - [HeartbeatConfig type](./types.md#heartbeatconfig)
 - [Security: Origin Validation](../security/origin-validation.md)
@@ -116,11 +126,13 @@ const parley = Parley.create({
 Static property containing the current library version.
 
 **Type:**
+
 ```typescript
 static readonly VERSION: string
 ```
 
 **Example:**
+
 ```typescript
 console.log('ParleyJS version:', Parley.VERSION); // "1.0.0"
 ```
@@ -129,9 +141,11 @@ console.log('ParleyJS version:', Parley.VERSION); // "1.0.0"
 
 ### SYSTEM_EVENTS
 
-Exported constant object containing all system event names for type-safe event listening.
+Exported constant object containing all system event names for type-safe event
+listening.
 
 **Type:**
+
 ```typescript
 const SYSTEM_EVENTS: {
     CONNECTED: 'system:connected';
@@ -148,14 +162,17 @@ const SYSTEM_EVENTS: {
     HANDSHAKE_START: 'system:handshake_start';
     HANDSHAKE_COMPLETE: 'system:handshake_complete';
     HANDSHAKE_FAILED: 'system:handshake_failed';
-}
+};
 ```
 
 **Example:**
+
 ```typescript
 import { Parley, SYSTEM_EVENTS } from 'parley-js';
 
-const parley = Parley.create({ /* config */ });
+const parley = Parley.create({
+    /* config */
+});
 
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
     console.log('Connected to:', event.targetId);
@@ -167,6 +184,7 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
 ```
 
 **See Also:**
+
 - [onSystem()](#onsystem)
 - [System Events Reference](./README.md#system-events)
 
@@ -176,30 +194,35 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
 
 ### register()
 
-Registers a message type with optional JSON Schema validation. Registration is optional but recommended for type safety and payload validation.
+Registers a message type with optional JSON Schema validation. Registration is
+optional but recommended for type safety and payload validation.
 
 **Signature:**
+
 ```typescript
 register(messageType: string, options?: MessageRegistrationOptions): void
 ```
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| messageType | `string` | Yes | Unique message type identifier |
-| options | `MessageRegistrationOptions` | No | Registration options |
-| options.schema | `JSONSchema` | No | JSON Schema for payload validation |
-| options.timeout | `number` | No | Custom timeout for this message type |
-| options.retries | `number` | No | Custom retry count for this message type |
+| Name            | Type                         | Required | Description                              |
+| --------------- | ---------------------------- | -------- | ---------------------------------------- |
+| messageType     | `string`                     | Yes      | Unique message type identifier           |
+| options         | `MessageRegistrationOptions` | No       | Registration options                     |
+| options.schema  | `JSONSchema`                 | No       | JSON Schema for payload validation       |
+| options.timeout | `number`                     | No       | Custom timeout for this message type     |
+| options.retries | `number`                     | No       | Custom retry count for this message type |
 
 **Returns:**
+
 - `void`
 
 **Throws:**
+
 - `ValidationError` - If message type is already registered
 
 **Example:**
+
 ```typescript
 // Register with schema validation
 parley.register('user:update', {
@@ -209,11 +232,11 @@ parley.register('user:update', {
         properties: {
             userId: { type: 'number' },
             name: { type: 'string' },
-            email: { type: 'string', format: 'email' }
-        }
+            email: { type: 'string', format: 'email' },
+        },
     },
-    timeout: 10000,  // 10 second timeout for user updates
-    retries: 2       // Retry twice on failure
+    timeout: 10000, // 10 second timeout for user updates
+    retries: 2, // Retry twice on failure
 });
 
 // Register without schema
@@ -221,89 +244,101 @@ parley.register('notification');
 
 // Register with custom timeout only
 parley.register('file:upload', {
-    timeout: 60000  // 60 second timeout for uploads
+    timeout: 60000, // 60 second timeout for uploads
 });
 ```
 
 **Common Mistakes:**
 
 **Mistake:** Registering the same type twice
+
 ```typescript
 // Wrong - throws ValidationError
 parley.register('greeting');
-parley.register('greeting');  // Error!
+parley.register('greeting'); // Error!
 ```
 
 **Mistake:** Schema doesn't match sent payload
+
 ```typescript
 // Register with strict schema
 parley.register('user:data', {
     schema: {
         type: 'object',
         required: ['id'],
-        properties: { id: { type: 'number' } }
-    }
+        properties: { id: { type: 'number' } },
+    },
 });
 
 // Wrong - sends string instead of number
-await parley.send('user:data', { id: '123' });  // ValidationError
+await parley.send('user:data', { id: '123' }); // ValidationError
 ```
 
 **Correct:**
+
 ```typescript
-await parley.send('user:data', { id: 123 });  // Works
+await parley.send('user:data', { id: 123 }); // Works
 ```
 
 **See Also:**
+
 - [on()](#on)
 - [send()](#send)
 - [Schema Validation Guide](../EXAMPLES.md#schema-validation)
-- [Message Validation](../security/message-validation.md) - Schema validation security
-- [Type Validation Errors](../troubleshooting/common-errors.md#type-validation-errors) - Debug schema issues
+- [Message Validation](../security/message-validation.md) - Schema validation
+  security
+- [Type Validation Errors](../troubleshooting/common-errors.md#type-validation-errors) -
+  Debug schema issues
 - [JSON Schema Documentation](https://json-schema.org/)
 
 ---
 
 ### on()
 
-Registers a message handler for a specific message type. Returns an unsubscribe function to remove the handler.
+Registers a message handler for a specific message type. Returns an unsubscribe
+function to remove the handler.
 
 **Signature:**
+
 ```typescript
 on<T>(messageType: string, handler: MessageHandler<T>): () => void
 ```
 
 **Handler Signature:**
+
 ```typescript
 type MessageHandler<T> = (
     payload: T,
     respond: (response: unknown) => void,
     metadata: MessageMetadata
-) => void | Promise<void>
+) => void | Promise<void>;
 ```
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| messageType | `string` | Yes | Message type to listen for |
-| handler | `MessageHandler<T>` | Yes | Handler function with three parameters |
+| Name        | Type                | Required | Description                            |
+| ----------- | ------------------- | -------- | -------------------------------------- |
+| messageType | `string`            | Yes      | Message type to listen for             |
+| handler     | `MessageHandler<T>` | Yes      | Handler function with three parameters |
 
 **Handler Parameters:**
 
-| Name | Type | Description |
-|------|------|-------------|
-| payload | `T` | The message payload data |
-| respond | `(response: unknown) => void` | Function to send response back to sender |
-| metadata | `MessageMetadata` | Message metadata (origin, targetId, messageId, timestamp) |
+| Name     | Type                          | Description                                               |
+| -------- | ----------------------------- | --------------------------------------------------------- |
+| payload  | `T`                           | The message payload data                                  |
+| respond  | `(response: unknown) => void` | Function to send response back to sender                  |
+| metadata | `MessageMetadata`             | Message metadata (origin, targetId, messageId, timestamp) |
 
 **Returns:**
+
 - `() => void` - Unsubscribe function to remove the handler
 
 **Throws:**
+
 - None
 
 **Example:**
+
 ```typescript
 // Basic handler
 parley.on('greeting', (payload, respond, metadata) => {
@@ -347,6 +382,7 @@ parley.on('analytics:event', (payload, respond, metadata) => {
 **Common Mistakes:**
 
 **Mistake:** Forgetting to call `respond()` when sender expects response
+
 ```typescript
 // Wrong - sender will timeout waiting for response
 parley.on('getData', (payload, respond) => {
@@ -356,47 +392,58 @@ parley.on('getData', (payload, respond) => {
 ```
 
 **Correct:**
+
 ```typescript
 parley.on('getData', (payload, respond) => {
     const data = fetchData();
-    respond(data);  // Send response
+    respond(data); // Send response
 });
 ```
 
 **Mistake:** Calling `respond()` multiple times
+
 ```typescript
 // Wrong - only first respond() is used
 parley.on('getData', (payload, respond) => {
     respond({ status: 'processing' });
-    respond({ status: 'complete' });  // Ignored
+    respond({ status: 'complete' }); // Ignored
 });
 ```
 
 **Correct:** Only call `respond()` once per message
+
 ```typescript
 parley.on('getData', async (payload, respond) => {
     const result = await processData();
-    respond(result);  // Single response
+    respond(result); // Single response
 });
 ```
 
 **See Also:**
+
 - [register()](#register)
 - [send()](#send)
 - [MessageMetadata type](./types.md#messagemetadata)
-- [Request-Response Pattern](../patterns/request-response.md) - Request-response workflows
-- [Message Handlers](../getting-started/first-example.md#step-3-set-up-message-handlers) - Handler basics
-- [Error Handling in Handlers](../patterns/error-handling.md#handler-errors) - Robust handler patterns
-- [Testing Handlers](../patterns/request-response.md#testing-the-responder) - How to test message handlers
-- [Messages Not Received](../troubleshooting/common-errors.md#messages-not-being-received) - Debug handler issues
+- [Request-Response Pattern](../patterns/request-response.md) - Request-response
+  workflows
+- [Message Handlers](../getting-started/first-example.md#step-3-set-up-message-handlers) -
+  Handler basics
+- [Error Handling in Handlers](../patterns/error-handling.md#handler-errors) -
+  Robust handler patterns
+- [Testing Handlers](../patterns/request-response.md#testing-the-responder) -
+  How to test message handlers
+- [Messages Not Received](../troubleshooting/common-errors.md#messages-not-being-received) -
+  Debug handler issues
 
 ---
 
 ### send()
 
-Sends a message to a target and optionally waits for a response. Supports fire-and-forget and request-response patterns.
+Sends a message to a target and optionally waits for a response. Supports
+fire-and-forget and request-response patterns.
 
 **Signature:**
+
 ```typescript
 async send<T, R = unknown>(
     messageType: string,
@@ -407,41 +454,55 @@ async send<T, R = unknown>(
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| messageType | `string` | Yes | Message type to send |
-| payload | `T` | Yes | Message payload data |
-| options | `SendOptions` | No | Send options |
-| options.targetId | `string` | No | Specific target ID (default: first connected target) |
-| options.expectsResponse | `boolean` | No | Whether to wait for response (default: true) |
-| options.timeout | `number` | No | Custom timeout in milliseconds |
-| options.retries | `number` | No | Custom retry count |
+| Name                    | Type          | Required | Description                                          |
+| ----------------------- | ------------- | -------- | ---------------------------------------------------- |
+| messageType             | `string`      | Yes      | Message type to send                                 |
+| payload                 | `T`           | Yes      | Message payload data                                 |
+| options                 | `SendOptions` | No       | Send options                                         |
+| options.targetId        | `string`      | No       | Specific target ID (default: first connected target) |
+| options.expectsResponse | `boolean`     | No       | Whether to wait for response (default: true)         |
+| options.timeout         | `number`      | No       | Custom timeout in milliseconds                       |
+| options.retries         | `number`      | No       | Custom retry count                                   |
 
 **Returns:**
-- `Promise<R | undefined>` - Response data if `expectsResponse` is true, undefined otherwise
+
+- `Promise<R | undefined>` - Response data if `expectsResponse` is true,
+  undefined otherwise
 
 **Throws:**
-- `ValidationError` (ERR_VALIDATION_SCHEMA_MISMATCH) - Payload doesn't match registered schema
-- `TargetNotFoundError` (ERR_TARGET_NOT_CONNECTED) - Target not found or not connected
+
+- `ValidationError` (ERR_VALIDATION_SCHEMA_MISMATCH) - Payload doesn't match
+  registered schema
+- `TargetNotFoundError` (ERR_TARGET_NOT_CONNECTED) - Target not found or not
+  connected
 - `TimeoutError` (ERR_TIMEOUT_NO_RESPONSE) - No response received within timeout
 - `ConnectionError` (ERR_CONNECTION_CLOSED) - Connection closed during send
 
 **Example:**
+
 ```typescript
 // Basic request-response
 const response = await parley.send('getData', { id: 123 });
 console.log('Response:', response);
 
 // Send to specific target
-await parley.send('update', { value: 42 }, {
-    targetId: 'child-iframe',
-    timeout: 10000
-});
+await parley.send(
+    'update',
+    { value: 42 },
+    {
+        targetId: 'child-iframe',
+        timeout: 10000,
+    }
+);
 
 // Fire-and-forget (no response needed)
-await parley.send('notification', { message: 'Hello' }, {
-    expectsResponse: false
-});
+await parley.send(
+    'notification',
+    { message: 'Hello' },
+    {
+        expectsResponse: false,
+    }
+);
 
 // With type safety
 interface Request {
@@ -453,7 +514,7 @@ interface Response {
 }
 
 const result = await parley.send<Request, Response>('user:get', {
-    userId: 123
+    userId: 123,
 });
 
 console.log('User name:', result.user.name);
@@ -462,7 +523,7 @@ console.log('User name:', result.user.name);
 try {
     const data = await parley.send('critical:operation', payload, {
         timeout: 5000,
-        retries: 3  // Retry up to 3 times
+        retries: 3, // Retry up to 3 times
     });
 } catch (error) {
     if (error instanceof TimeoutError) {
@@ -474,12 +535,14 @@ try {
 **Common Mistakes:**
 
 **Mistake:** Not handling timeout errors
+
 ```typescript
 // Wrong - unhandled timeout will crash
 const response = await parley.send('getData', {});
 ```
 
 **Correct:**
+
 ```typescript
 import { TimeoutError } from 'parley-js';
 
@@ -493,29 +556,37 @@ try {
 ```
 
 **Mistake:** Sending before target is connected
+
 ```typescript
 // Wrong - target not connected yet
 const iframe = document.getElementById('myframe');
-await parley.send('message', {}, { targetId: 'myframe' });  // Fails
+await parley.send('message', {}, { targetId: 'myframe' }); // Fails
 ```
 
 **Correct:**
+
 ```typescript
 const iframe = document.getElementById('myframe');
-await parley.connect(iframe, 'myframe');  // Connect first
-await parley.send('message', {}, { targetId: 'myframe' });  // Works
+await parley.connect(iframe, 'myframe'); // Connect first
+await parley.send('message', {}, { targetId: 'myframe' }); // Works
 ```
 
 **Mistake:** Using `expectsResponse: false` but awaiting result
+
 ```typescript
 // Wrong - result will always be undefined
-const response = await parley.send('notify', {}, {
-    expectsResponse: false
-});
-console.log(response);  // undefined
+const response = await parley.send(
+    'notify',
+    {},
+    {
+        expectsResponse: false,
+    }
+);
+console.log(response); // undefined
 ```
 
 **Correct:** Don't await fire-and-forget messages
+
 ```typescript
 // Don't need await if not expecting response
 parley.send('notify', {}, { expectsResponse: false });
@@ -525,13 +596,19 @@ await parley.send('notify', {}, { expectsResponse: false });
 ```
 
 **See Also:**
+
 - [on()](#on)
 - [broadcast()](#broadcast)
-- [Common Errors](../troubleshooting/common-errors.md) - Error reference and solutions
-- [Request-Response Pattern](../patterns/request-response.md) - Send/receive workflows
-- [Error Handling Pattern](../patterns/error-handling.md#timeout-errors) - Handle send() failures
-- [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors) - Common send() issues
-- [Performance: Message Batching](../patterns/request-response.md#batch-request-response) - Optimize multiple sends
+- [Common Errors](../troubleshooting/common-errors.md) - Error reference and
+  solutions
+- [Request-Response Pattern](../patterns/request-response.md) - Send/receive
+  workflows
+- [Error Handling Pattern](../patterns/error-handling.md#timeout-errors) -
+  Handle send() failures
+- [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors) - Common
+  send() issues
+- [Performance: Message Batching](../patterns/request-response.md#batch-request-response) -
+  Optimize multiple sends
 - [iFrame Communication](../guides/iframe-communication.md) - Send to iframes
 - [Popup Communication](../guides/popup-communication.md) - Send to popups
 
@@ -539,38 +616,44 @@ await parley.send('notify', {}, { expectsResponse: false });
 
 ### broadcast()
 
-Broadcasts a message to all connected targets. This is a fire-and-forget operation that doesn't wait for responses.
+Broadcasts a message to all connected targets. This is a fire-and-forget
+operation that doesn't wait for responses.
 
 **Signature:**
+
 ```typescript
 broadcast<T>(messageType: string, payload: T): void
 ```
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| messageType | `string` | Yes | Message type to broadcast |
-| payload | `T` | Yes | Message payload data |
+| Name        | Type     | Required | Description               |
+| ----------- | -------- | -------- | ------------------------- |
+| messageType | `string` | Yes      | Message type to broadcast |
+| payload     | `T`      | Yes      | Message payload data      |
 
 **Returns:**
+
 - `void`
 
 **Throws:**
-- `ValidationError` (ERR_VALIDATION_SCHEMA_MISMATCH) - Payload doesn't match schema
+
+- `ValidationError` (ERR_VALIDATION_SCHEMA_MISMATCH) - Payload doesn't match
+  schema
 
 **Example:**
+
 ```typescript
 // Notify all connected windows
 parley.broadcast('state:changed', {
     version: 42,
-    timestamp: Date.now()
+    timestamp: Date.now(),
 });
 
 // Broadcast configuration update
 parley.broadcast('config:update', {
     theme: 'dark',
-    language: 'en'
+    language: 'en',
 });
 
 // With type safety
@@ -581,60 +664,72 @@ interface StateUpdate {
 
 parley.broadcast<StateUpdate>('state:update', {
     key: 'user.preferences',
-    value: { notifications: true }
+    value: { notifications: true },
 });
 ```
 
 **Common Mistakes:**
 
 **Mistake:** Expecting responses from broadcast
+
 ```typescript
 // Wrong - broadcast doesn't return responses
-const responses = await parley.broadcast('update', {});  // No responses
+const responses = await parley.broadcast('update', {}); // No responses
 ```
 
 **Correct:** Use individual `send()` calls if responses are needed
+
 ```typescript
 const targets = parley.getConnectedTargets();
 const responses = await Promise.all(
-    targets.map(id => parley.send('update', {}, { targetId: id }))
+    targets.map((id) => parley.send('update', {}, { targetId: id }))
 );
 ```
 
 **See Also:**
+
 - [send()](#send)
 - [getConnectedTargets()](#getconnectedtargets)
-- [Multi-Window Communication Guide](../guides/multi-window-communication.md) - Broadcast to multiple windows
-- [State Synchronization Pattern](../patterns/state-synchronization.md) - Sync state across windows
-- [Performance: Batching](../troubleshooting/common-errors.md#performance-issues) - Optimize broadcasts
+- [Multi-Window Communication Guide](../guides/multi-window-communication.md) -
+  Broadcast to multiple windows
+- [State Synchronization Pattern](../patterns/state-synchronization.md) - Sync
+  state across windows
+- [Performance: Batching](../troubleshooting/common-errors.md#performance-issues) -
+  Optimize broadcasts
 
 ---
 
 ### connect()
 
-Establishes a connection to an iframe or window target. This must be called before sending messages.
+Establishes a connection to an iframe or window target. This must be called
+before sending messages.
 
 **Signature:**
+
 ```typescript
 async connect(target: HTMLIFrameElement | Window, targetId?: string): Promise<void>
 ```
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| target | `HTMLIFrameElement \| Window` | Yes | The iframe element or window object to connect to |
-| targetId | `string` | No | Custom identifier for the target (auto-generated if not provided) |
+| Name     | Type                          | Required | Description                                                       |
+| -------- | ----------------------------- | -------- | ----------------------------------------------------------------- |
+| target   | `HTMLIFrameElement \| Window` | Yes      | The iframe element or window object to connect to                 |
+| targetId | `string`                      | No       | Custom identifier for the target (auto-generated if not provided) |
 
 **Returns:**
+
 - `Promise<void>` - Resolves when connection is established
 
 **Throws:**
-- `ConnectionError` (ERR_CONNECTION_HANDSHAKE_FAILED) - Handshake failed or timed out
+
+- `ConnectionError` (ERR_CONNECTION_HANDSHAKE_FAILED) - Handshake failed or
+  timed out
 - `TargetError` (ERR_TARGET_DUPLICATE_ID) - Target ID already registered
 - `ConnectionError` (ERR_CONNECTION_FAILED) - Connection failed
 
 **Example:**
+
 ```typescript
 // Connect to iframe
 const iframe = document.getElementById('child') as HTMLIFrameElement;
@@ -668,32 +763,36 @@ try {
 **Common Mistakes:**
 
 **Mistake:** Connecting before iframe loads
+
 ```typescript
 // Wrong - iframe not ready yet
 const iframe = document.createElement('iframe');
 iframe.src = 'child.html';
 document.body.appendChild(iframe);
-await parley.connect(iframe);  // Fails - iframe not loaded
+await parley.connect(iframe); // Fails - iframe not loaded
 ```
 
 **Correct:**
+
 ```typescript
 const iframe = document.createElement('iframe');
 iframe.src = 'child.html';
 document.body.appendChild(iframe);
 
 iframe.addEventListener('load', async () => {
-    await parley.connect(iframe);  // Works - iframe loaded
+    await parley.connect(iframe); // Works - iframe loaded
 });
 ```
 
 **Mistake:** Not handling connection errors
+
 ```typescript
 // Wrong - connection might fail
 await parley.connect(iframe);
 ```
 
 **Correct:**
+
 ```typescript
 import { ConnectionError, TimeoutError } from 'parley-js';
 
@@ -709,13 +808,18 @@ try {
 ```
 
 **See Also:**
+
 - [disconnect()](#disconnect)
 - [isConnected()](#isconnected)
 - [onSystem()](#onsystem)
-- [iFrame Communication Guide](../guides/iframe-communication.md) - Connect to iframes
-- [Popup Communication Guide](../guides/popup-communication.md) - Connect to popups
-- [Connection Errors](../troubleshooting/common-errors.md#channel-closed-errors) - Troubleshoot connections
-- [Dead Window References](../troubleshooting/common-errors.md#dead-window-references) - Handle invalid windows
+- [iFrame Communication Guide](../guides/iframe-communication.md) - Connect to
+  iframes
+- [Popup Communication Guide](../guides/popup-communication.md) - Connect to
+  popups
+- [Connection Errors](../troubleshooting/common-errors.md#channel-closed-errors) -
+  Troubleshoot connections
+- [Dead Window References](../troubleshooting/common-errors.md#dead-window-references) -
+  Handle invalid windows
 
 ---
 
@@ -724,23 +828,27 @@ try {
 Gracefully disconnects from a target with notification to the other side.
 
 **Signature:**
+
 ```typescript
 async disconnect(targetId: string): Promise<void>
 ```
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| targetId | `string` | Yes | ID of target to disconnect from |
+| Name     | Type     | Required | Description                     |
+| -------- | -------- | -------- | ------------------------------- |
+| targetId | `string` | Yes      | ID of target to disconnect from |
 
 **Returns:**
+
 - `Promise<void>` - Resolves when disconnection is complete
 
 **Throws:**
+
 - None (warnings logged if target not found)
 
 **Example:**
+
 ```typescript
 // Disconnect from specific target
 await parley.disconnect('child-iframe');
@@ -759,19 +867,22 @@ parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
 **Common Mistakes:**
 
 **Mistake:** Assuming disconnect is instant
+
 ```typescript
 // Wrong - might send message before disconnect completes
 await parley.disconnect('child');
-await parley.send('message', {}, { targetId: 'child' });  // Might fail
+await parley.send('message', {}, { targetId: 'child' }); // Might fail
 ```
 
 **Correct:** Wait for disconnect to complete
+
 ```typescript
 await parley.disconnect('child');
 // Now safe - target is disconnected
 ```
 
 **See Also:**
+
 - [connect()](#connect)
 - [destroy()](#destroy)
 - [SYSTEM_EVENTS.DISCONNECTED](#system_events)
@@ -780,27 +891,32 @@ await parley.disconnect('child');
 
 ### onSystem()
 
-Registers a handler for system events emitted by ParleyJS for connection lifecycle and analytics.
+Registers a handler for system events emitted by ParleyJS for connection
+lifecycle and analytics.
 
 **Signature:**
+
 ```typescript
 onSystem(event: SystemEventName, handler: (data: unknown) => void): () => void
 ```
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| event | `SystemEventName` | Yes | System event name (use SYSTEM_EVENTS constant) |
-| handler | `(data: unknown) => void` | Yes | Event handler function |
+| Name    | Type                      | Required | Description                                    |
+| ------- | ------------------------- | -------- | ---------------------------------------------- |
+| event   | `SystemEventName`         | Yes      | System event name (use SYSTEM_EVENTS constant) |
+| handler | `(data: unknown) => void` | Yes      | Event handler function                         |
 
 **Returns:**
+
 - `() => void` - Unsubscribe function
 
 **Throws:**
+
 - None
 
 **Example:**
+
 ```typescript
 import { SYSTEM_EVENTS } from 'parley-js';
 
@@ -845,6 +961,7 @@ unsubscribe();
 ```
 
 **See Also:**
+
 - [SYSTEM_EVENTS](#system_events)
 - [System Events Reference](./README.md#system-events)
 - [Heartbeat Monitoring Guide](../guides/multi-window-communication.md#heartbeat-monitoring)
@@ -853,31 +970,37 @@ unsubscribe();
 
 ### onAnalyticsEvent()
 
-Registers a handler for analytics events. Useful for tracking message performance and usage metrics.
+Registers a handler for analytics events. Useful for tracking message
+performance and usage metrics.
 
 **Signature:**
+
 ```typescript
 onAnalyticsEvent(handler: AnalyticsEventHandler): () => void
 ```
 
 **Handler Signature:**
+
 ```typescript
-type AnalyticsEventHandler = (event: AnalyticsEvent) => void
+type AnalyticsEventHandler = (event: AnalyticsEvent) => void;
 ```
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| handler | `AnalyticsEventHandler` | Yes | Analytics event handler |
+| Name    | Type                    | Required | Description             |
+| ------- | ----------------------- | -------- | ----------------------- |
+| handler | `AnalyticsEventHandler` | Yes      | Analytics event handler |
 
 **Returns:**
+
 - `() => void` - Unsubscribe function
 
 **Throws:**
+
 - None
 
 **Example:**
+
 ```typescript
 // Track all message events
 parley.onAnalyticsEvent((event) => {
@@ -886,14 +1009,14 @@ parley.onAnalyticsEvent((event) => {
             analytics.track('Message Sent', {
                 messageType: event.messageType,
                 messageId: event.messageId,
-                targetId: event.targetId
+                targetId: event.targetId,
             });
             break;
 
         case 'message_received':
             analytics.track('Message Received', {
                 messageType: event.messageType,
-                duration: event.duration
+                duration: event.duration,
             });
             break;
     }
@@ -905,13 +1028,14 @@ parley.onAnalyticsEvent((event) => {
         method: 'POST',
         body: JSON.stringify({
             event: event.type,
-            data: event
-        })
+            data: event,
+        }),
     });
 });
 ```
 
 **See Also:**
+
 - [Analytics Integration Example](../EXAMPLES.md#analytics-integration)
 
 ---
@@ -921,23 +1045,28 @@ parley.onAnalyticsEvent((event) => {
 Returns an array of all currently connected target IDs.
 
 **Signature:**
+
 ```typescript
 getConnectedTargets(): string[]
 ```
 
 **Parameters:**
+
 - None
 
 **Returns:**
+
 - `string[]` - Array of connected target IDs
 
 **Throws:**
+
 - None
 
 **Example:**
+
 ```typescript
 const targets = parley.getConnectedTargets();
-console.log('Connected targets:', targets);  // ['child-1', 'child-2', 'popup']
+console.log('Connected targets:', targets); // ['child-1', 'child-2', 'popup']
 
 // Send to all connected targets
 for (const targetId of parley.getConnectedTargets()) {
@@ -951,6 +1080,7 @@ if (parley.getConnectedTargets().length === 0) {
 ```
 
 **See Also:**
+
 - [isConnected()](#isconnected)
 - [broadcast()](#broadcast)
 
@@ -961,23 +1091,27 @@ if (parley.getConnectedTargets().length === 0) {
 Checks if a specific target is currently connected.
 
 **Signature:**
+
 ```typescript
 isConnected(targetId: string): boolean
 ```
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| targetId | `string` | Yes | Target ID to check |
+| Name     | Type     | Required | Description        |
+| -------- | -------- | -------- | ------------------ |
+| targetId | `string` | Yes      | Target ID to check |
 
 **Returns:**
+
 - `boolean` - True if target is connected, false otherwise
 
 **Throws:**
+
 - None
 
 **Example:**
+
 ```typescript
 if (parley.isConnected('child-iframe')) {
     await parley.send('message', data, { targetId: 'child-iframe' });
@@ -987,12 +1121,13 @@ if (parley.isConnected('child-iframe')) {
 
 // Wait for connection
 while (!parley.isConnected('popup')) {
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 }
 console.log('Popup connected');
 ```
 
 **See Also:**
+
 - [getConnectedTargets()](#getconnectedtargets)
 - [connect()](#connect)
 
@@ -1000,26 +1135,34 @@ console.log('Popup connected');
 
 ### destroy()
 
-Destroys the Parley instance and cleans up all resources. Disconnects all targets, clears all listeners, and rejects pending requests.
+Destroys the Parley instance and cleans up all resources. Disconnects all
+targets, clears all listeners, and rejects pending requests.
 
 **Signature:**
+
 ```typescript
 destroy(): void
 ```
 
 **Parameters:**
+
 - None
 
 **Returns:**
+
 - `void`
 
 **Throws:**
+
 - None
 
 **Example:**
+
 ```typescript
 // Clean up when component unmounts
-const parley = Parley.create({ /* config */ });
+const parley = Parley.create({
+    /* config */
+});
 
 // Use parley...
 
@@ -1028,23 +1171,27 @@ parley.destroy();
 
 // React example
 useEffect(() => {
-    const parley = Parley.create({ /* config */ });
+    const parley = Parley.create({
+        /* config */
+    });
 
     // Use parley...
 
     return () => {
-        parley.destroy();  // Clean up on unmount
+        parley.destroy(); // Clean up on unmount
     };
 }, []);
 
 // Vue example
 export default {
     mounted() {
-        this.parley = Parley.create({ /* config */ });
+        this.parley = Parley.create({
+            /* config */
+        });
     },
     beforeUnmount() {
-        this.parley.destroy();  // Clean up
-    }
+        this.parley.destroy(); // Clean up
+    },
 };
 
 // Angular example
@@ -1052,38 +1199,49 @@ export class MyComponent implements OnDestroy {
     private parley: Parley;
 
     ngOnInit() {
-        this.parley = Parley.create({ /* config */ });
+        this.parley = Parley.create({
+            /* config */
+        });
     }
 
     ngOnDestroy() {
-        this.parley.destroy();  // Clean up
+        this.parley.destroy(); // Clean up
     }
 }
 ```
 
-Framework cleanup is critical to prevent memory leaks. For framework-specific integration patterns, see [Testing Patterns: Framework Integration](../TESTING_PATTERNS.md#framework-integration).
+Framework cleanup is critical to prevent memory leaks. For framework-specific
+integration patterns, see
+[Testing Patterns: Framework Integration](../TESTING_PATTERNS.md#framework-integration).
 
 **Common Mistakes:**
 
 **Mistake:** Using instance after destroy
+
 ```typescript
 // Wrong - instance is destroyed
 parley.destroy();
-await parley.send('message', {});  // Throws error
+await parley.send('message', {}); // Throws error
 ```
 
 **Correct:** Create new instance if needed
+
 ```typescript
 parley.destroy();
-const newParley = Parley.create({ /* config */ });
+const newParley = Parley.create({
+    /* config */
+});
 await newParley.send('message', {});
 ```
 
 **See Also:**
+
 - [disconnect()](#disconnect)
 - [React Integration Example](../EXAMPLES.md#react-integration)
-- [Memory Leaks Prevention](../troubleshooting/common-errors.md#memory-leaks) - Why cleanup matters
-- [Popup Lifecycle](../guides/popup-communication.md#lifecycle-management) - Managing popup cleanup
+- [Memory Leaks Prevention](../troubleshooting/common-errors.md#memory-leaks) -
+  Why cleanup matters
+- [Popup Lifecycle](../guides/popup-communication.md#lifecycle-management) -
+  Managing popup cleanup
 
 ---
 
@@ -1094,27 +1252,29 @@ await newParley.send('message', {});
 Read-only property containing the unique instance identifier.
 
 **Type:**
+
 ```typescript
 readonly instanceId: string
 ```
 
 **Example:**
+
 ```typescript
 const parley = Parley.create({
     targetType: 'iframe',
     allowedOrigins: ['https://example.com'],
-    instanceId: 'my-custom-id'  // Optional custom ID
+    instanceId: 'my-custom-id', // Optional custom ID
 });
 
-console.log(parley.instanceId);  // "my-custom-id"
+console.log(parley.instanceId); // "my-custom-id"
 
 // Auto-generated ID if not specified
 const parley2 = Parley.create({
     targetType: 'iframe',
-    allowedOrigins: ['https://example.com']
+    allowedOrigins: ['https://example.com'],
 });
 
-console.log(parley2.instanceId);  // "parley_a1b2c3d4"
+console.log(parley2.instanceId); // "parley_a1b2c3d4"
 ```
 
 ---
@@ -1124,30 +1284,32 @@ console.log(parley2.instanceId);  // "parley_a1b2c3d4"
 Read-only property containing the configured target type.
 
 **Type:**
+
 ```typescript
 readonly targetType: 'iframe' | 'window'
 ```
 
 **Example:**
+
 ```typescript
 const parley = Parley.create({
     targetType: 'iframe',
-    allowedOrigins: ['https://example.com']
+    allowedOrigins: ['https://example.com'],
 });
 
-console.log(parley.targetType);  // "iframe"
+console.log(parley.targetType); // "iframe"
 ```
 
 ---
 
 ## Navigation
 
-**Previous**: [API Reference Overview](./README.md)
-**Next**: [System Events](./system-events.md)
-**Back to**: [API Reference](./README.md)
+**Previous**: [API Reference Overview](./index.md) **Next**:
+[System Events](./system-events.md) **Back to**: [API Reference](./index.md)
 
 **Related**:
+
 - [System Events](./system-events.md) - System event reference
 - [Common Errors](../troubleshooting/common-errors.md) - Error reference
-- [Code Patterns](../patterns/README.md)
+- [Code Patterns](../patterns/index.md)
 - [Examples](../EXAMPLES.md)

@@ -1,4 +1,4 @@
-[Home](../README.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > API Reference
+[Home](./index.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > API Reference
 
 # API Reference
 
@@ -27,6 +27,7 @@ Complete API documentation for Parley-js.
 The main class for inter-window communication.
 
 **Quick Links**:
+
 - [Framework Reference](./FRAMEWORK_REFERENCE.md) - Quick start guide
 - [Code Patterns](./CODE_PATTERNS.md) - Usage patterns
 - [Examples](./EXAMPLES.md) - Complete examples
@@ -1224,4 +1225,4 @@ parley.onSystem(
 - [Troubleshooting](./TROUBLESHOOTING.md) - FAQ and debugging
 - [Contributing](../CONTRIBUTING.md) - How to contribute
 
-**Back to**: [Documentation Home](../README.md)
+**Back to**: [Documentation Home](./index.md)

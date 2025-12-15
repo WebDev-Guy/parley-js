@@ -1,10 +1,11 @@
-[Home](../README.md) > [Documentation](./README.md) > Code Patterns
+[Home](./index.md) > [Documentation](./index.md) > Code Patterns
 
 # ParleyJS Code Patterns
 
 Common, tested patterns for implementing ParleyJS in different scenarios.
 
 ## Table of Contents
+
 1. [Basic Patterns](#basic-patterns)
 2. [Request-Response Workflows](#request-response-workflows)
 3. [Error Handling](#error-handling)
@@ -19,31 +20,36 @@ For complete implementation examples, see [Examples](./EXAMPLES.md).
 
 **Pattern**: Send a message and forget about it.
 
-```typescript
+```javascript
 // Sender
 const parley = Parley.create({
-  allowedOrigins: ['https://child.example.com']
+    allowedOrigins: ['https://child.example.com'],
 });
 
 await parley.connect(childWindow, 'child');
 
-await parley.send('notify', {
-  message: 'Hello from parent',
-  timestamp: Date.now()
-}, {
-  targetId: 'child',
-  expectsResponse: false
-});
+await parley.send(
+    'notify',
+    {
+        message: 'Hello from parent',
+        timestamp: Date.now(),
+    },
+    {
+        targetId: 'child',
+        expectsResponse: false,
+    }
+);
 ```
 
 **Receiver**:
-```typescript
+
+```javascript
 const parley = Parley.create({
-  allowedOrigins: ['https://parent.example.com']
+    allowedOrigins: ['https://parent.example.com'],
 });
 
 parley.on('notify', (payload) => {
-  console.log('Received:', payload.message);
+    console.log('Received:', payload.message);
 });
 
 await parley.connect(window.parent, 'parent');
@@ -55,26 +61,31 @@ await parley.connect(window.parent, 'parent');
 
 **Pattern**: Send a message and wait for a response.
 
-```typescript
+```javascript
 // Sender (requester)
 try {
-  const response = await parley.send('get-user', { id: 123 }, {
-    targetId: 'child'
-  });
-  console.log('User:', response);
+    const response = await parley.send(
+        'get-user',
+        { id: 123 },
+        {
+            targetId: 'child',
+        }
+    );
+    console.log('User:', response);
 } catch (error) {
-  console.error('Request failed:', error.code);
+    console.error('Request failed:', error.code);
 }
 ```
 
 **Receiver (responder)**:
-```typescript
+
+```javascript
 parley.on('get-user', async (payload, respond) => {
-  const user = await fetchUser(payload.id);
-  respond({
-    success: true,
-    user: user
-  });
+    const user = await fetchUser(payload.id);
+    respond({
+        success: true,
+        user: user,
+    });
 });
 ```
 
@@ -84,25 +95,29 @@ parley.on('get-user', async (payload, respond) => {
 
 ### Simple RPC-style Call
 
-```typescript
+```javascript
 // Define handler in child
 childParley.on('calculate', (payload, respond) => {
-  respond({
-    result: payload.x + payload.y,
-    timestamp: Date.now()
-  });
+    respond({
+        result: payload.x + payload.y,
+        timestamp: Date.now(),
+    });
 });
 
 // Call from parent
-const result = await parentParley.send('calculate', { x: 5, y: 3 }, {
-  targetId: 'child'
-});
+const result = await parentParley.send(
+    'calculate',
+    { x: 5, y: 3 },
+    {
+        targetId: 'child',
+    }
+);
 console.log(result.result); // 8
 ```
 
 ### Query with Validation
 
-```typescript
+```javascript
 // Handler with validation
 parley.on('fetch-data', async (payload, respond) => {
   // Validate input
@@ -152,142 +167,145 @@ if (response.success) {
 
 **Pattern**: Chain multiple request-response calls.
 
-```typescript
+```javascript
 // Process data through multiple steps
 async function processData(data) {
-  // Step 1: Validate
-  const validated = await parley.send('validate', data, {
-    targetId: 'validator'
-  });
-  if (!validated.success) throw new Error(validated.error);
+    // Step 1: Validate
+    const validated = await parley.send('validate', data, {
+        targetId: 'validator',
+    });
+    if (!validated.success) throw new Error(validated.error);
 
-  // Step 2: Transform
-  const transformed = await parley.send('transform', validated.data, {
-    targetId: 'transformer'
-  });
-  if (!transformed.success) throw new Error(transformed.error);
+    // Step 2: Transform
+    const transformed = await parley.send('transform', validated.data, {
+        targetId: 'transformer',
+    });
+    if (!transformed.success) throw new Error(transformed.error);
 
-  // Step 3: Store
-  const stored = await parley.send('store', transformed.data, {
-    targetId: 'storage'
-  });
-  if (!stored.success) throw new Error(stored.error);
+    // Step 3: Store
+    const stored = await parley.send('store', transformed.data, {
+        targetId: 'storage',
+    });
+    if (!stored.success) throw new Error(stored.error);
 
-  return stored.data;
+    return stored.data;
 }
 
 // Usage
 try {
-  const result = await processData(inputData);
+    const result = await processData(inputData);
 } catch (error) {
-  console.error('Pipeline failed:', error.message);
+    console.error('Pipeline failed:', error.message);
 }
 ```
 
 ## Error Handling
 
-For troubleshooting common errors, see [Troubleshooting Guide](./TROUBLESHOOTING.md).
+For troubleshooting common errors, see
+[Troubleshooting Guide](./TROUBLESHOOTING.md).
 
 ### Try-Catch Pattern
 
-```typescript
+```javascript
 async function safeRequest(type, data, timeoutMs = 5000) {
-  try {
-    return await parley.send(type, data, {
-      targetId: 'child',
-      timeout: timeoutMs
-    });
-  } catch (error) {
-    if (error instanceof TimeoutError) {
-      console.error('Request timed out after', timeoutMs, 'ms');
-    } else if (error instanceof SecurityError) {
-      console.error('Origin validation failed');
-    } else if (error instanceof ConnectionError) {
-      console.error('Connection error');
-    } else {
-      console.error('Unexpected error:', error.message);
+    try {
+        return await parley.send(type, data, {
+            targetId: 'child',
+            timeout: timeoutMs,
+        });
+    } catch (error) {
+        if (error instanceof TimeoutError) {
+            console.error('Request timed out after', timeoutMs, 'ms');
+        } else if (error instanceof SecurityError) {
+            console.error('Origin validation failed');
+        } else if (error instanceof ConnectionError) {
+            console.error('Connection error');
+        } else {
+            console.error('Unexpected error:', error.message);
+        }
+        throw error;
     }
-    throw error;
-  }
 }
 ```
 
 ### Fallback Pattern
 
-```typescript
+```javascript
 async function requestWithFallback(type, data, fallback) {
-  try {
-    return await parley.send(type, data, { targetId: 'child' });
-  } catch (error) {
-    console.warn(`${type} failed, using fallback:`, error.message);
-    return fallback;
-  }
+    try {
+        return await parley.send(type, data, { targetId: 'child' });
+    } catch (error) {
+        console.warn(`${type} failed, using fallback:`, error.message);
+        return fallback;
+    }
 }
 
 // Usage
 const config = await requestWithFallback(
-  'get-config',
-  {},
-  { theme: 'light', language: 'en' } // fallback
+    'get-config',
+    {},
+    { theme: 'light', language: 'en' } // fallback
 );
 ```
 
 ### Retry Pattern
 
-```typescript
+```javascript
 async function requestWithRetry(type, data, maxAttempts = 3, delayMs = 1000) {
-  let lastError;
+    let lastError;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await parley.send(type, data, { targetId: 'child' });
-    } catch (error) {
-      lastError = error;
-      console.warn(`Attempt ${attempt} failed:`, error.message);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await parley.send(type, data, { targetId: 'child' });
+        } catch (error) {
+            lastError = error;
+            console.warn(`Attempt ${attempt} failed:`, error.message);
 
-      if (attempt < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
-      }
+            if (attempt < maxAttempts) {
+                await new Promise((resolve) =>
+                    setTimeout(resolve, delayMs * attempt)
+                );
+            }
+        }
     }
-  }
 
-  throw lastError;
+    throw lastError;
 }
 
 // Usage
 try {
-  const data = await requestWithRetry('fetch-data', { id: 'user-123' });
+    const data = await requestWithRetry('fetch-data', { id: 'user-123' });
 } catch (error) {
-  console.error('Failed after all retries:', error);
+    console.error('Failed after all retries:', error);
 }
 ```
 
 ### Error Handler in Receiver
 
-```typescript
+```javascript
 parley.on('risky-operation', async (payload, respond) => {
-  try {
-    const result = await performRiskyOperation(payload);
-    respond({
-      success: true,
-      result: result
-    });
-  } catch (error) {
-    // Return structured error
-    respond({
-      success: false,
-      error: {
-        code: error.code || 'UNKNOWN',
-        message: error.message,
-        // Include helpful context
-        context: {
-          operation: 'risky-operation',
-          input: payload,
-          timestamp: new Date().toISOString()
-        }
-      }
-    });
-  }
+    try {
+        const result = await performRiskyOperation(payload);
+        respond({
+            success: true,
+            result: result,
+        });
+    } catch (error) {
+        // Return structured error
+        respond({
+            success: false,
+            error: {
+                code: error.code || 'UNKNOWN',
+                message: error.message,
+                // Include helpful context
+                context: {
+                    operation: 'risky-operation',
+                    input: payload,
+                    timestamp: new Date().toISOString(),
+                },
+            },
+        });
+    }
 });
 ```
 
@@ -295,96 +313,96 @@ parley.on('risky-operation', async (payload, respond) => {
 
 ### Event Emitter Pattern
 
-```typescript
+```javascript
 class EventBridge {
-  constructor(parley) {
-    this.parley = parley;
-    this.listeners = new Map();
-  }
-
-  on(event, handler) {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, []);
-
-      // Register one listener with parley for this event type
-      this.parley.on(event, (payload) => {
-        const handlers = this.listeners.get(event) || [];
-        handlers.forEach(h => h(payload));
-      });
+    constructor(parley) {
+        this.parley = parley;
+        this.listeners = new Map();
     }
 
-    this.listeners.get(event).push(handler);
+    on(event, handler) {
+        if (!this.listeners.has(event)) {
+            this.listeners.set(event, []);
 
-    // Return unsubscribe function
-    return () => {
-      const handlers = this.listeners.get(event);
-      const index = handlers.indexOf(handler);
-      if (index > -1) {
-        handlers.splice(index, 1);
-      }
-    };
-  }
+            // Register one listener with parley for this event type
+            this.parley.on(event, (payload) => {
+                const handlers = this.listeners.get(event) || [];
+                handlers.forEach((h) => h(payload));
+            });
+        }
 
-  async emit(event, data) {
-    return this.parley.broadcast(event, data);
-  }
+        this.listeners.get(event).push(handler);
+
+        // Return unsubscribe function
+        return () => {
+            const handlers = this.listeners.get(event);
+            const index = handlers.indexOf(handler);
+            if (index > -1) {
+                handlers.splice(index, 1);
+            }
+        };
+    }
+
+    async emit(event, data) {
+        return this.parley.broadcast(event, data);
+    }
 }
 
 // Usage
 const bridge = new EventBridge(parley);
 bridge.on('user-logged-in', (data) => {
-  console.log('User', data.username, 'logged in');
+    console.log('User', data.username, 'logged in');
 });
 bridge.on('user-logged-in', (data) => {
-  updateUI(data);
+    updateUI(data);
 });
 ```
 
 ### State Synchronization Pattern
 
-```typescript
+```javascript
 class SyncedState {
-  constructor(parley, initialState = {}) {
-    this.parley = parley;
-    this.state = initialState;
-    this.listeners = new Set();
+    constructor(parley, initialState = {}) {
+        this.parley = parley;
+        this.state = initialState;
+        this.listeners = new Set();
 
-    // Listen for state updates from remote
-    this.parley.on('state-update', (updates) => {
-      this.setState(updates);
-    });
-  }
+        // Listen for state updates from remote
+        this.parley.on('state-update', (updates) => {
+            this.setState(updates);
+        });
+    }
 
-  setState(updates) {
-    const oldState = { ...this.state };
-    this.state = { ...this.state, ...updates };
+    setState(updates) {
+        const oldState = { ...this.state };
+        this.state = { ...this.state, ...updates };
 
-    // Notify local listeners
-    this.listeners.forEach(listener => {
-      listener(this.state, oldState);
-    });
-  }
+        // Notify local listeners
+        this.listeners.forEach((listener) => {
+            listener(this.state, oldState);
+        });
+    }
 
-  getState() {
-    return { ...this.state };
-  }
+    getState() {
+        return { ...this.state };
+    }
 
-  async updateRemote(updates) {
-    this.setState(updates); // Update locally first
-    await this.parley.broadcast('state-update', updates); // Sync to remote
-  }
+    async updateRemote(updates) {
+        this.setState(updates); // Update locally first
+        await this.parley.broadcast('state-update', updates); // Sync to remote
+    }
 
-  subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
+    subscribe(listener) {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
 }
 
 // Usage
 const appState = new SyncedState(parley, { theme: 'light' });
 
 appState.subscribe((newState, oldState) => {
-  console.log('State changed:', newState);
+    console.log('State changed:', newState);
 });
 
 await appState.updateRemote({ theme: 'dark' });
@@ -394,64 +412,68 @@ await appState.updateRemote({ theme: 'dark' });
 
 ### Debounced Messages
 
-```typescript
+```javascript
 function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
     };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
 }
 
 // Debounce frequent updates
 const debouncedUpdate = debounce((data) => {
-  parley.send('update', data, {
-    targetId: 'child',
-    expectsResponse: false
-  });
+    parley.send('update', data, {
+        targetId: 'child',
+        expectsResponse: false,
+    });
 }, 300);
 
 // Usage
 window.addEventListener('scroll', () => {
-  debouncedUpdate({ scrollY: window.scrollY });
+    debouncedUpdate({ scrollY: window.scrollY });
 });
 ```
 
 ### Batching Pattern
 
-```typescript
+```javascript
 class MessageBatcher {
-  constructor(parley, targetId, flushInterval = 100) {
-    this.parley = parley;
-    this.targetId = targetId;
-    this.flushInterval = flushInterval;
-    this.queue = [];
-    this.timer = null;
-  }
-
-  add(type, data) {
-    this.queue.push({ type, data, timestamp: Date.now() });
-
-    if (!this.timer) {
-      this.timer = setTimeout(() => this.flush(), this.flushInterval);
+    constructor(parley, targetId, flushInterval = 100) {
+        this.parley = parley;
+        this.targetId = targetId;
+        this.flushInterval = flushInterval;
+        this.queue = [];
+        this.timer = null;
     }
-  }
 
-  async flush() {
-    if (this.queue.length === 0) return;
+    add(type, data) {
+        this.queue.push({ type, data, timestamp: Date.now() });
 
-    const batch = this.queue.splice(0);
-    this.timer = null;
+        if (!this.timer) {
+            this.timer = setTimeout(() => this.flush(), this.flushInterval);
+        }
+    }
 
-    await this.parley.send('batch', { messages: batch }, {
-      targetId: this.targetId,
-      expectsResponse: false
-    });
-  }
+    async flush() {
+        if (this.queue.length === 0) return;
+
+        const batch = this.queue.splice(0);
+        this.timer = null;
+
+        await this.parley.send(
+            'batch',
+            { messages: batch },
+            {
+                targetId: this.targetId,
+                expectsResponse: false,
+            }
+        );
+    }
 }
 
 // Usage
@@ -464,6 +486,7 @@ batcher.add('event2', { value: 2 });
 ## Testing Patterns
 
 See [TESTING_PATTERNS.md](./TESTING_PATTERNS.md) for:
+
 - Unit testing message handlers
 - Integration testing channel communication
 - Mocking parley behavior
@@ -475,9 +498,10 @@ See [TESTING_PATTERNS.md](./TESTING_PATTERNS.md) for:
 ### Navigation
 
 **Related Documentation**:
+
 - [API Reference](./API.md) - Complete API details
 - [Testing Patterns](./TESTING_PATTERNS.md) - Testing strategies
 - [Security Guide](./SECURITY.md) - Security best practices
 - [Examples](./EXAMPLES.md) - Real-world examples
 
-**Back to**: [Documentation Home](../README.md)
+**Back to**: [Documentation Home](./index.md)

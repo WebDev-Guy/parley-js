@@ -1,8 +1,10 @@
-[Home](../../README.md) > [Code Patterns](./README.md) > Request-Response Pattern
+[Home](../../index.md) > [Code Patterns](./index.md) > Request-Response Pattern
 
 # Request-Response Pattern
 
-The request-response pattern enables synchronous-style communication between windows where one side sends a request and waits for a response from the other side.
+The request-response pattern enables synchronous-style communication between
+windows where one side sends a request and waits for a response from the other
+side.
 
 ## Table of Contents
 
@@ -18,44 +20,60 @@ The request-response pattern enables synchronous-style communication between win
 
 ## Problem This Solves
 
-Many cross-window interactions require bidirectional communication where the sender needs confirmation or data from the receiver. Without request-response, you must manually correlate responses with requests using message IDs and manage timeouts yourself.
+Many cross-window interactions require bidirectional communication where the
+sender needs confirmation or data from the receiver. Without request-response,
+you must manually correlate responses with requests using message IDs and manage
+timeouts yourself.
 
-The request-response pattern solves this by providing async/await-style communication. You send a message and receive a Promise that resolves with the response, handling correlation and timeouts automatically.
+The request-response pattern solves this by providing async/await-style
+communication. You send a message and receive a Promise that resolves with the
+response, handling correlation and timeouts automatically.
 
 ## When to Use It
 
 Use the request-response pattern when:
+
 - You need data from the other window (queries, function calls)
 - You need confirmation that an operation completed successfully
 - The sender's next action depends on the receiver's response
 - You want synchronous-style code flow with async operations
 - You need to handle timeouts if the receiver doesn't respond
 
-This pattern is ideal for RPC-style communication, data fetching, form validation, and any operation where you need feedback.
+This pattern is ideal for RPC-style communication, data fetching, form
+validation, and any operation where you need feedback.
 
-For implementing request-response in iframes, see [iFrame Communication Guide](../guides/iframe-communication.md). For request-response in popups (OAuth flows), see [Popup Communication Guide](../guides/popup-communication.md).
+For implementing request-response in iframes, see
+[iFrame Communication Guide](../guides/iframe-communication.md). For
+request-response in popups (OAuth flows), see
+[Popup Communication Guide](../guides/popup-communication.md).
 
 ## When NOT to Use It
 
 Avoid request-response when:
-- Sending notifications that don't require acknowledgment (use fire-and-forget instead)
-- Broadcasting events to multiple listeners (use broadcast() with expectsResponse: false)
-- The response time might be very long (consider polling or event-based approaches)
+
+- Sending notifications that don't require acknowledgment (use fire-and-forget
+  instead)
+- Broadcasting events to multiple listeners (use broadcast() with
+  expectsResponse: false)
+- The response time might be very long (consider polling or event-based
+  approaches)
 - You don't care if the message was received (use expectsResponse: false)
 - Real-time streaming data is needed (consider event-based patterns)
 
-For one-way notifications, set expectsResponse: false to avoid unnecessary waiting.
+For one-way notifications, set expectsResponse: false to avoid unnecessary
+waiting.
 
 ## Code Example
 
 ### Basic Request-Response
 
 **Requester Side (Parent Window)**:
-```javascript
+
+```typescript
 import { Parley } from 'parley-js';
 
 const parley = Parley.create({
-    allowedOrigins: [window.location.origin]
+    allowedOrigins: [window.location.origin],
 });
 
 // Connect to iframe
@@ -65,12 +83,16 @@ iframe.addEventListener('load', async () => {
 
     // Send request and wait for response
     try {
-        const response = await parley.send('getUserData', {
-            userId: 123
-        }, {
-            targetId: 'child',
-            timeout: 5000
-        });
+        const response = await parley.send(
+            'getUserData',
+            {
+                userId: 123,
+            },
+            {
+                targetId: 'child',
+                timeout: 5000,
+            }
+        );
 
         console.log('User data:', response.user);
     } catch (error) {
@@ -83,14 +105,18 @@ iframe.addEventListener('load', async () => {
 });
 ```
 
-For complete send() options and error codes, see [send() API reference](../api-reference/methods.md#send). For troubleshooting timeout errors, see [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors).
+For complete send() options and error codes, see
+[send() API reference](../api-reference/methods.md#send). For troubleshooting
+timeout errors, see
+[Timeout Errors](../troubleshooting/common-errors.md#timeout-errors).
 
 **Responder Side (Child Iframe)**:
-```javascript
+
+```typescript
 import { Parley } from 'parley-js';
 
 const parley = Parley.create({
-    allowedOrigins: [window.location.origin]
+    allowedOrigins: [window.location.origin],
 });
 
 // Register handler that responds
@@ -107,14 +133,14 @@ parley.on('getUserData', async (payload, respond, metadata) => {
             user: {
                 id: user.id,
                 name: user.name,
-                email: user.email
-            }
+                email: user.email,
+            },
         });
     } catch (error) {
         // Send error response
         respond({
             success: false,
-            error: error.message
+            error: error.message,
         });
     }
 });
@@ -126,13 +152,14 @@ await parley.connect(window.parent, 'parent');
 ### Request-Response with Validation
 
 **Responder with Input Validation**:
-```javascript
+
+```typescript
 parley.on('createUser', async (payload, respond) => {
     // Validate required fields
     if (!payload.name || typeof payload.name !== 'string') {
         respond({
             success: false,
-            error: 'Invalid name field'
+            error: 'Invalid name field',
         });
         return;
     }
@@ -140,7 +167,7 @@ parley.on('createUser', async (payload, respond) => {
     if (!payload.email || !isValidEmail(payload.email)) {
         respond({
             success: false,
-            error: 'Invalid email address'
+            error: 'Invalid email address',
         });
         return;
     }
@@ -150,12 +177,12 @@ parley.on('createUser', async (payload, respond) => {
         const user = await createUserInDatabase(payload);
         respond({
             success: true,
-            userId: user.id
+            userId: user.id,
         });
     } catch (error) {
         respond({
             success: false,
-            error: 'Failed to create user'
+            error: 'Failed to create user',
         });
     }
 });
@@ -168,32 +195,45 @@ function isValidEmail(email) {
 ### Pipeline Pattern (Chained Requests)
 
 **Multiple Sequential Requests**:
-```javascript
+
+```typescript
 async function processUserData(userId) {
     try {
         // Step 1: Fetch user
-        const userResponse = await parley.send('getUser', {
-            userId
-        }, { targetId: 'database-iframe' });
+        const userResponse = await parley.send(
+            'getUser',
+            {
+                userId,
+            },
+            { targetId: 'database-iframe' }
+        );
 
         if (!userResponse.success) {
             throw new Error('Failed to fetch user');
         }
 
         // Step 2: Validate user data
-        const validationResponse = await parley.send('validateUser', {
-            user: userResponse.user
-        }, { targetId: 'validator-iframe' });
+        const validationResponse = await parley.send(
+            'validateUser',
+            {
+                user: userResponse.user,
+            },
+            { targetId: 'validator-iframe' }
+        );
 
         if (!validationResponse.valid) {
             throw new Error('User validation failed');
         }
 
         // Step 3: Process user
-        const processResponse = await parley.send('processUser', {
-            user: userResponse.user,
-            validationResult: validationResponse
-        }, { targetId: 'processor-iframe' });
+        const processResponse = await parley.send(
+            'processUser',
+            {
+                user: userResponse.user,
+                validationResult: validationResponse,
+            },
+            { targetId: 'processor-iframe' }
+        );
 
         return processResponse;
     } catch (error) {
@@ -214,6 +254,7 @@ try {
 ### Type-Safe Request-Response
 
 **Using TypeScript for Type Safety**:
+
 ```typescript
 interface GetUserRequest {
     userId: number;
@@ -251,57 +292,70 @@ parley.on<GetUserRequest>('getUserData', async (payload, respond) => {
         user: {
             id: user.id,
             name: user.name,
-            email: user.email
-        }
+            email: user.email,
+        },
     });
 });
 ```
 
-For type validation errors and solutions, see [Type Validation Errors](../troubleshooting/common-errors.md#type-validation-errors). For schema registration, see [register() method](../api-reference/methods.md#register).
+For type validation errors and solutions, see
+[Type Validation Errors](../troubleshooting/common-errors.md#type-validation-errors).
+For schema registration, see
+[register() method](../api-reference/methods.md#register).
 
 ## Explanation
 
 ### How It Works
 
-1. **Requester calls send()**: The sender calls parley.send() with a message type and payload. ParleyJS generates a unique message ID and stores a Promise resolver.
+1. **Requester calls send()**: The sender calls parley.send() with a message
+   type and payload. ParleyJS generates a unique message ID and stores a Promise
+   resolver.
 
-2. **Message transmitted**: The message is sent via postMessage with the unique ID, payload, and metadata indicating a response is expected.
+2. **Message transmitted**: The message is sent via postMessage with the unique
+   ID, payload, and metadata indicating a response is expected.
 
-3. **Responder receives message**: The receiver's handler is called with the payload, a respond() callback, and metadata.
+3. **Responder receives message**: The receiver's handler is called with the
+   payload, a respond() callback, and metadata.
 
-4. **Responder calls respond()**: When the receiver calls respond(), ParleyJS sends a response message with the same message ID.
+4. **Responder calls respond()**: When the receiver calls respond(), ParleyJS
+   sends a response message with the same message ID.
 
-5. **Promise resolves**: The original send() Promise resolves with the response data.
+5. **Promise resolves**: The original send() Promise resolves with the response
+   data.
 
-If the responder doesn't call respond() within the timeout period (default 5000ms), the Promise rejects with a TimeoutError.
+If the responder doesn't call respond() within the timeout period (default
+5000ms), the Promise rejects with a TimeoutError.
 
 ### Why This Pattern Works
 
 The request-response pattern simplifies cross-window RPC by:
+
 - **Automatic correlation**: Message IDs are generated and matched automatically
 - **Promise-based API**: Natural async/await syntax instead of callback hell
 - **Timeout handling**: Built-in timeout detection prevents hanging requests
 - **Type safety**: TypeScript generics provide compile-time type checking
-- **Error propagation**: Errors in the handler can be caught and returned as responses
+- **Error propagation**: Errors in the handler can be caught and returned as
+  responses
 
-This eliminates the boilerplate of manually tracking pending requests, generating IDs, and managing timeouts.
+This eliminates the boilerplate of manually tracking pending requests,
+generating IDs, and managing timeouts.
 
 ### Response Structure Best Practice
 
 Structure responses consistently with success/error fields:
 
-```javascript
+```typescript
 // Successful response
 respond({
     success: true,
-    data: actualData
+    data: actualData,
 });
 
 // Error response
 respond({
     success: false,
     error: 'Error message',
-    code: 'ERROR_CODE' // optional
+    code: 'ERROR_CODE', // optional
 });
 ```
 
@@ -313,7 +367,7 @@ This allows the requester to handle both cases uniformly.
 
 Treat messages as remote function calls:
 
-```javascript
+```typescript
 // Define "remote functions" in child
 const remoteFunctions = {
     add: (a, b) => a + b,
@@ -321,7 +375,7 @@ const remoteFunctions = {
     divide: (a, b) => {
         if (b === 0) throw new Error('Division by zero');
         return a / b;
-    }
+    },
 };
 
 parley.on('rpc:call', async (payload, respond) => {
@@ -342,10 +396,14 @@ parley.on('rpc:call', async (payload, respond) => {
 
 // Call remote function from parent
 async function callRemote(method, ...args) {
-    const response = await parley.send('rpc:call', {
-        method,
-        args
-    }, { targetId: 'child' });
+    const response = await parley.send(
+        'rpc:call',
+        {
+            method,
+            args,
+        },
+        { targetId: 'child' }
+    );
 
     if (response.error) {
         throw new Error(response.error);
@@ -363,7 +421,7 @@ const product = await callRemote('multiply', 4, 7); // 28
 
 Send progress updates during long operations:
 
-```javascript
+```typescript
 // Child: Process with progress
 parley.on('processLargeFile', async (payload, respond) => {
     const file = payload.file;
@@ -373,12 +431,16 @@ parley.on('processLargeFile', async (payload, respond) => {
         await processChunk(chunks[i]);
 
         // Send progress update (fire-and-forget)
-        await parley.send('progress', {
-            percent: ((i + 1) / chunks.length) * 100
-        }, {
-            targetId: 'parent',
-            expectsResponse: false
-        });
+        await parley.send(
+            'progress',
+            {
+                percent: ((i + 1) / chunks.length) * 100,
+            },
+            {
+                targetId: 'parent',
+                expectsResponse: false,
+            }
+        );
     }
 
     respond({ success: true });
@@ -390,31 +452,37 @@ parley.on('progress', (payload) => {
 });
 
 // Parent: Start long operation
-const result = await parley.send('processLargeFile', {
-    file: largeFile
-}, { targetId: 'child', timeout: 60000 });
+const result = await parley.send(
+    'processLargeFile',
+    {
+        file: largeFile,
+    },
+    { targetId: 'child', timeout: 60000 }
+);
 ```
 
 ### Variation 3: Batch Request-Response
 
 Send multiple requests in parallel:
 
-```javascript
+```typescript
 async function fetchMultipleUsers(userIds) {
     // Send all requests in parallel
-    const promises = userIds.map(userId =>
-        parley.send('getUser', { userId }, {
-            targetId: 'child'
-        })
+    const promises = userIds.map((userId) =>
+        parley.send(
+            'getUser',
+            { userId },
+            {
+                targetId: 'child',
+            }
+        )
     );
 
     // Wait for all responses
     const responses = await Promise.all(promises);
 
     // Filter successful responses
-    const users = responses
-        .filter(r => r.success)
-        .map(r => r.user);
+    const users = responses.filter((r) => r.success).map((r) => r.user);
 
     return users;
 }
@@ -424,13 +492,14 @@ const users = await fetchMultipleUsers([1, 2, 3, 4, 5]);
 console.log('Fetched users:', users);
 ```
 
-For performance considerations when sending many messages, see [Performance Issues troubleshooting](../troubleshooting/common-errors.md#performance-issues).
+For performance considerations when sending many messages, see
+[Performance Issues troubleshooting](../troubleshooting/common-errors.md#performance-issues).
 
 ### Variation 4: Request-Response with Retry
 
 Add automatic retry logic for failed requests:
 
-```javascript
+```typescript
 async function sendWithRetry(type, payload, options = {}) {
     const maxRetries = options.maxRetries || 3;
     const retryDelay = options.retryDelay || 1000;
@@ -439,14 +508,14 @@ async function sendWithRetry(type, payload, options = {}) {
         try {
             return await parley.send(type, payload, {
                 targetId: options.targetId,
-                timeout: options.timeout
+                timeout: options.timeout,
             });
         } catch (error) {
             console.warn(`Attempt ${attempt} failed:`, error.message);
 
             if (attempt < maxRetries) {
                 // Wait before retry with exponential backoff
-                await new Promise(resolve =>
+                await new Promise((resolve) =>
                     setTimeout(resolve, retryDelay * attempt)
                 );
             } else {
@@ -458,11 +527,15 @@ async function sendWithRetry(type, payload, options = {}) {
 
 // Usage
 try {
-    const response = await sendWithRetry('getData', { id: 123 }, {
-        targetId: 'child',
-        maxRetries: 3,
-        retryDelay: 1000
-    });
+    const response = await sendWithRetry(
+        'getData',
+        { id: 123 },
+        {
+            targetId: 'child',
+            maxRetries: 3,
+            retryDelay: 1000,
+        }
+    );
 } catch (error) {
     console.error('Failed after all retries:', error);
 }
@@ -474,24 +547,28 @@ Test request-response patterns by verifying both sides of the communication.
 
 ### Testing the Requester
 
-```javascript
+```typescript
 import { describe, it, expect, vi } from 'vitest';
 
 describe('Request-Response Requester', () => {
     it('should send request and receive response', async () => {
         const parley = Parley.create({
-            allowedOrigins: [window.location.origin]
+            allowedOrigins: [window.location.origin],
         });
 
         // Mock the connection and response
         const mockSend = vi.spyOn(parley, 'send').mockResolvedValue({
             success: true,
-            user: { id: 123, name: 'John' }
+            user: { id: 123, name: 'John' },
         });
 
-        const response = await parley.send('getUser', { userId: 123 }, {
-            targetId: 'child'
-        });
+        const response = await parley.send(
+            'getUser',
+            { userId: 123 },
+            {
+                targetId: 'child',
+            }
+        );
 
         expect(mockSend).toHaveBeenCalledWith(
             'getUser',
@@ -505,7 +582,7 @@ describe('Request-Response Requester', () => {
 
     it('should handle timeout errors', async () => {
         const parley = Parley.create({
-            allowedOrigins: [window.location.origin]
+            allowedOrigins: [window.location.origin],
         });
 
         vi.spyOn(parley, 'send').mockRejectedValue(
@@ -521,11 +598,11 @@ describe('Request-Response Requester', () => {
 
 ### Testing the Responder
 
-```javascript
+```typescript
 describe('Request-Response Responder', () => {
     it('should respond to requests', async () => {
         const parley = Parley.create({
-            allowedOrigins: [window.location.origin]
+            allowedOrigins: [window.location.origin],
         });
 
         let respondCalled = false;
@@ -547,7 +624,7 @@ describe('Request-Response Responder', () => {
 
     it('should validate input and respond with error', async () => {
         const parley = Parley.create({
-            allowedOrigins: [window.location.origin]
+            allowedOrigins: [window.location.origin],
         });
 
         let responseData = null;
@@ -572,32 +649,47 @@ describe('Request-Response Responder', () => {
 });
 ```
 
-For comprehensive testing strategies, see [Testing Patterns](../TESTING_PATTERNS.md) and [Testing Guide](../TESTING.md). For mocking request-response in tests, see [Testing Request-Response](../TESTING_PATTERNS.md#request-response).
+For comprehensive testing strategies, see
+[Testing Patterns](../TESTING_PATTERNS.md) and [Testing Guide](../TESTING.md).
+For mocking request-response in tests, see
+[Testing Request-Response](../TESTING_PATTERNS.md#request-response).
 
 ## Related Patterns
 
-- **[Error Handling Pattern](./error-handling.md)** - Handle errors in request-response flows
-- **[State Synchronization Pattern](./state-synchronization.md)** - Keep state in sync across windows
-- **Fire-and-Forget Pattern** - Send messages without waiting for response (see [CODE_PATTERNS.md](../CODE_PATTERNS.md#simple-one-way-message))
+- **[Error Handling Pattern](./error-handling.md)** - Handle errors in
+  request-response flows
+- **[State Synchronization Pattern](./state-synchronization.md)** - Keep state
+  in sync across windows
+- **Fire-and-Forget Pattern** - Send messages without waiting for response (see
+  [CODE_PATTERNS.md](../CODE_PATTERNS.md#simple-one-way-message))
 
 ## See Also
 
 **API Methods**:
+
 - [send()](../api-reference/methods.md#send) - Send messages with response
 - [on()](../api-reference/methods.md#on) - Register message handlers
-- [register()](../api-reference/methods.md#register) - Register message types with schema
+- [register()](../api-reference/methods.md#register) - Register message types
+  with schema
 
 **Guides**:
-- [iFrame Communication](../guides/iframe-communication.md) - Complete iframe integration
-- [Popup Communication](../guides/popup-communication.md) - OAuth and payment flows
-- [Getting Started](../getting-started/first-example.md) - Your first request-response example
+
+- [iFrame Communication](../guides/iframe-communication.md) - Complete iframe
+  integration
+- [Popup Communication](../guides/popup-communication.md) - OAuth and payment
+  flows
+- [Getting Started](../getting-started/first-example.md) - Your first
+  request-response example
 
 **Security**:
-- [Origin Validation](../security/origin-validation.md) - Secure your request-response flows
-- [Message Validation](../security/message-validation.md) - Validate request payloads
+
+- [Origin Validation](../security/origin-validation.md) - Secure your
+  request-response flows
+- [Message Validation](../security/message-validation.md) - Validate request
+  payloads
 
 ---
 
-**Previous**: [Code Patterns](./README.md)
-**Next**: [Error Handling Pattern](./error-handling.md)
-**Back to**: [Code Patterns](./README.md)
+**Previous**: [Code Patterns](./index.md) **Next**:
+[Error Handling Pattern](./error-handling.md) **Back to**:
+[Code Patterns](./index.md)

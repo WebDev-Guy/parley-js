@@ -1,8 +1,10 @@
-[Home](../../README.md) > [Documentation](../README.md) > [Examples](./README.md) > Basic Parent-Child Communication
+[Home](../../index.md) > [Documentation](./index.md) > [Examples](./index.md) >
+Basic Parent-Child Communication
 
 # Basic Parent-Child Communication Example
 
-A complete working example showing ParleyJS communication between a parent window and an iframe.
+A complete working example showing ParleyJS communication between a parent
+window and an iframe.
 
 ## Table of Contents
 
@@ -20,9 +22,12 @@ A complete working example showing ParleyJS communication between a parent windo
 
 ## Overview
 
-This example demonstrates the fundamental pattern for ParleyJS communication between a parent window and an iframe. The parent sends a request to the child, and the child responds with data.
+This example demonstrates the fundamental pattern for ParleyJS communication
+between a parent window and an iframe. The parent sends a request to the child,
+and the child responds with data.
 
 **What you will learn:**
+
 - Creating a ParleyJS instance with origin validation
 - Connecting to an iframe
 - Sending messages and receiving responses
@@ -39,7 +44,8 @@ Before starting, ensure you have:
 - Basic understanding of iframes and the postMessage API
 - A local development server (for HTTPS in production)
 
-For installation instructions, see [Installation Guide](../getting-started/installation.md).
+For installation instructions, see
+[Installation Guide](../getting-started/installation.md).
 
 ---
 
@@ -64,23 +70,23 @@ project/
 ```html
 <!DOCTYPE html>
 <html>
-<head>
-    <title>ParleyJS Parent Example</title>
-</head>
-<body>
-    <h1>Parent Window</h1>
-    <button id="send-message">Send Message to Child</button>
-    <div id="response"></div>
+    <head>
+        <title>ParleyJS Parent Example</title>
+    </head>
+    <body>
+        <h1>Parent Window</h1>
+        <button id="send-message">Send Message to Child</button>
+        <div id="response"></div>
 
-    <iframe
-        id="child-frame"
-        src="child.html"
-        width="600"
-        height="400"
-    ></iframe>
+        <iframe
+            id="child-frame"
+            src="child.html"
+            width="600"
+            height="400"
+        ></iframe>
 
-    <script type="module" src="parent.ts"></script>
-</body>
+        <script type="module" src="parent.ts"></script>
+    </body>
 </html>
 ```
 
@@ -108,7 +114,7 @@ interface DataResponse {
 const parley = Parley.create({
     allowedOrigins: [window.location.origin],
     timeout: 5000,
-    debug: true
+    debug: true,
 });
 
 // Get DOM elements
@@ -156,7 +162,7 @@ sendButton.addEventListener('click', async () => {
             { userId: 123 },
             {
                 targetId: 'child-iframe',
-                timeout: 5000
+                timeout: 5000,
             }
         );
 
@@ -174,13 +180,15 @@ sendButton.addEventListener('click', async () => {
     } catch (error) {
         // Handle different error types
         if (error instanceof TimeoutError) {
-            responseDiv.textContent = 'Request timed out. Child may be unresponsive.';
+            responseDiv.textContent =
+                'Request timed out. Child may be unresponsive.';
             console.error('Timeout error:', error);
         } else if (error instanceof ValidationError) {
             responseDiv.textContent = 'Invalid response from child.';
             console.error('Validation error:', error);
         } else {
-            responseDiv.textContent = 'Request failed. See console for details.';
+            responseDiv.textContent =
+                'Request failed. See console for details.';
             console.error('Request error:', error);
         }
     } finally {
@@ -204,16 +212,16 @@ window.addEventListener('beforeunload', () => {
 ```html
 <!DOCTYPE html>
 <html>
-<head>
-    <title>ParleyJS Child Example</title>
-</head>
-<body>
-    <h1>Child Iframe</h1>
-    <p>Waiting for requests from parent...</p>
-    <div id="status">Not connected</div>
+    <head>
+        <title>ParleyJS Child Example</title>
+    </head>
+    <body>
+        <h1>Child Iframe</h1>
+        <p>Waiting for requests from parent...</p>
+        <div id="status">Not connected</div>
 
-    <script type="module" src="child.ts"></script>
-</body>
+        <script type="module" src="child.ts"></script>
+    </body>
 </html>
 ```
 
@@ -240,7 +248,7 @@ interface DataResponse {
 // Create ParleyJS instance
 const parley = Parley.create({
     allowedOrigins: [window.location.origin],
-    debug: true
+    debug: true,
 });
 
 const statusDiv = document.getElementById('status') as HTMLDivElement;
@@ -248,7 +256,11 @@ const statusDiv = document.getElementById('status') as HTMLDivElement;
 // Register message handler for 'get-user-data' requests
 parley.on<DataRequest>(
     'get-user-data',
-    async (payload, respond: ResponseFunction<DataResponse>, metadata: MessageMetadata) => {
+    async (
+        payload,
+        respond: ResponseFunction<DataResponse>,
+        metadata: MessageMetadata
+    ) => {
         console.log('Received request from parent:', payload);
         statusDiv.textContent = `Processing request for user ${payload.userId}...`;
 
@@ -259,7 +271,7 @@ parley.on<DataRequest>(
             // Send success response
             respond({
                 success: true,
-                user: userData
+                user: userData,
             });
 
             statusDiv.textContent = `Sent user data for ID ${payload.userId}`;
@@ -267,7 +279,7 @@ parley.on<DataRequest>(
             // Send error response
             respond({
                 success: false,
-                user: null as any
+                user: null as any,
             });
 
             statusDiv.textContent = `Failed to fetch user ${payload.userId}`;
@@ -279,13 +291,13 @@ parley.on<DataRequest>(
 // Simulate fetching user data
 async function fetchUserData(userId: number) {
     // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Return mock data
     return {
         id: userId,
         name: 'Alice Johnson',
-        email: 'alice@example.com'
+        email: 'alice@example.com',
     };
 }
 
@@ -320,12 +332,14 @@ parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
 Both parent and child use strict origin validation:
 
 ```typescript
-allowedOrigins: [window.location.origin]
+allowedOrigins: [window.location.origin];
 ```
 
-This ensures only messages from the same origin are accepted. In production, specify the exact origins you trust.
+This ensures only messages from the same origin are accepted. In production,
+specify the exact origins you trust.
 
-For more on origin validation, see [Origin Validation Guide](../security/origin-validation.md).
+For more on origin validation, see
+[Origin Validation Guide](../security/origin-validation.md).
 
 ### Connection Establishment
 
@@ -343,7 +357,8 @@ The child connects to the parent immediately:
 await parley.connect(window.parent, 'parent-window');
 ```
 
-For connection patterns, see [iFrame Communication Guide](../guides/iframe-communication.md).
+For connection patterns, see
+[iFrame Communication Guide](../guides/iframe-communication.md).
 
 ### Type Safety
 
@@ -367,7 +382,8 @@ The example handles three error types:
 - **ValidationError**: Response failed schema validation
 - **Generic errors**: Other communication failures
 
-For comprehensive error handling patterns, see [Error Handling Pattern](../patterns/error-handling.md).
+For comprehensive error handling patterns, see
+[Error Handling Pattern](../patterns/error-handling.md).
 
 ### System Events
 
@@ -379,7 +395,8 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
 });
 ```
 
-For all available system events, see [System Events Reference](../api-reference/system-events.md).
+For all available system events, see
+[System Events Reference](../api-reference/system-events.md).
 
 ---
 
@@ -420,23 +437,28 @@ Navigate to `http://localhost:8000/parent.html`
 
 **Symptom**: "Failed to connect to iframe" error
 
-**Solution**: Ensure the iframe has fully loaded before connecting. Use the `load` event listener as shown in the example.
+**Solution**: Ensure the iframe has fully loaded before connecting. Use the
+`load` event listener as shown in the example.
 
-For more timeout troubleshooting, see [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors).
+For more timeout troubleshooting, see
+[Timeout Errors](../troubleshooting/common-errors.md#timeout-errors).
 
 ### Issue: Origin Mismatch
 
 **Symptom**: Messages not received, console shows origin errors
 
-**Solution**: Verify `allowedOrigins` matches the actual origin. Use `window.location.origin` for same-origin communication.
+**Solution**: Verify `allowedOrigins` matches the actual origin. Use
+`window.location.origin` for same-origin communication.
 
-For origin troubleshooting, see [Origin Mismatch Errors](../troubleshooting/common-errors.md#origin-mismatch-errors).
+For origin troubleshooting, see
+[Origin Mismatch Errors](../troubleshooting/common-errors.md#origin-mismatch-errors).
 
 ### Issue: TypeScript Errors
 
 **Symptom**: Type errors when using `send()` or `on()`
 
-**Solution**: Define proper interfaces for request and response types. See TypeScript examples in this guide.
+**Solution**: Define proper interfaces for request and response types. See
+TypeScript examples in this guide.
 
 ---
 
@@ -445,41 +467,46 @@ For origin troubleshooting, see [Origin Mismatch Errors](../troubleshooting/comm
 Now that you understand the basics:
 
 1. **Add Schema Validation** - Validate message payloads with JSON Schema
-   - See [Message Validation Guide](../security/message-validation.md)
+    - See [Message Validation Guide](../security/message-validation.md)
 
 2. **Implement Error Recovery** - Add retry logic and fallback handling
-   - See [Error Handling Pattern](../patterns/error-handling.md)
+    - See [Error Handling Pattern](../patterns/error-handling.md)
 
 3. **Monitor Connection Health** - Use heartbeat monitoring
-   - See [Heartbeat Monitoring](../guides/iframe-communication.md#heartbeat-monitoring)
+    - See
+      [Heartbeat Monitoring](../guides/iframe-communication.md#heartbeat-monitoring)
 
 4. **Scale to Multiple Windows** - Communicate with multiple iframes
-   - See [Multi-Window Communication](../guides/multi-window-communication.md)
+    - See [Multi-Window Communication](../guides/multi-window-communication.md)
 
 5. **Learn Advanced Patterns** - Request-response, state sync, broadcasting
-   - See [Code Patterns](../patterns/README.md)
+    - See [Code Patterns](../patterns/index.md)
 
 ---
 
 ## Related Documentation
 
 **API Reference**:
+
 - [Parley.create()](../api-reference/methods.md#create) - Instance creation
 - [connect()](../api-reference/methods.md#connect) - Establish connections
 - [send()](../api-reference/methods.md#send) - Send messages
 - [on()](../api-reference/methods.md#on) - Register handlers
 
 **Guides**:
+
 - [First Example](../getting-started/first-example.md) - Step-by-step tutorial
-- [iFrame Communication](../guides/iframe-communication.md) - Complete iframe guide
-- [Security Best Practices](../security/README.md) - Secure communication
+- [iFrame Communication](../guides/iframe-communication.md) - Complete iframe
+  guide
+- [Security Best Practices](../security/index.md) - Secure communication
 
 **Patterns**:
-- [Request-Response Pattern](../patterns/request-response.md) - Messaging patterns
+
+- [Request-Response Pattern](../patterns/request-response.md) - Messaging
+  patterns
 - [Error Handling Pattern](../patterns/error-handling.md) - Error strategies
 
 ---
 
-**Previous**: [Examples Overview](./README.md)
-**Next**: [Advanced Examples](./README.md)
-**Back to**: [Examples](./README.md)
+**Previous**: [Examples Overview](./index.md) **Next**:
+[Advanced Examples](./index.md) **Back to**: [Examples](./index.md)

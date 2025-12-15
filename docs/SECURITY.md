@@ -1,4 +1,4 @@
-[Home](../README.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Security Guide
+[Home](./index.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Security Guide
 
 # Security Guide
 
@@ -43,7 +43,8 @@ layers of protection:
 
 ## Core Security Features
 
-For secure coding patterns, see [Code Patterns](./CODE_PATTERNS.md). For security testing, see [Testing Patterns](./TESTING_PATTERNS.md).
+For secure coding patterns, see [Code Patterns](./CODE_PATTERNS.md). For
+security testing, see [Testing Patterns](./TESTING_PATTERNS.md).
 
 ### 1. Origin Validation
 
@@ -718,4 +719,4 @@ class IncidentHandler {
 - [Troubleshooting](./TROUBLESHOOTING.md) - Common security issues
 - [Architecture](./ARCHITECTURE.md) - Security layer design
 
-**Back to**: [Documentation Home](../README.md)
+**Back to**: [Documentation Home](./index.md)

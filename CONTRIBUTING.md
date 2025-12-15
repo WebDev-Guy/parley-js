@@ -491,34 +491,44 @@ See [TESTING.md](./docs/TESTING.md) for comprehensive testing guidelines.
 
 ## Documentation
 
-Documentation is as important as code. ParleyJS maintains comprehensive documentation that follows strict quality standards to ensure clarity, consistency, and professionalism.
+Documentation is as important as code. ParleyJS maintains comprehensive
+documentation that follows strict quality standards to ensure clarity,
+consistency, and professionalism.
 
 ### Documentation Standards
 
 All documentation contributions must follow:
 
-- **[DOCUMENTATION_STYLE_GUIDE.md](./docs/DOCUMENTATION_STYLE_GUIDE.md)** - Writing style, language standards, and quality requirements
-- **[DOCUMENTATION_NAVIGATION_STRATEGY.md](./docs/DOCUMENTATION_NAVIGATION_STRATEGY.md)** - Cross-linking, breadcrumbs, and navigation patterns
-- **[.cursorrules](./.cursorrules)** - AI assistant guidelines (also useful for human contributors)
+- **[DOCUMENTATION_STYLE_GUIDE.md](./docs/DOCUMENTATION_STYLE_GUIDE.md)** -
+  Writing style, language standards, and quality requirements
+- **[DOCUMENTATION_NAVIGATION_STRATEGY.md](./docs/DOCUMENTATION_NAVIGATION_STRATEGY.md)** -
+  Cross-linking, breadcrumbs, and navigation patterns
+- **[.cursorrules](./.cursorrules)** - AI assistant guidelines (also useful for
+  human contributors)
 
 ### Key Documentation Principles
 
 **No Emojis - Ever**
-- Never use emojis in documentation, code comments, commit messages, or error messages
+
+- Never use emojis in documentation, code comments, commit messages, or error
+  messages
 - Use clear, descriptive text instead
 
 **Single Source of Truth**
+
 - Document each concept once in its canonical location
 - Reference that location from elsewhere rather than duplicating
 - Maintain consistency through cross-references
 
 **Active Voice & Clear Language**
+
 - Write naturally: "ParleyJS validates the origin" not "the origin is validated"
 - Keep paragraphs short (maximum 5 sentences)
 - Use professional but friendly tone
 - Explain technical terms when first introduced
 
 **Complete Navigation**
+
 - Include breadcrumb navigation at top of each file
 - Add table of contents for files with 5+ sections
 - Include footer navigation (Previous/Next/Related/Back to)
@@ -627,12 +637,16 @@ If you use AI assistants (Cursor, GitHub Copilot, Claude):
 
 ### Resources
 
-- **Style Guide**: [DOCUMENTATION_STYLE_GUIDE.md](./docs/DOCUMENTATION_STYLE_GUIDE.md)
-- **Navigation Guide**: [DOCUMENTATION_NAVIGATION_STRATEGY.md](./docs/DOCUMENTATION_NAVIGATION_STRATEGY.md)
+- **Style Guide**:
+  [DOCUMENTATION_STYLE_GUIDE.md](./docs/DOCUMENTATION_STYLE_GUIDE.md)
+- **Navigation Guide**:
+  [DOCUMENTATION_NAVIGATION_STRATEGY.md](./docs/DOCUMENTATION_NAVIGATION_STRATEGY.md)
 - **AI Guidelines**: [.cursorrules](./.cursorrules)
-- **Example**: [basic-example.md](./docs/examples/basic-example.md) - Shows all standards applied
+- **Example**: [basic-example.md](./docs/examples/basic-example.md) - Shows all
+  standards applied
 
-For detailed documentation contribution guidelines, see [CONTRIBUTING_DOCUMENTATION.md](./docs/CONTRIBUTING_DOCUMENTATION.md).
+For detailed documentation contribution guidelines, see
+[CONTRIBUTING_DOCUMENTATION.md](./docs/CONTRIBUTING_DOCUMENTATION.md).
 
 ## Pull Request Process
 

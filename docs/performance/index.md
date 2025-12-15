@@ -1,4 +1,4 @@
-[Home](../../README.md) > [Documentation](../README.md) > Performance
+[Home](../../index.md) > [Documentation](./index.md) > Performance
 
 # Performance Guide
 
@@ -6,20 +6,24 @@ Optimize ParleyJS for high-performance applications.
 
 ## Overview
 
-ParleyJS is designed for performance, but understanding performance characteristics helps you build faster applications. This section covers optimization techniques, profiling, and performance best practices.
+ParleyJS is designed for performance, but understanding performance
+characteristics helps you build faster applications. This section covers
+optimization techniques, profiling, and performance best practices.
 
 ## Contents
 
-- **[Optimization Guide](./optimization.md)** - Performance optimization techniques
-  - Message size optimization
-  - Batching strategies
-  - Debouncing and throttling
-  - Memory management
-  - Connection pooling
+- **[Optimization Guide](./optimization.md)** - Performance optimization
+  techniques
+    - Message size optimization
+    - Batching strategies
+    - Debouncing and throttling
+    - Memory management
+    - Connection pooling
 
 ## Performance Characteristics
 
 ParleyJS performance depends on:
+
 - **Message size** - Smaller messages are faster
 - **Message frequency** - Too many messages cause overhead
 - **Number of connections** - More connections use more memory
@@ -28,6 +32,7 @@ ParleyJS performance depends on:
 ## Quick Performance Tips
 
 **Do**:
+
 - Keep messages small (< 1MB)
 - Batch multiple updates
 - Debounce frequent messages
@@ -35,6 +40,7 @@ ParleyJS performance depends on:
 - Use fire-and-forget for notifications
 
 **Don't**:
+
 - Send large files through postMessage
 - Send messages in tight loops
 - Keep unused connections open
@@ -45,74 +51,78 @@ ParleyJS performance depends on:
 
 ### Message Size
 
-```typescript
+```javascript
 // Slow - large payload
 await parley.send('update', {
-  data: hugeArray, // 10MB
-  metadata: { /* lots of data */ }
+    data: hugeArray, // 10MB
+    metadata: {
+        /* lots of data */
+    },
 });
 
 // Fast - send reference
 await parley.send('update', {
-  dataId: 'ref-123', // Just ID
-  timestamp: Date.now()
+    dataId: 'ref-123', // Just ID
+    timestamp: Date.now(),
 });
 ```
 
 ### Message Batching
 
-```typescript
+```javascript
 // Slow - many small messages
 for (let i = 0; i < 1000; i++) {
-  await parley.send('update', { index: i });
+    await parley.send('update', { index: i });
 }
 
 // Fast - batch messages
 await parley.send('batch-update', {
-  items: Array.from({ length: 1000 }, (_, i) => ({ index: i }))
+    items: Array.from({ length: 1000 }, (_, i) => ({ index: i })),
 });
 ```
 
 ### Debouncing
 
-```typescript
+```javascript
 // Debounce frequent updates
 const debouncedUpdate = debounce((data) => {
-  parley.send('update', data, { targetId: 'child', expectsResponse: false });
+    parley.send('update', data, { targetId: 'child', expectsResponse: false });
 }, 300);
 
 window.addEventListener('scroll', () => {
-  debouncedUpdate({ scrollY: window.scrollY });
+    debouncedUpdate({ scrollY: window.scrollY });
 });
 ```
 
-For more patterns, see [CODE_PATTERNS.md](../CODE_PATTERNS.md#performance-patterns).
+For more patterns, see
+[CODE_PATTERNS.md](../CODE_PATTERNS.md#performance-patterns).
 
 ## Profiling
 
 ### Measure Message Latency
 
-```typescript
+```javascript
 parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
-  console.time(`message-${event.messageId}`);
+    console.time(`message-${event.messageId}`);
 });
 
 parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
-  console.timeEnd(`message-${event.correlationId}`);
+    console.timeEnd(`message-${event.correlationId}`);
 });
 ```
 
 ### Monitor Connection Health
 
-```typescript
+```javascript
 parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
-  console.warn('Connection health degraded:', event.targetId);
+    console.warn('Connection health degraded:', event.targetId);
 });
 ```
 
 ## Performance Benchmarks
 
 Typical performance characteristics:
+
 - **Message latency**: < 5ms (same origin)
 - **Message throughput**: 1000+ messages/sec
 - **Memory per connection**: ~10KB
@@ -122,10 +132,10 @@ These numbers vary based on browser, payload complexity, and system load.
 
 ## Memory Management
 
-```typescript
+```javascript
 // Clean up when done
 function cleanup() {
-  parley.destroy(); // Removes all listeners
+    parley.destroy(); // Removes all listeners
 }
 
 // Or remove specific listeners
@@ -145,6 +155,7 @@ For details, see [Optimization Guide](./optimization.md).
 ## Performance Checklist
 
 Before deploying:
+
 - [ ] Messages are small (< 1MB)
 - [ ] Frequent updates are batched or debounced
 - [ ] Unused connections are closed
@@ -157,10 +168,12 @@ Before deploying:
 ## Navigation
 
 **Topics**:
+
 - [Optimization Guide](./optimization.md)
 
 **Related**:
+
 - [Advanced Patterns](../CODE_PATTERNS.md)
 - [Architecture](../ARCHITECTURE.md)
 
-**Back to**: [Documentation Home](../README.md) | [Project Home](../../README.md)
+**Back to**: [Documentation Home](./index.md) | [Project Home](../../index.md)

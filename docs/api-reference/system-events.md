@@ -1,4 +1,4 @@
-[Home](../../README.md) > [API Reference](./README.md) > System Events
+[Home](../../index.md) > [API Reference](./index.md) > System Events
 
 # System Events
 
@@ -21,9 +21,12 @@ Reference documentation for all system events emitted by ParleyJS.
 
 ## Overview
 
-System events provide visibility into ParleyJS internal operations. They are emitted for connection lifecycle, message flow, errors, and heartbeat monitoring.
+System events provide visibility into ParleyJS internal operations. They are
+emitted for connection lifecycle, message flow, errors, and heartbeat
+monitoring.
 
-All system events use the `system:` prefix to avoid conflicts with user-defined message types. You listen to system events using `parley.onSystem()`.
+All system events use the `system:` prefix to avoid conflicts with user-defined
+message types. You listen to system events using `parley.onSystem()`.
 
 ```typescript
 import { SYSTEM_EVENTS } from 'parley-js';
@@ -33,7 +36,8 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
 });
 ```
 
-System events are useful for logging, analytics, debugging, and monitoring application health.
+System events are useful for logging, analytics, debugging, and monitoring
+application health.
 
 ---
 
@@ -42,12 +46,14 @@ System events are useful for logging, analytics, debugging, and monitoring appli
 System events are emitted at key points in the communication lifecycle:
 
 1. **Connection Phase**: `HANDSHAKE_START`, `HANDSHAKE_COMPLETE`, `CONNECTED`
-2. **Communication Phase**: `MESSAGE_SENT`, `MESSAGE_RECEIVED`, `RESPONSE_SENT`, `RESPONSE_RECEIVED`
+2. **Communication Phase**: `MESSAGE_SENT`, `MESSAGE_RECEIVED`, `RESPONSE_SENT`,
+   `RESPONSE_RECEIVED`
 3. **Monitoring Phase**: `HEARTBEAT_MISSED`, `CONNECTION_STATE_CHANGED`
 4. **Error Phase**: `ERROR`, `TIMEOUT`, `HANDSHAKE_FAILED`
 5. **Disconnection Phase**: `CONNECTION_LOST`, `DISCONNECTED`
 
-Understanding this lifecycle helps you implement robust monitoring and error handling.
+Understanding this lifecycle helps you implement robust monitoring and error
+handling.
 
 ---
 
@@ -64,27 +70,30 @@ Emitted when a target successfully establishes a connection.
 **When Fired**: After successful handshake completes
 
 **Event Data**:
+
 ```typescript
 interface ConnectedEventData {
-    targetId: string;        // Target identifier
-    targetType: 'iframe' | 'window';  // Target type
-    origin: string;          // Target origin
-    timestamp: number;       // Connection timestamp
+    targetId: string; // Target identifier
+    targetType: 'iframe' | 'window'; // Target type
+    origin: string; // Target origin
+    timestamp: number; // Connection timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
     console.log(`Connected to ${event.targetId} at ${event.origin}`);
     analytics.track('connection_established', {
         targetId: event.targetId,
-        targetType: event.targetType
+        targetType: event.targetType,
     });
 });
 ```
 
 **Use Cases**:
+
 - Track active connections
 - Initialize module-specific logic after connection
 - Update UI to show connection status
@@ -100,20 +109,22 @@ Emitted when a target disconnects gracefully.
 **When Fired**: When `disconnect()` is called or target explicitly closes
 
 **Event Data**:
+
 ```typescript
 interface DisconnectedEventData {
-    targetId: string;        // Target identifier
-    reason: DisconnectReason;  // Disconnection reason
-    timestamp: number;       // Disconnection timestamp
+    targetId: string; // Target identifier
+    reason: DisconnectReason; // Disconnection reason
+    timestamp: number; // Disconnection timestamp
 }
 
 type DisconnectReason =
-    | 'manual'              // disconnect() was called
-    | 'target_closed'       // Target window closed
-    | 'cleanup';            // Cleanup during shutdown
+    | 'manual' // disconnect() was called
+    | 'target_closed' // Target window closed
+    | 'cleanup'; // Cleanup during shutdown
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
     console.log(`${event.targetId} disconnected: ${event.reason}`);
@@ -126,6 +137,7 @@ parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
 ```
 
 **Use Cases**:
+
 - Clean up resources when connections close
 - Update connection status indicators
 - Handle graceful shutdowns
@@ -141,15 +153,17 @@ Emitted when a connection is lost ungracefully.
 **When Fired**: After heartbeat timeout or max failures reached
 
 **Event Data**:
+
 ```typescript
 interface ConnectionLostEventData {
-    targetId: string;        // Target identifier
+    targetId: string; // Target identifier
     reason: 'heartbeat_timeout' | 'max_failures_reached';
-    timestamp: number;       // When connection was determined lost
+    timestamp: number; // When connection was determined lost
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
     console.error(`Lost connection to ${event.targetId}: ${event.reason}`);
@@ -163,6 +177,7 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
 ```
 
 **Use Cases**:
+
 - Detect network failures
 - Trigger reconnection logic
 - Show offline indicators
@@ -175,27 +190,30 @@ Emitted when connection state transitions.
 
 **Event Name**: `system:connection_state_changed`
 
-**When Fired**: On any state transition (connecting, connected, disconnected, etc.)
+**When Fired**: On any state transition (connecting, connected, disconnected,
+etc.)
 
 **Event Data**:
+
 ```typescript
 interface ConnectionStateChangedEventData {
-    targetId: string;           // Target identifier
-    previousState: ConnectionState;  // Previous state
-    currentState: ConnectionState;   // Current state
-    reason?: string;            // Reason for change
-    timestamp: number;          // Change timestamp
+    targetId: string; // Target identifier
+    previousState: ConnectionState; // Previous state
+    currentState: ConnectionState; // Current state
+    reason?: string; // Reason for change
+    timestamp: number; // Change timestamp
 }
 
 enum ConnectionState {
     DISCONNECTED = 'disconnected',
     CONNECTING = 'connecting',
     CONNECTED = 'connected',
-    RECONNECTING = 'reconnecting'
+    RECONNECTING = 'reconnecting',
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, (event) => {
     console.log(
@@ -207,6 +225,7 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, (event) => {
 ```
 
 **Use Cases**:
+
 - Track detailed connection lifecycle
 - Update UI based on connection state
 - Debug connection issues
@@ -226,29 +245,32 @@ Emitted when a message is sent to a target.
 **When Fired**: Immediately after `send()` or `broadcast()` dispatches message
 
 **Event Data**:
+
 ```typescript
 interface MessageSentEventData {
-    messageId: string;       // Unique message ID
-    messageType: string;     // Message type name
-    targetId?: string;       // Target ID (undefined for broadcast)
-    expectsResponse: boolean;  // Whether response expected
-    timestamp: number;       // Send timestamp
+    messageId: string; // Unique message ID
+    messageType: string; // Message type name
+    targetId?: string; // Target ID (undefined for broadcast)
+    expectsResponse: boolean; // Whether response expected
+    timestamp: number; // Send timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
     console.log(`Sent ${event.messageType} to ${event.targetId}`);
 
     analytics.track('message_sent', {
         type: event.messageType,
-        target: event.targetId
+        target: event.targetId,
     });
 });
 ```
 
 **Use Cases**:
+
 - Track outgoing message volume
 - Measure message frequency
 - Debug message flow
@@ -264,28 +286,31 @@ Emitted when a message is received from a target.
 **When Fired**: After message passes origin validation, before handler called
 
 **Event Data**:
+
 ```typescript
 interface MessageReceivedEventData {
-    messageId: string;       // Unique message ID
-    messageType: string;     // Message type name
-    origin: string;          // Sender origin
-    timestamp: number;       // Receive timestamp
+    messageId: string; // Unique message ID
+    messageType: string; // Message type name
+    origin: string; // Sender origin
+    timestamp: number; // Receive timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
     console.log(`Received ${event.messageType} from ${event.origin}`);
 
     analytics.track('message_received', {
         type: event.messageType,
-        origin: event.origin
+        origin: event.origin,
     });
 });
 ```
 
 **Use Cases**:
+
 - Track incoming message volume
 - Monitor message types received
 - Audit message sources
@@ -301,16 +326,18 @@ Emitted when a response is sent to a request.
 **When Fired**: When handler calls `respond()` function
 
 **Event Data**:
+
 ```typescript
 interface ResponseSentEventData {
-    responseId: string;      // Response message ID
-    requestId: string;       // Original request message ID
-    success: boolean;        // Whether response indicates success
-    timestamp: number;       // Response send timestamp
+    responseId: string; // Response message ID
+    requestId: string; // Original request message ID
+    success: boolean; // Whether response indicates success
+    timestamp: number; // Response send timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.RESPONSE_SENT, (event) => {
     console.log(`Sent response to ${event.requestId}: ${event.success}`);
@@ -318,6 +345,7 @@ parley.onSystem(SYSTEM_EVENTS.RESPONSE_SENT, (event) => {
 ```
 
 **Use Cases**:
+
 - Track response rates
 - Monitor handler success/failure ratios
 - Debug response issues
@@ -333,17 +361,19 @@ Emitted when a response is received for a request.
 **When Fired**: When response arrives for a pending request
 
 **Event Data**:
+
 ```typescript
 interface ResponseReceivedEventData {
-    responseId: string;      // Response message ID
-    requestId: string;       // Original request message ID
-    success: boolean;        // Whether response indicates success
-    duration: number;        // Round-trip time in milliseconds
-    timestamp: number;       // Response receive timestamp
+    responseId: string; // Response message ID
+    requestId: string; // Original request message ID
+    success: boolean; // Whether response indicates success
+    duration: number; // Round-trip time in milliseconds
+    timestamp: number; // Response receive timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.RESPONSE_RECEIVED, (event) => {
     console.log(`Response received in ${event.duration}ms`);
@@ -354,12 +384,13 @@ parley.onSystem(SYSTEM_EVENTS.RESPONSE_RECEIVED, (event) => {
 
     analytics.track('request_duration', {
         requestId: event.requestId,
-        duration: event.duration
+        duration: event.duration,
     });
 });
 ```
 
 **Use Cases**:
+
 - Measure request-response latency
 - Track slow requests
 - Monitor communication performance
@@ -376,21 +407,24 @@ Emitted when any error occurs in ParleyJS operations.
 
 **Event Name**: `system:error`
 
-**When Fired**: On validation errors, security errors, serialization errors, etc.
+**When Fired**: On validation errors, security errors, serialization errors,
+etc.
 
 **Event Data**:
+
 ```typescript
 interface ErrorEventData {
-    code: string;            // Error code
-    message: string;         // Error message
-    targetId?: string;       // Associated target (if applicable)
-    messageId?: string;      // Associated message (if applicable)
-    details?: unknown;       // Additional error details
-    timestamp: number;       // Error timestamp
+    code: string; // Error code
+    message: string; // Error message
+    targetId?: string; // Associated target (if applicable)
+    messageId?: string; // Associated message (if applicable)
+    details?: unknown; // Additional error details
+    timestamp: number; // Error timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
     console.error(`Error [${event.code}]: ${event.message}`);
@@ -406,13 +440,14 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
         metadata: {
             targetId: event.targetId,
             messageId: event.messageId,
-            details: event.details
-        }
+            details: event.details,
+        },
     });
 });
 ```
 
 **Use Cases**:
+
 - Centralized error logging
 - Error monitoring and alerting
 - Debug production issues
@@ -428,39 +463,43 @@ Emitted when a request times out without receiving a response.
 **When Fired**: After timeout duration expires without response
 
 **Event Data**:
+
 ```typescript
 interface TimeoutEventData {
-    messageId: string;       // Message ID that timed out
-    messageType: string;     // Message type
-    targetId?: string;       // Target ID
-    timeoutMs: number;       // Timeout duration
-    retriesAttempted: number;  // Number of retries attempted
-    timestamp: number;       // Timeout timestamp
+    messageId: string; // Message ID that timed out
+    messageType: string; // Message type
+    targetId?: string; // Target ID
+    timeoutMs: number; // Timeout duration
+    retriesAttempted: number; // Number of retries attempted
+    timestamp: number; // Timeout timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
     console.warn(
         `Timeout for ${event.messageType} after ${event.timeoutMs}ms ` +
-        `(${event.retriesAttempted} retries)`
+            `(${event.retriesAttempted} retries)`
     );
 
     analytics.track('request_timeout', {
         messageType: event.messageType,
         targetId: event.targetId,
-        timeoutMs: event.timeoutMs
+        timeoutMs: event.timeoutMs,
     });
 });
 ```
 
 **Use Cases**:
+
 - Monitor timeout frequency
 - Identify unreliable targets
 - Adjust timeout settings based on actual latency
 
-For timeout error handling patterns, see [Error Handling Pattern](../patterns/error-handling.md#timeout-errors).
+For timeout error handling patterns, see
+[Error Handling Pattern](../patterns/error-handling.md#timeout-errors).
 
 ---
 
@@ -477,15 +516,17 @@ Emitted when handshake begins with a target.
 **When Fired**: When `connect()` initiates handshake
 
 **Event Data**:
+
 ```typescript
 interface HandshakeEventData {
-    targetId: string;        // Target identifier
-    targetType: 'iframe' | 'window';  // Target type
-    timestamp: number;       // Handshake start timestamp
+    targetId: string; // Target identifier
+    targetType: 'iframe' | 'window'; // Target type
+    timestamp: number; // Handshake start timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.HANDSHAKE_START, (event) => {
     console.log(`Starting handshake with ${event.targetId}`);
@@ -504,15 +545,17 @@ Emitted when handshake completes successfully.
 **When Fired**: After successful handshake exchange
 
 **Event Data**:
+
 ```typescript
 interface HandshakeEventData {
-    targetId: string;        // Target identifier
-    targetType: 'iframe' | 'window';  // Target type
-    timestamp: number;       // Handshake completion timestamp
+    targetId: string; // Target identifier
+    targetType: 'iframe' | 'window'; // Target type
+    timestamp: number; // Handshake completion timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.HANDSHAKE_COMPLETE, (event) => {
     console.log(`Handshake complete with ${event.targetId}`);
@@ -531,11 +574,12 @@ Emitted when handshake fails.
 **When Fired**: When handshake times out or encounters error
 
 **Event Data**:
+
 ```typescript
 interface HandshakeEventData {
-    targetId: string;        // Target identifier
-    targetType: 'iframe' | 'window';  // Target type
-    timestamp: number;       // Failure timestamp
+    targetId: string; // Target identifier
+    targetType: 'iframe' | 'window'; // Target type
+    timestamp: number; // Failure timestamp
     error?: {
         code: string;
         message: string;
@@ -544,6 +588,7 @@ interface HandshakeEventData {
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.HANDSHAKE_FAILED, (event) => {
     console.error(
@@ -568,20 +613,22 @@ Emitted when a heartbeat is missed.
 **When Fired**: When heartbeat response not received within interval
 
 **Event Data**:
+
 ```typescript
 interface HeartbeatMissedEventData {
-    targetId: string;        // Target identifier
-    consecutiveMissed: number;  // Number of consecutive missed heartbeats
-    timestamp: number;       // Missed heartbeat timestamp
+    targetId: string; // Target identifier
+    consecutiveMissed: number; // Number of consecutive missed heartbeats
+    timestamp: number; // Missed heartbeat timestamp
 }
 ```
 
 **Example**:
+
 ```typescript
 parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
     console.warn(
         `Missed heartbeat from ${event.targetId} ` +
-        `(${event.consecutiveMissed} consecutive)`
+            `(${event.consecutiveMissed} consecutive)`
     );
 
     if (event.consecutiveMissed >= 3) {
@@ -592,11 +639,13 @@ parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
 ```
 
 **Use Cases**:
+
 - Detect connection degradation early
 - Trigger proactive reconnection
 - Monitor connection health
 
-For heartbeat configuration, see [Heartbeat Monitoring](../guides/iframe-communication.md#heartbeat-monitoring).
+For heartbeat configuration, see
+[Heartbeat Monitoring](../guides/iframe-communication.md#heartbeat-monitoring).
 
 ---
 
@@ -641,14 +690,15 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
 parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
     analytics.track('error_occurred', {
         code: event.code,
-        targetId: event.targetId
+        targetId: event.targetId,
     });
 });
 ```
 
 ### Removing Listeners
 
-System event listeners cannot currently be removed individually. To stop listening, create a new Parley instance or disconnect targets.
+System event listeners cannot currently be removed individually. To stop
+listening, create a new Parley instance or disconnect targets.
 
 ---
 
@@ -711,14 +761,14 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, () => {
 parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
     analytics.track('message_sent', {
         messageType: event.messageType,
-        targetId: event.targetId
+        targetId: event.targetId,
     });
 });
 
 parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
     analytics.track('request_timeout', {
         messageType: event.messageType,
-        timeoutMs: event.timeoutMs
+        timeoutMs: event.timeoutMs,
     });
 });
 ```
@@ -736,7 +786,7 @@ System events are for observability, not application flow control:
 ```typescript
 // Bad: Business logic in system event
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
-    loadUserData(event.targetId);  // Wrong place
+    loadUserData(event.targetId); // Wrong place
 });
 
 // Good: Business logic in message handlers
@@ -753,7 +803,7 @@ Keep system event handlers lightweight:
 ```typescript
 // Bad: Heavy processing blocks event loop
 parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
-    processLargeDataset(event);  // Slow operation
+    processLargeDataset(event); // Slow operation
 });
 
 // Good: Offload to background
@@ -789,7 +839,7 @@ Enable detailed logging in development:
 ```typescript
 if (process.env.NODE_ENV === 'development') {
     // Log all system events
-    Object.values(SYSTEM_EVENTS).forEach(eventName => {
+    Object.values(SYSTEM_EVENTS).forEach((eventName) => {
         parley.onSystem(eventName, (event) => {
             console.log(`[${eventName}]`, event);
         });
@@ -804,22 +854,25 @@ if (process.env.NODE_ENV === 'development') {
 ### Related API Documentation
 
 - [Methods](./methods.md) - All ParleyJS methods
-- [API Reference](./README.md) - Complete API overview
+- [API Reference](./index.md) - Complete API overview
 - [Error Codes](../troubleshooting/common-errors.md) - Error code reference
 
 ### Related Guides
 
-- [iFrame Communication](../guides/iframe-communication.md) - Heartbeat monitoring
-- [Multi-Window Communication](../guides/multi-window-communication.md) - System events in multi-window scenarios
-- [Error Handling Pattern](../patterns/error-handling.md) - Error handling with system events
+- [iFrame Communication](../guides/iframe-communication.md) - Heartbeat
+  monitoring
+- [Multi-Window Communication](../guides/multi-window-communication.md) - System
+  events in multi-window scenarios
+- [Error Handling Pattern](../patterns/error-handling.md) - Error handling with
+  system events
 
 ### Related Documentation
 
-- [Analytics Hooks](../FRAMEWORK_REFERENCE.md#analytics-hooks) - Analytics integration
-- [Troubleshooting](../troubleshooting/README.md) - Debugging with system events
+- [Analytics Hooks](../FRAMEWORK_REFERENCE.md#analytics-hooks) - Analytics
+  integration
+- [Troubleshooting](../troubleshooting/index.md) - Debugging with system events
 
 ---
 
-**Previous**: [Methods Reference](./methods.md)
-**Next**: [API Reference Overview](./README.md)
-**Back to**: [API Reference](./README.md)
+**Previous**: [Methods Reference](./methods.md) **Next**:
+[API Reference Overview](./index.md) **Back to**: [API Reference](./index.md)

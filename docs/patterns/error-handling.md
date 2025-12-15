@@ -1,8 +1,10 @@
-[Home](../../README.md) > [Code Patterns](./README.md) > Error Handling Pattern
+[Home](../../index.md) > [Code Patterns](./index.md) > Error Handling Pattern
 
 # Error Handling Pattern
 
-The error handling pattern provides strategies for gracefully handling failures in cross-window communication including timeouts, connection errors, validation errors, and application errors.
+The error handling pattern provides strategies for gracefully handling failures
+in cross-window communication including timeouts, connection errors, validation
+errors, and application errors.
 
 ## Table of Contents
 
@@ -18,53 +20,67 @@ The error handling pattern provides strategies for gracefully handling failures 
 
 ## Problem This Solves
 
-Cross-window communication can fail in many ways: network timeouts, disconnected targets, validation errors, or application errors. Without proper error handling, these failures crash your application, leave users confused, or create inconsistent state.
+Cross-window communication can fail in many ways: network timeouts, disconnected
+targets, validation errors, or application errors. Without proper error
+handling, these failures crash your application, leave users confused, or create
+inconsistent state.
 
-The error handling pattern solves this by providing structured approaches to detect, handle, and recover from errors. This ensures your application remains stable and provides helpful feedback when communication fails.
+The error handling pattern solves this by providing structured approaches to
+detect, handle, and recover from errors. This ensures your application remains
+stable and provides helpful feedback when communication fails.
 
 ## When to Use It
 
 Use error handling patterns when:
+
 - Communicating with unreliable targets (popups, third-party iframes)
 - User actions depend on successful communication
 - You need to provide feedback about communication failures
 - Operations can be retried or have fallback options
 - Maintaining application state consistency is critical
 
-Proper error handling is essential in production applications where communication failures are expected.
+Proper error handling is essential in production applications where
+communication failures are expected.
 
 ## When NOT to Use It
 
 You might skip extensive error handling when:
+
 - Building quick prototypes or demos
 - Communication is always reliable (same-origin, controlled environment)
 - Failures are acceptable without recovery (optional features)
 - Complexity outweighs benefits for simple use cases
 
-However, even simple applications benefit from basic error handling to improve user experience.
+However, even simple applications benefit from basic error handling to improve
+user experience.
 
 ## Code Example
 
 ### Basic Try-Catch Pattern
 
 **Simple Error Handling**:
+
 ```javascript
 import { Parley } from 'parley-js';
 
 const parley = Parley.create({
-    allowedOrigins: [window.location.origin]
+    allowedOrigins: [window.location.origin],
 });
 
 await parley.connect(iframe, 'child');
 
 async function fetchUserData(userId) {
     try {
-        const response = await parley.send('getUser', {
-            userId
-        }, {
-            targetId: 'child',
-            timeout: 5000
-        });
+        const response = await parley.send(
+            'getUser',
+            {
+                userId,
+            },
+            {
+                targetId: 'child',
+                timeout: 5000,
+            }
+        );
 
         if (!response.success) {
             throw new Error(response.error || 'Unknown error');
@@ -74,7 +90,9 @@ async function fetchUserData(userId) {
     } catch (error) {
         // Handle specific error types
         if (error.code === 'ERR_TIMEOUT_NO_RESPONSE') {
-            console.error('Request timed out. Child iframe may be unresponsive.');
+            console.error(
+                'Request timed out. Child iframe may be unresponsive.'
+            );
             showNotification('Connection timeout. Please try again.');
         } else if (error.code === 'ERR_TARGET_NOT_CONNECTED') {
             console.error('Target not connected');
@@ -94,7 +112,8 @@ async function fetchUserData(userId) {
 }
 ```
 
-For common error solutions and error code details, see [Common Errors Reference](../troubleshooting/common-errors.md).
+For common error solutions and error code details, see
+[Common Errors Reference](../troubleshooting/common-errors.md).
 
 ```javascript
 // Usage
@@ -109,6 +128,7 @@ try {
 ### Retry Pattern
 
 **Automatic Retry with Exponential Backoff**:
+
 ```javascript
 async function sendWithRetry(messageType, payload, options = {}) {
     const maxAttempts = options.maxAttempts || 3;
@@ -123,7 +143,7 @@ async function sendWithRetry(messageType, payload, options = {}) {
 
             const response = await parley.send(messageType, payload, {
                 targetId,
-                timeout: options.timeout || 5000
+                timeout: options.timeout || 5000,
             });
 
             console.log('Request succeeded');
@@ -147,7 +167,7 @@ async function sendWithRetry(messageType, payload, options = {}) {
                 // Exponential backoff: 1s, 2s, 4s
                 const delay = baseDelay * Math.pow(2, attempt - 1);
                 console.log(`Waiting ${delay}ms before retry...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                await new Promise((resolve) => setTimeout(resolve, delay));
             }
         }
     }
@@ -159,14 +179,18 @@ async function sendWithRetry(messageType, payload, options = {}) {
 
 // Usage
 try {
-    const result = await sendWithRetry('processData', {
-        data: largeDataset
-    }, {
-        targetId: 'worker-iframe',
-        maxAttempts: 3,
-        baseDelay: 1000,
-        timeout: 10000
-    });
+    const result = await sendWithRetry(
+        'processData',
+        {
+            data: largeDataset,
+        },
+        {
+            targetId: 'worker-iframe',
+            maxAttempts: 3,
+            baseDelay: 1000,
+            timeout: 10000,
+        }
+    );
 
     console.log('Processing complete:', result);
 } catch (error) {
@@ -178,14 +202,19 @@ try {
 ### Fallback Pattern
 
 **Graceful Degradation with Fallback**:
+
 ```javascript
 async function getConfiguration() {
     try {
         // Try to fetch config from iframe
-        const response = await parley.send('getConfig', {}, {
-            targetId: 'config-iframe',
-            timeout: 3000
-        });
+        const response = await parley.send(
+            'getConfig',
+            {},
+            {
+                targetId: 'config-iframe',
+                timeout: 3000,
+            }
+        );
 
         if (response.success) {
             console.log('Using configuration from iframe');
@@ -201,7 +230,7 @@ async function getConfiguration() {
         theme: 'light',
         language: 'en',
         notifications: true,
-        autoSave: true
+        autoSave: true,
     };
 }
 
@@ -210,12 +239,16 @@ async function getUserPreferences(userId) {
 
     try {
         // Try remote first
-        const response = await parley.send('getPreferences', {
-            userId
-        }, {
-            targetId: 'preferences-iframe',
-            timeout: 2000
-        });
+        const response = await parley.send(
+            'getPreferences',
+            {
+                userId,
+            },
+            {
+                targetId: 'preferences-iframe',
+                timeout: 2000,
+            }
+        );
 
         preferences = response.preferences;
         console.log('Loaded preferences from remote');
@@ -243,6 +276,7 @@ applyConfiguration(config);
 ### Structured Error Responses
 
 **Handler with Structured Error Responses**:
+
 ```javascript
 // Child iframe: Handler with detailed errors
 parley.on('processOrder', async (payload, respond) => {
@@ -254,8 +288,8 @@ parley.on('processOrder', async (payload, respond) => {
                 error: {
                     code: 'MISSING_ORDER_ID',
                     message: 'Order ID is required',
-                    field: 'orderId'
-                }
+                    field: 'orderId',
+                },
             });
             return;
         }
@@ -266,8 +300,8 @@ parley.on('processOrder', async (payload, respond) => {
                 error: {
                     code: 'EMPTY_ORDER',
                     message: 'Order must contain at least one item',
-                    field: 'items'
-                }
+                    field: 'items',
+                },
             });
             return;
         }
@@ -278,7 +312,7 @@ parley.on('processOrder', async (payload, respond) => {
         respond({
             success: true,
             orderId: order.id,
-            total: order.total
+            total: order.total,
         });
     } catch (error) {
         // Unexpected errors
@@ -287,8 +321,11 @@ parley.on('processOrder', async (payload, respond) => {
             error: {
                 code: 'PROCESSING_FAILED',
                 message: error.message,
-                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            }
+                stack:
+                    process.env.NODE_ENV === 'development'
+                        ? error.stack
+                        : undefined,
+            },
         });
     }
 });
@@ -297,7 +334,7 @@ parley.on('processOrder', async (payload, respond) => {
 async function submitOrder(orderData) {
     try {
         const response = await parley.send('processOrder', orderData, {
-            targetId: 'order-processor'
+            targetId: 'order-processor',
         });
 
         if (!response.success) {
@@ -318,7 +355,9 @@ async function submitOrder(orderData) {
         return response;
     } catch (error) {
         // Communication errors (timeout, connection lost, etc.)
-        showErrorDialog('Unable to submit order. Please check your connection.');
+        showErrorDialog(
+            'Unable to submit order. Please check your connection.'
+        );
         return null;
     }
 }
@@ -327,6 +366,7 @@ async function submitOrder(orderData) {
 ### Circuit Breaker Pattern
 
 **Prevent Cascading Failures**:
+
 ```javascript
 class CircuitBreaker {
     constructor(options = {}) {
@@ -366,7 +406,9 @@ class CircuitBreaker {
         if (this.failures >= this.failureThreshold) {
             this.state = 'OPEN';
             this.nextAttempt = Date.now() + this.resetTimeout;
-            console.warn(`Circuit breaker opened after ${this.failures} failures`);
+            console.warn(
+                `Circuit breaker opened after ${this.failures} failures`
+            );
         }
     }
 
@@ -378,7 +420,7 @@ class CircuitBreaker {
 // Usage
 const breaker = new CircuitBreaker({
     failureThreshold: 5,
-    resetTimeout: 60000
+    resetTimeout: 60000,
 });
 
 async function sendToUnreliableTarget(data) {
@@ -386,7 +428,7 @@ async function sendToUnreliableTarget(data) {
         return await breaker.execute(async () => {
             return await parley.send('process', data, {
                 targetId: 'unreliable-iframe',
-                timeout: 3000
+                timeout: 3000,
             });
         });
     } catch (error) {
@@ -414,19 +456,25 @@ for (let i = 0; i < 10; i++) {
 
 ParleyJS provides specific error types for different failure scenarios:
 
-1. **TimeoutError** (ERR_TIMEOUT_NO_RESPONSE): Request timed out waiting for response. The target may be unresponsive or the operation took too long.
+1. **TimeoutError** (ERR_TIMEOUT_NO_RESPONSE): Request timed out waiting for
+   response. The target may be unresponsive or the operation took too long.
 
-2. **ValidationError** (ERR_VALIDATION_SCHEMA_MISMATCH): Payload doesn't match registered schema. This indicates a programming error in the sender.
+2. **ValidationError** (ERR_VALIDATION_SCHEMA_MISMATCH): Payload doesn't match
+   registered schema. This indicates a programming error in the sender.
 
-3. **TargetNotFoundError** (ERR_TARGET_NOT_CONNECTED): Target is not connected. The target may have disconnected or never connected.
+3. **TargetNotFoundError** (ERR_TARGET_NOT_CONNECTED): Target is not connected.
+   The target may have disconnected or never connected.
 
-4. **ConnectionError** (ERR_CONNECTION_CLOSED, ERR_CONNECTION_HANDSHAKE_FAILED): Connection-level errors during handshake or while connected.
+4. **ConnectionError** (ERR_CONNECTION_CLOSED, ERR_CONNECTION_HANDSHAKE_FAILED):
+   Connection-level errors during handshake or while connected.
 
-Each error type has a code property you can check to handle specific scenarios appropriately.
+Each error type has a code property you can check to handle specific scenarios
+appropriately.
 
 ### Why Structured Error Handling Matters
 
 Proper error handling prevents:
+
 - **User confusion**: Show helpful messages instead of cryptic errors
 - **Data loss**: Retry or save state when operations fail
 - **Cascading failures**: Circuit breakers prevent overwhelming failed services
@@ -437,6 +485,7 @@ Good error handling improves reliability and user trust.
 ### Error Recovery Strategies
 
 Different errors require different recovery strategies:
+
 - **Timeout**: Retry with exponential backoff
 - **Connection lost**: Attempt reconnection, use cached data
 - **Validation error**: Fix the code, don't retry
@@ -450,6 +499,7 @@ Choose the strategy based on the error type and user impact.
 ### Variation 1: Global Error Handler
 
 **Centralized Error Handling**:
+
 ```javascript
 class ParleyErrorHandler {
     constructor(parley) {
@@ -466,7 +516,7 @@ class ParleyErrorHandler {
         console.error('ParleyJS Error:', error);
 
         // Notify all listeners
-        this.errorListeners.forEach(listener => {
+        this.errorListeners.forEach((listener) => {
             try {
                 listener(error);
             } catch (e) {
@@ -499,6 +549,7 @@ errorHandler.onError((error) => {
 ### Variation 2: Timeout with Progress Indication
 
 **Show Progress During Long Operations**:
+
 ```javascript
 async function sendWithProgress(messageType, payload, options = {}) {
     const timeout = options.timeout || 10000;
@@ -518,7 +569,7 @@ async function sendWithProgress(messageType, payload, options = {}) {
 
         const response = await parley.send(messageType, payload, {
             targetId: options.targetId,
-            timeout
+            timeout,
         });
 
         if (progressCallback) {
@@ -536,20 +587,25 @@ async function sendWithProgress(messageType, payload, options = {}) {
 }
 
 // Usage
-await sendWithProgress('processLargeFile', {
-    file: largeFile
-}, {
-    targetId: 'processor',
-    timeout: 30000,
-    onProgress: (percent) => {
-        updateProgressBar(percent);
+await sendWithProgress(
+    'processLargeFile',
+    {
+        file: largeFile,
+    },
+    {
+        targetId: 'processor',
+        timeout: 30000,
+        onProgress: (percent) => {
+            updateProgressBar(percent);
+        },
     }
-});
+);
 ```
 
 ### Variation 3: Error Boundaries
 
 **React-Style Error Boundaries**:
+
 ```javascript
 class ParleyErrorBoundary {
     constructor(parley) {
@@ -568,8 +624,8 @@ class ParleyErrorBoundary {
                     success: false,
                     error: {
                         code: 'HANDLER_ERROR',
-                        message: 'Internal error processing request'
-                    }
+                        message: 'Internal error processing request',
+                    },
                 });
 
                 // Notify error handlers
@@ -601,7 +657,7 @@ boundary.onError('processData', (error, payload, metadata) => {
     logErrorToServer({
         error: error.message,
         payload,
-        origin: metadata.origin
+        origin: metadata.origin,
     });
 });
 ```
@@ -609,29 +665,38 @@ boundary.onError('processData', (error, payload, metadata) => {
 ### Variation 4: Graceful Degradation
 
 **Fallback Chain**:
+
 ```javascript
 async function fetchDataWithFallbacks(dataId) {
     const strategies = [
         // Strategy 1: Primary iframe
         async () => {
-            const response = await parley.send('getData', {
-                id: dataId
-            }, {
-                targetId: 'primary-iframe',
-                timeout: 2000
-            });
+            const response = await parley.send(
+                'getData',
+                {
+                    id: dataId,
+                },
+                {
+                    targetId: 'primary-iframe',
+                    timeout: 2000,
+                }
+            );
             return response.data;
         },
 
         // Strategy 2: Backup iframe
         async () => {
             console.log('Primary failed, trying backup');
-            const response = await parley.send('getData', {
-                id: dataId
-            }, {
-                targetId: 'backup-iframe',
-                timeout: 3000
-            });
+            const response = await parley.send(
+                'getData',
+                {
+                    id: dataId,
+                },
+                {
+                    targetId: 'backup-iframe',
+                    timeout: 3000,
+                }
+            );
             return response.data;
         },
 
@@ -645,7 +710,7 @@ async function fetchDataWithFallbacks(dataId) {
         async () => {
             console.log('Cache empty, using defaults');
             return getDefaultData();
-        }
+        },
     ];
 
     for (const strategy of strategies) {
@@ -673,19 +738,19 @@ import { describe, it, expect, vi } from 'vitest';
 describe('Error Handling - Timeouts', () => {
     it('should handle timeout errors', async () => {
         const parley = Parley.create({
-            allowedOrigins: [window.location.origin]
+            allowedOrigins: [window.location.origin],
         });
 
         // Mock send to throw timeout error
         vi.spyOn(parley, 'send').mockRejectedValue({
             code: 'ERR_TIMEOUT_NO_RESPONSE',
-            message: 'Request timed out'
+            message: 'Request timed out',
         });
 
         await expect(
             parley.send('getData', {}, { targetId: 'child' })
         ).rejects.toMatchObject({
-            code: 'ERR_TIMEOUT_NO_RESPONSE'
+            code: 'ERR_TIMEOUT_NO_RESPONSE',
         });
     });
 
@@ -694,7 +759,7 @@ describe('Error Handling - Timeouts', () => {
             for (let i = 0; i < 3; i++) {
                 try {
                     return await parley.send(type, payload, {
-                        targetId: 'child'
+                        targetId: 'child',
                     });
                 } catch (error) {
                     if (i === 2) throw error;
@@ -703,7 +768,8 @@ describe('Error Handling - Timeouts', () => {
         };
 
         // Test retry logic
-        const mockSend = vi.spyOn(parley, 'send')
+        const mockSend = vi
+            .spyOn(parley, 'send')
             .mockRejectedValueOnce({ code: 'ERR_TIMEOUT_NO_RESPONSE' })
             .mockRejectedValueOnce({ code: 'ERR_TIMEOUT_NO_RESPONSE' })
             .mockResolvedValueOnce({ success: true });
@@ -722,9 +788,13 @@ describe('Error Handling - Fallbacks', () => {
     it('should use fallback on error', async () => {
         const getDataWithFallback = async () => {
             try {
-                return await parley.send('getData', {}, {
-                    targetId: 'child'
-                });
+                return await parley.send(
+                    'getData',
+                    {},
+                    {
+                        targetId: 'child',
+                    }
+                );
             } catch (error) {
                 return { data: 'fallback' };
             }
@@ -740,35 +810,50 @@ describe('Error Handling - Fallbacks', () => {
 });
 ```
 
-For comprehensive testing strategies, see [Testing Patterns](../TESTING_PATTERNS.md). For testing error scenarios, see [Testing Error Scenarios](../TESTING_PATTERNS.md#error-scenarios).
+For comprehensive testing strategies, see
+[Testing Patterns](../TESTING_PATTERNS.md). For testing error scenarios, see
+[Testing Error Scenarios](../TESTING_PATTERNS.md#error-scenarios).
 
 ## Related Patterns
 
-- **[Request-Response Pattern](./request-response.md)** - Base pattern for sending requests
-- **[State Synchronization Pattern](./state-synchronization.md)** - Maintain consistency during errors
-- **Retry Pattern** - Detailed retry strategies (see [CODE_PATTERNS.md](../CODE_PATTERNS.md#retry-pattern))
+- **[Request-Response Pattern](./request-response.md)** - Base pattern for
+  sending requests
+- **[State Synchronization Pattern](./state-synchronization.md)** - Maintain
+  consistency during errors
+- **Retry Pattern** - Detailed retry strategies (see
+  [CODE_PATTERNS.md](../CODE_PATTERNS.md#retry-pattern))
 
 ## See Also
 
 **API Methods**:
-- [send()](../api-reference/methods.md#send) - Send messages with timeout configuration
+
+- [send()](../api-reference/methods.md#send) - Send messages with timeout
+  configuration
 - [onSystem()](../api-reference/methods.md#onsystem) - Listen for system errors
-- [System Events](../api-reference/system-events.md) - System event documentation
+- [System Events](../api-reference/system-events.md) - System event
+  documentation
 
 **Guides**:
-- [Troubleshooting](../troubleshooting/README.md) - Common issues and solutions
+
+- [Troubleshooting](../troubleshooting/index.md) - Common issues and solutions
 - [Common Errors](../troubleshooting/common-errors.md) - Quick error solutions
-- [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors) - Diagnose and fix timeouts
-- [Connection Errors](../troubleshooting/common-errors.md#channel-closed-errors) - Handle disconnections
+- [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors) -
+  Diagnose and fix timeouts
+- [Connection Errors](../troubleshooting/common-errors.md#channel-closed-errors) -
+  Handle disconnections
 - [Testing Guide](../TESTING.md) - Testing error scenarios
-- [iFrame Communication](../guides/iframe-communication.md) - Error handling in iframes
+- [iFrame Communication](../guides/iframe-communication.md) - Error handling in
+  iframes
 
 **Security**:
-- [Origin Validation](../security/origin-validation.md) - Security-related errors
-- [Message Validation](../security/message-validation.md) - Validation error handling
+
+- [Origin Validation](../security/origin-validation.md) - Security-related
+  errors
+- [Message Validation](../security/message-validation.md) - Validation error
+  handling
 
 ---
 
-**Previous**: [Request-Response Pattern](./request-response.md)
-**Next**: [State Synchronization Pattern](./state-synchronization.md)
-**Back to**: [Code Patterns](./README.md)
+**Previous**: [Request-Response Pattern](./request-response.md) **Next**:
+[State Synchronization Pattern](./state-synchronization.md) **Back to**:
+[Code Patterns](./index.md)

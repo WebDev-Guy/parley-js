@@ -32,7 +32,10 @@
         "test:run": "vitest run",
         "test:coverage": "vitest run --coverage",
         "test:watch": "vitest watch",
-        "test:debug": "vitest --inspect-brk --single-thread"
+        "test:debug": "vitest --inspect-brk --single-thread",
+        "docs:dev": "vitepress dev docs",
+        "docs:build": "vitepress build docs",
+        "docs:preview": "vitepress preview docs"
     },
     "keywords": [
         "postmessage",
@@ -52,9 +55,13 @@
         "prettier": "^3.7.3",
         "tsup": "^8.0.0",
         "typescript": "^5.3.0",
+        "vitepress": "^1.6.4",
         "vitest": "^4.0.15"
     },
     "engines": {
         "node": ">=20"
+    },
+    "overrides": {
+        "esbuild": "^0.25.0"
     }
 }

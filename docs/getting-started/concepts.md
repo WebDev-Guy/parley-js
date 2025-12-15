@@ -1,8 +1,9 @@
-[Home](../../README.md) > [Getting Started](./README.md) > Core Concepts
+[Home](../../index.md) > [Getting Started](./index.md) > Core Concepts
 
 # Core Concepts
 
-Understand the fundamental concepts behind ParleyJS and cross-window communication.
+Understand the fundamental concepts behind ParleyJS and cross-window
+communication.
 
 ## Table of Contents
 
@@ -19,7 +20,9 @@ Understand the fundamental concepts behind ParleyJS and cross-window communicati
 
 ## What is postMessage?
 
-The `postMessage` API is the browser's built-in method for secure cross-window communication. It allows different browsing contexts (windows, iframes, tabs) to exchange messages even across different origins.
+The `postMessage` API is the browser's built-in method for secure cross-window
+communication. It allows different browsing contexts (windows, iframes, tabs) to
+exchange messages even across different origins.
 
 ```javascript
 // Native postMessage usage
@@ -29,16 +32,21 @@ iframe.contentWindow.postMessage(
 );
 ```
 
-While powerful, the native API requires manual handling of message IDs, origin validation, timeout management, and error handling. This leads to repetitive boilerplate code in every project.
+While powerful, the native API requires manual handling of message IDs, origin
+validation, timeout management, and error handling. This leads to repetitive
+boilerplate code in every project.
 
 ---
 
 ## What ParleyJS Adds
 
-ParleyJS wraps `postMessage` with a robust framework that handles common challenges automatically:
+ParleyJS wraps `postMessage` with a robust framework that handles common
+challenges automatically:
 
-- **Automatic origin validation** - Messages from unauthorized origins are rejected
-- **Request-response pattern** - Built-in support for awaiting responses with timeouts
+- **Automatic origin validation** - Messages from unauthorized origins are
+  rejected
+- **Request-response pattern** - Built-in support for awaiting responses with
+  timeouts
 - **Type safety** - Full TypeScript support with generic message types
 - **Message handlers** - Register named handlers instead of parsing raw messages
 - **Schema validation** - Optional JSON Schema validation for message payloads
@@ -46,7 +54,8 @@ ParleyJS wraps `postMessage` with a robust framework that handles common challen
 - **Heartbeat monitoring** - Detect when connections are lost
 - **Broadcasting** - Send messages to multiple targets simultaneously
 
-You focus on your application logic while ParleyJS handles the communication infrastructure.
+You focus on your application logic while ParleyJS handles the communication
+infrastructure.
 
 ---
 
@@ -56,18 +65,18 @@ A channel represents a bidirectional communication link between two windows.
 
 ### Creating a Channel
 
-```typescript
+```javascript
 import { Parley } from 'parley-js';
 
 const parley = Parley.create({
     allowedOrigins: ['https://trusted-domain.com'],
-    timeout: 5000
+    timeout: 5000,
 });
 ```
 
 ### Connecting to a Target
 
-```typescript
+```javascript
 // Connect to an iframe
 const iframe = document.querySelector('#my-iframe');
 await parley.connect(iframe.contentWindow, 'child-frame');
@@ -80,31 +89,38 @@ await parley.connect(popup, 'popup-window');
 await parley.connect(window.parent, 'parent-window');
 ```
 
-Each connection is identified by a unique `targetId` that you provide. Use this ID when sending messages to specific targets.
+Each connection is identified by a unique `targetId` that you provide. Use this
+ID when sending messages to specific targets.
 
-For detailed connection examples, see [iFrame Communication Guide](../guides/iframe-communication.md) and [Popup Communication Guide](../guides/popup-communication.md).
+For detailed connection examples, see
+[iFrame Communication Guide](../guides/iframe-communication.md) and
+[Popup Communication Guide](../guides/popup-communication.md).
 
 ---
 
 ## Messages
 
-Messages are the data you send between windows. ParleyJS uses named message types with typed payloads.
+Messages are the data you send between windows. ParleyJS uses named message
+types with typed payloads.
 
 ### Registering Message Handlers
 
-```typescript
-parley.on<PayloadType>('message-type', (payload, respond, metadata) => {
-    // Process the message
-    console.log('Received:', payload);
+```javascript
+parley.on <
+    PayloadType >
+    ('message-type',
+    (payload, respond, metadata) => {
+        // Process the message
+        console.log('Received:', payload);
 
-    // Optionally send a response
-    respond({ success: true });
-});
+        // Optionally send a response
+        respond({ success: true });
+    });
 ```
 
 ### Sending Messages
 
-```typescript
+```javascript
 // Request-response (waits for reply)
 const response = await parley.send<RequestType, ResponseType>(
     'get-data',
@@ -120,46 +136,51 @@ await parley.send(
 );
 ```
 
-The message type name (like `'get-data'`) is arbitrary. Choose names that clearly describe the message purpose.
+The message type name (like `'get-data'`) is arbitrary. Choose names that
+clearly describe the message purpose.
 
-For message patterns and best practices, see [Request-Response Pattern](../patterns/request-response.md).
+For message patterns and best practices, see
+[Request-Response Pattern](../patterns/request-response.md).
 
 ---
 
 ## Origin Validation
 
-Origin validation is your first line of defense against malicious messages. ParleyJS validates that every message comes from an allowed origin.
+Origin validation is your first line of defense against malicious messages.
+ParleyJS validates that every message comes from an allowed origin.
 
 ### Configuring Allowed Origins
 
-```typescript
+```javascript
 const parley = Parley.create({
-    allowedOrigins: [
-        'https://trusted-domain.com',
-        'https://api.example.com'
-    ]
+    allowedOrigins: ['https://trusted-domain.com', 'https://api.example.com'],
 });
 ```
 
 ### Why Origin Validation Matters
 
-Without origin validation, any website could send messages to your application and potentially:
+Without origin validation, any website could send messages to your application
+and potentially:
 
 - Steal sensitive data by impersonating trusted sources
 - Trigger unauthorized actions in your application
 - Inject malicious content through message payloads
 
-ParleyJS rejects messages from origins not in your `allowedOrigins` list. This happens automatically before any of your handlers are called.
+ParleyJS rejects messages from origins not in your `allowedOrigins` list. This
+happens automatically before any of your handlers are called.
 
-**Important**: Never use wildcard origins (`['*']`) in production. Always specify exact origins including protocol and port.
+**Important**: Never use wildcard origins (`['*']`) in production. Always
+specify exact origins including protocol and port.
 
-For comprehensive security guidelines, see [Origin Validation Guide](../security/origin-validation.md).
+For comprehensive security guidelines, see
+[Origin Validation Guide](../security/origin-validation.md).
 
 ---
 
 ## Request-Response Pattern
 
-ParleyJS supports bidirectional request-response communication, similar to HTTP but for windows.
+ParleyJS supports bidirectional request-response communication, similar to HTTP
+but for windows.
 
 ### How It Works
 
@@ -171,10 +192,11 @@ When you send a message with `send()`, ParleyJS:
 4. Times out if no response is received
 5. Resolves the Promise when the response arrives
 
-```typescript
+```javascript
 // Sender
 try {
-    const response = await parley.send('calculate',
+    const response = await parley.send(
+        'calculate',
         { numbers: [1, 2, 3] },
         { targetId: 'worker', timeout: 3000 }
     );
@@ -184,7 +206,7 @@ try {
 }
 ```
 
-```typescript
+```javascript
 // Receiver
 parley.on('calculate', (payload, respond) => {
     const sum = payload.numbers.reduce((a, b) => a + b, 0);
@@ -192,19 +214,22 @@ parley.on('calculate', (payload, respond) => {
 });
 ```
 
-The `respond()` function sends the response back to the original sender. ParleyJS handles all the message ID tracking automatically.
+The `respond()` function sends the response back to the original sender.
+ParleyJS handles all the message ID tracking automatically.
 
-For advanced patterns including retry logic and timeout handling, see [Request-Response Pattern](../patterns/request-response.md).
+For advanced patterns including retry logic and timeout handling, see
+[Request-Response Pattern](../patterns/request-response.md).
 
 ---
 
 ## System Events
 
-System events notify you about connection lifecycle and internal operations. Use them for monitoring, logging, and analytics.
+System events notify you about connection lifecycle and internal operations. Use
+them for monitoring, logging, and analytics.
 
 ### Available System Events
 
-```typescript
+```javascript
 import { SYSTEM_EVENTS } from 'parley-js';
 
 // Connection lifecycle
@@ -239,9 +264,11 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
 });
 ```
 
-System events are prefixed with `system:` to avoid conflicts with your custom message types.
+System events are prefixed with `system:` to avoid conflicts with your custom
+message types.
 
-For complete system event documentation, see [System Events Reference](../api-reference/system-events.md).
+For complete system event documentation, see
+[System Events Reference](../api-reference/system-events.md).
 
 ---
 
@@ -250,36 +277,52 @@ For complete system event documentation, see [System Events Reference](../api-re
 Understanding these terms will help you work effectively with ParleyJS:
 
 ### Channel
-A bidirectional communication link between two windows. Created with `Parley.create()`.
+
+A bidirectional communication link between two windows. Created with
+`Parley.create()`.
 
 ### Target
-The window, iframe, or popup you want to communicate with. Identified by a unique `targetId`.
+
+The window, iframe, or popup you want to communicate with. Identified by a
+unique `targetId`.
 
 ### Origin
-The protocol, host, and port of a window's URL (e.g., `https://example.com:443`). Used for security validation.
+
+The protocol, host, and port of a window's URL (e.g.,
+`https://example.com:443`). Used for security validation.
 
 ### Message Type
-A string identifier for a category of messages (e.g., `'get-user'`, `'update-data'`). You define these names.
+
+A string identifier for a category of messages (e.g., `'get-user'`,
+`'update-data'`). You define these names.
 
 ### Payload
+
 The data object sent with a message. Must be JSON-serializable.
 
 ### Handler
-A function that processes incoming messages of a specific type. Registered with `parley.on()`.
+
+A function that processes incoming messages of a specific type. Registered with
+`parley.on()`.
 
 ### Request-Response
+
 A messaging pattern where the sender waits for a reply from the receiver.
 
 ### Fire-and-Forget
+
 A messaging pattern where the sender doesn't expect or wait for a response.
 
 ### Heartbeat
+
 Periodic ping messages sent to verify a connection is still alive.
 
 ### Schema
+
 A JSON Schema definition that validates message payload structure.
 
 ### System Event
+
 Internal events emitted by ParleyJS for monitoring lifecycle and operations.
 
 ---
@@ -289,14 +332,15 @@ Internal events emitted by ParleyJS for monitoring lifecycle and operations.
 Now that you understand the core concepts:
 
 1. **[First Example](./first-example.md)** - Build a working example
-2. **[API Reference](../api-reference/README.md)** - Explore all available methods
-3. **[Code Patterns](../patterns/README.md)** - Learn proven messaging patterns
-4. **[Security Guide](../security/README.md)** - Understand security best practices
+2. **[API Reference](../api-reference/index.md)** - Explore all available
+   methods
+3. **[Code Patterns](../patterns/index.md)** - Learn proven messaging patterns
+4. **[Security Guide](../security/index.md)** - Understand security best
+   practices
 
 For real-world examples, see [Code Examples](../EXAMPLES.md).
 
 ---
 
-**Previous**: [Installation](./installation.md)
-**Next**: [First Example](./first-example.md)
-**Back to**: [Getting Started](./README.md)
+**Previous**: [Installation](./installation.md) **Next**:
+[First Example](./first-example.md) **Back to**: [Getting Started](./index.md)

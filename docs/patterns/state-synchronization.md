@@ -1,8 +1,11 @@
-[Home](../../README.md) > [Code Patterns](./README.md) > State Synchronization Pattern
+[Home](../../index.md) > [Code Patterns](./index.md) > State Synchronization
+Pattern
 
 # State Synchronization Pattern
 
-The state synchronization pattern enables multiple windows to maintain consistent shared state by automatically propagating state changes between windows.
+The state synchronization pattern enables multiple windows to maintain
+consistent shared state by automatically propagating state changes between
+windows.
 
 ## Table of Contents
 
@@ -18,37 +21,47 @@ The state synchronization pattern enables multiple windows to maintain consisten
 
 ## Problem This Solves
 
-When multiple windows need to share application state (user preferences, UI state, data), manually keeping them in sync is error-prone. State can become inconsistent if updates are lost, arrive out of order, or conflict with concurrent changes.
+When multiple windows need to share application state (user preferences, UI
+state, data), manually keeping them in sync is error-prone. State can become
+inconsistent if updates are lost, arrive out of order, or conflict with
+concurrent changes.
 
-The state synchronization pattern solves this by providing automatic state propagation and consistency mechanisms. When state changes in one window, all other windows receive the update and update their local state accordingly.
+The state synchronization pattern solves this by providing automatic state
+propagation and consistency mechanisms. When state changes in one window, all
+other windows receive the update and update their local state accordingly.
 
 ## When to Use It
 
 Use state synchronization when:
+
 - Multiple windows display the same data and need to stay in sync
 - User actions in one window should reflect in all windows
 - Sharing configuration or preferences across windows
 - Building collaborative features where users see real-time updates
 - State changes need to persist across window reloads or reconnections
 
-This pattern is essential for multi-window applications, dashboard widgets, and collaborative tools.
+This pattern is essential for multi-window applications, dashboard widgets, and
+collaborative tools.
 
 ## When NOT to Use It
 
 Avoid state synchronization when:
+
 - State is local to one window and doesn't need sharing
 - Windows are independent and don't need coordination
 - State changes are too frequent (causes performance issues)
 - State is too large to transmit efficiently
 - Simple one-way data flow is sufficient
 
-For simple parent-to-child configuration, use request-response instead of full synchronization.
+For simple parent-to-child configuration, use request-response instead of full
+synchronization.
 
 ## Code Example
 
 ### Basic State Synchronization
 
 **Shared State Class**:
+
 ```javascript
 import { Parley } from 'parley-js';
 
@@ -85,7 +98,7 @@ class SyncedState {
         // Broadcast to all connected windows
         await this.parley.broadcast('state:update', {
             updates,
-            timestamp: Date.now()
+            timestamp: Date.now(),
         });
     }
 
@@ -114,7 +127,7 @@ class SyncedState {
      * Notify all listeners of state change
      */
     notifyListeners(newState, oldState) {
-        this.listeners.forEach(listener => {
+        this.listeners.forEach((listener) => {
             try {
                 listener(newState, oldState);
             } catch (error) {
@@ -126,7 +139,7 @@ class SyncedState {
 
 // Usage in parent window
 const parley = Parley.create({
-    allowedOrigins: [window.location.origin]
+    allowedOrigins: [window.location.origin],
 });
 
 await parley.connect(iframe, 'child');
@@ -134,7 +147,7 @@ await parley.connect(iframe, 'child');
 const appState = new SyncedState(parley, {
     theme: 'light',
     user: null,
-    notifications: []
+    notifications: [],
 });
 
 // Subscribe to state changes
@@ -149,14 +162,14 @@ appState.subscribe((newState, oldState) => {
 
 // Update state (broadcasts to all windows)
 await appState.setState({
-    theme: 'dark'
+    theme: 'dark',
 });
 
 // Usage in child window
 const childState = new SyncedState(childParley, {
     theme: 'light',
     user: null,
-    notifications: []
+    notifications: [],
 });
 
 childState.subscribe((newState) => {
@@ -168,6 +181,7 @@ childState.subscribe((newState) => {
 ### Redux-Style Store Synchronization
 
 **Synchronized Redux Store**:
+
 ```javascript
 class SyncedStore {
     constructor(parley, reducer, initialState = {}) {
@@ -192,12 +206,12 @@ class SyncedStore {
         this.state = this.reducer(this.state, action);
 
         // Notify listeners
-        this.listeners.forEach(listener => listener(this.state, action));
+        this.listeners.forEach((listener) => listener(this.state, action));
 
         // Broadcast action to other windows
         await this.parley.broadcast('store:action', {
             action,
-            timestamp: Date.now()
+            timestamp: Date.now(),
         });
 
         return this.state;
@@ -209,7 +223,7 @@ class SyncedStore {
         this.state = this.reducer(this.state, action);
 
         // Notify listeners (don't broadcast - already received)
-        this.listeners.forEach(listener => listener(this.state, action));
+        this.listeners.forEach((listener) => listener(this.state, action));
     }
 
     subscribe(listener) {
@@ -230,7 +244,7 @@ function appReducer(state, action) {
         case 'ADD_NOTIFICATION':
             return {
                 ...state,
-                notifications: [...state.notifications, action.payload]
+                notifications: [...state.notifications, action.payload],
             };
 
         case 'CLEAR_NOTIFICATIONS':
@@ -245,7 +259,7 @@ function appReducer(state, action) {
 const store = new SyncedStore(parley, appReducer, {
     user: null,
     theme: 'light',
-    notifications: []
+    notifications: [],
 });
 
 store.subscribe((state, action) => {
@@ -256,18 +270,19 @@ store.subscribe((state, action) => {
 // Dispatch actions (synchronized across windows)
 await store.dispatch({
     type: 'SET_USER',
-    payload: { id: 123, name: 'John' }
+    payload: { id: 123, name: 'John' },
 });
 
 await store.dispatch({
     type: 'SET_THEME',
-    payload: 'dark'
+    payload: 'dark',
 });
 ```
 
 ### Optimistic Updates with Conflict Resolution
 
 **Handle Concurrent Updates**:
+
 ```javascript
 class OptimisticSyncedState {
     constructor(parley, initialState = {}) {
@@ -302,7 +317,7 @@ class OptimisticSyncedState {
             await this.parley.broadcast('state:update', {
                 updates,
                 version: this.version,
-                timestamp: Date.now()
+                timestamp: Date.now(),
             });
         } catch (error) {
             // Rollback on failure
@@ -354,7 +369,7 @@ class OptimisticSyncedState {
     }
 
     notifyListeners(newState, oldState) {
-        this.listeners.forEach(listener => {
+        this.listeners.forEach((listener) => {
             try {
                 listener(newState, oldState);
             } catch (error) {
@@ -367,7 +382,7 @@ class OptimisticSyncedState {
 // Usage
 const state = new OptimisticSyncedState(parley, {
     counter: 0,
-    text: ''
+    text: '',
 });
 
 state.subscribe((newState) => {
@@ -384,6 +399,7 @@ await state.setState(
 ### Partial State Synchronization
 
 **Sync Only Specific State Slices**:
+
 ```javascript
 class SlicedSyncedState {
     constructor(parley, config = {}) {
@@ -393,7 +409,7 @@ class SlicedSyncedState {
         this.listeners = new Map();
 
         // Listen for updates to synced keys
-        this.syncedKeys.forEach(key => {
+        this.syncedKeys.forEach((key) => {
             this.parley.on(`state:${key}`, (payload) => {
                 this.updateSlice(key, payload.value);
             });
@@ -414,13 +430,13 @@ class SlicedSyncedState {
 
         // Notify listeners for this key
         const keyListeners = this.listeners.get(key) || new Set();
-        keyListeners.forEach(listener => listener(value, oldValue));
+        keyListeners.forEach((listener) => listener(value, oldValue));
 
         // Broadcast if key is synced
         if (this.syncedKeys.has(key)) {
             await this.parley.broadcast(`state:${key}`, {
                 value,
-                timestamp: Date.now()
+                timestamp: Date.now(),
             });
         }
     }
@@ -431,7 +447,7 @@ class SlicedSyncedState {
 
         // Notify listeners
         const keyListeners = this.listeners.get(key) || new Set();
-        keyListeners.forEach(listener => listener(value, oldValue));
+        keyListeners.forEach((listener) => listener(value, oldValue));
     }
 
     subscribe(key, listener) {
@@ -453,11 +469,11 @@ class SlicedSyncedState {
 // Usage
 const state = new SlicedSyncedState(parley, {
     initialState: {
-        theme: 'light',      // synced
-        user: null,          // synced
-        localCache: {}       // not synced
+        theme: 'light', // synced
+        user: null, // synced
+        localCache: {}, // not synced
     },
-    syncedKeys: ['theme', 'user'] // Only these keys sync
+    syncedKeys: ['theme', 'user'], // Only these keys sync
 });
 
 // Subscribe to specific state slices
@@ -482,44 +498,53 @@ await state.setValue('localCache', { data: '...' });
 
 ### How State Synchronization Works
 
-1. **Local Update**: When setState() is called, the state is updated locally first for immediate UI response.
+1. **Local Update**: When setState() is called, the state is updated locally
+   first for immediate UI response.
 
-2. **Broadcast**: The state change is broadcast to all connected windows via ParleyJS.
+2. **Broadcast**: The state change is broadcast to all connected windows via
+   ParleyJS.
 
 3. **Remote Receive**: Other windows receive the state update message.
 
 4. **Remote Apply**: Each window applies the update to its local state.
 
-5. **Notify Listeners**: Listeners in each window are notified of the state change.
+5. **Notify Listeners**: Listeners in each window are notified of the state
+   change.
 
-This ensures all windows maintain consistent state while providing immediate feedback for the user who initiated the change.
+This ensures all windows maintain consistent state while providing immediate
+feedback for the user who initiated the change.
 
 ### Why This Pattern Works
 
 State synchronization provides:
+
 - **Consistency**: All windows see the same state at any given time
 - **Reactivity**: UI updates automatically when state changes
 - **Optimistic updates**: Changes appear instant to the user
 - **Decoupling**: Components subscribe to state without knowing about messaging
 
-This creates a seamless multi-window experience where changes in one window instantly reflect everywhere.
+This creates a seamless multi-window experience where changes in one window
+instantly reflect everywhere.
 
 ### Conflict Resolution Strategies
 
-When multiple windows update state simultaneously, conflicts can occur. Common resolution strategies:
+When multiple windows update state simultaneously, conflicts can occur. Common
+resolution strategies:
 
 1. **Last-Write-Wins**: Most recent update wins (use timestamps)
 2. **Version Numbers**: Higher version number wins
 3. **Operational Transformation**: Merge concurrent changes intelligently
 4. **Manual Resolution**: Prompt user to resolve conflicts
 
-Choose the strategy based on your application's needs and the nature of the state being synchronized.
+Choose the strategy based on your application's needs and the nature of the
+state being synchronized.
 
 ## Common Variations
 
 ### Variation 1: Debounced Synchronization
 
 **Reduce Update Frequency**:
+
 ```javascript
 class DebouncedSyncedState {
     constructor(parley, initialState = {}, debounceMs = 300) {
@@ -563,7 +588,7 @@ class DebouncedSyncedState {
 
         await this.parley.broadcast('state:update', {
             updates,
-            timestamp: Date.now()
+            timestamp: Date.now(),
         });
     }
 
@@ -579,14 +604,18 @@ class DebouncedSyncedState {
     }
 
     notifyListeners(newState, oldState) {
-        this.listeners.forEach(listener => listener(newState, oldState));
+        this.listeners.forEach((listener) => listener(newState, oldState));
     }
 }
 
 // Usage - high-frequency updates are batched
-const state = new DebouncedSyncedState(parley, {
-    scrollY: 0
-}, 300);
+const state = new DebouncedSyncedState(
+    parley,
+    {
+        scrollY: 0,
+    },
+    300
+);
 
 window.addEventListener('scroll', () => {
     // Updates every frame but only broadcasts every 300ms
@@ -594,17 +623,22 @@ window.addEventListener('scroll', () => {
 });
 ```
 
-Debouncing is essential for high-frequency updates like scroll events. For more performance optimization strategies, see [Performance Issues troubleshooting](../troubleshooting/common-errors.md#performance-issues).
+Debouncing is essential for high-frequency updates like scroll events. For more
+performance optimization strategies, see
+[Performance Issues troubleshooting](../troubleshooting/common-errors.md#performance-issues).
 
 ### Variation 2: State Persistence
 
 **Persist State to localStorage**:
+
 ```javascript
 class PersistedSyncedState extends SyncedState {
     constructor(parley, initialState = {}, storageKey = 'appState') {
         // Load from localStorage
         const savedState = localStorage.getItem(storageKey);
-        const persistedState = savedState ? JSON.parse(savedState) : initialState;
+        const persistedState = savedState
+            ? JSON.parse(savedState)
+            : initialState;
 
         super(parley, persistedState);
 
@@ -624,15 +658,20 @@ class PersistedSyncedState extends SyncedState {
 }
 
 // Usage - state persists across page reloads
-const state = new PersistedSyncedState(parley, {
-    theme: 'light',
-    preferences: {}
-}, 'myApp:state');
+const state = new PersistedSyncedState(
+    parley,
+    {
+        theme: 'light',
+        preferences: {},
+    },
+    'myApp:state'
+);
 ```
 
 ### Variation 3: Selective Updates
 
 **Only Sync Changed Values**:
+
 ```javascript
 class DiffSyncedState extends SyncedState {
     async setState(updates) {
@@ -657,13 +696,18 @@ class DiffSyncedState extends SyncedState {
         // Broadcast only changed values
         await this.parley.broadcast('state:update', {
             updates: changes,
-            timestamp: Date.now()
+            timestamp: Date.now(),
         });
     }
 }
 ```
 
-For broadcasting state updates to multiple windows, see [Multi-Window Communication](../guides/multi-window-communication.md). For broadcast() API details, see [broadcast() method](../api-reference/methods.md#broadcast). For error handling when state updates fail, see [Error Handling: Rollback Pattern](./error-handling.md#fallback-pattern).
+For broadcasting state updates to multiple windows, see
+[Multi-Window Communication](../guides/multi-window-communication.md). For
+broadcast() API details, see
+[broadcast() method](../api-reference/methods.md#broadcast). For error handling
+when state updates fail, see
+[Error Handling: Rollback Pattern](./error-handling.md#fallback-pattern).
 
 ## Testing
 
@@ -677,7 +721,7 @@ import { describe, it, expect, vi } from 'vitest';
 describe('State Synchronization', () => {
     it('should update state locally', () => {
         const parley = Parley.create({
-            allowedOrigins: [window.location.origin]
+            allowedOrigins: [window.location.origin],
         });
 
         const state = new SyncedState(parley, { count: 0 });
@@ -689,7 +733,7 @@ describe('State Synchronization', () => {
 
     it('should notify listeners on state change', () => {
         const parley = Parley.create({
-            allowedOrigins: [window.location.origin]
+            allowedOrigins: [window.location.origin],
         });
 
         const state = new SyncedState(parley, { count: 0 });
@@ -699,15 +743,12 @@ describe('State Synchronization', () => {
 
         state.setState({ count: 5 });
 
-        expect(listener).toHaveBeenCalledWith(
-            { count: 5 },
-            { count: 0 }
-        );
+        expect(listener).toHaveBeenCalledWith({ count: 5 }, { count: 0 });
     });
 
     it('should broadcast state updates', async () => {
         const parley = Parley.create({
-            allowedOrigins: [window.location.origin]
+            allowedOrigins: [window.location.origin],
         });
 
         const broadcastSpy = vi.spyOn(parley, 'broadcast');
@@ -719,14 +760,14 @@ describe('State Synchronization', () => {
         expect(broadcastSpy).toHaveBeenCalledWith(
             'state:update',
             expect.objectContaining({
-                updates: { count: 5 }
+                updates: { count: 5 },
             })
         );
     });
 
     it('should handle remote updates', () => {
         const parley = Parley.create({
-            allowedOrigins: [window.location.origin]
+            allowedOrigins: [window.location.origin],
         });
 
         const state = new SyncedState(parley, { count: 0 });
@@ -743,32 +784,40 @@ describe('State Synchronization', () => {
 });
 ```
 
-For comprehensive testing strategies, see [Testing Patterns](../TESTING_PATTERNS.md).
+For comprehensive testing strategies, see
+[Testing Patterns](../TESTING_PATTERNS.md).
 
 ## Related Patterns
 
 - **[Request-Response Pattern](./request-response.md)** - One-time state queries
 - **[Error Handling Pattern](./error-handling.md)** - Handle sync failures
-- **Event Emitter Pattern** - Event-based updates (see [CODE_PATTERNS.md](../CODE_PATTERNS.md#event-emitter-pattern))
+- **Event Emitter Pattern** - Event-based updates (see
+  [CODE_PATTERNS.md](../CODE_PATTERNS.md#event-emitter-pattern))
 
 ## See Also
 
 **API Methods**:
-- [broadcast()](../api-reference/methods.md#broadcast) - Broadcast state updates to all windows
+
+- [broadcast()](../api-reference/methods.md#broadcast) - Broadcast state updates
+  to all windows
 - [on()](../api-reference/methods.md#on) - Listen for state update messages
-- [send()](../api-reference/methods.md#send) - Request initial state from other windows
+- [send()](../api-reference/methods.md#send) - Request initial state from other
+  windows
 
 **Guides**:
-- [Multi-Window Communication](../guides/multi-window-communication.md) - Coordinate multiple windows
-- [iFrame Communication](../guides/iframe-communication.md) - Sync state with iframes
+
+- [Multi-Window Communication](../guides/multi-window-communication.md) -
+  Coordinate multiple windows
+- [iFrame Communication](../guides/iframe-communication.md) - Sync state with
+  iframes
 - [Examples](../EXAMPLES.md) - State synchronization examples
 
 **Advanced Topics**:
-- [Performance](../performance/README.md) - Optimize state sync performance
+
+- [Performance](../performance/index.md) - Optimize state sync performance
 - [Testing Guide](../TESTING.md) - Test synchronized state
 
 ---
 
-**Previous**: [Error Handling Pattern](./error-handling.md)
-**Next**: [Code Patterns Overview](./README.md)
-**Back to**: [Code Patterns](./README.md)
+**Previous**: [Error Handling Pattern](./error-handling.md) **Next**:
+[Code Patterns Overview](./index.md) **Back to**: [Code Patterns](./index.md)

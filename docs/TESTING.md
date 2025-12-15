@@ -1,4 +1,4 @@
-[Home](../README.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Testing Guide
+[Home](./index.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Testing Guide
 
 # Testing Guide
 
@@ -6,7 +6,8 @@ Parley-js maintains **85%+ test coverage** with comprehensive unit, integration,
 and security tests using
 <a href="https://vitest.dev/" target="_blank">Vitest</a>.
 
-For testing patterns and strategies, see [Testing Patterns](./TESTING_PATTERNS.md).
+For testing patterns and strategies, see
+[Testing Patterns](./TESTING_PATTERNS.md).
 
 ## Table of Contents
 
@@ -1053,4 +1054,4 @@ please open an issue in the repository.
 - [Examples](./EXAMPLES.md) - Examples to test
 - [Contributing](../CONTRIBUTING.md) - Contributing tests
 
-**Back to**: [Documentation Home](../README.md)
+**Back to**: [Documentation Home](./index.md)

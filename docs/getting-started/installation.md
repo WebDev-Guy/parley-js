@@ -1,4 +1,4 @@
-[Home](../../README.md) > [Getting Started](./README.md) > Installation
+[Home](../../index.md) > [Getting Started](./index.md) > Installation
 
 # Installing ParleyJS
 
@@ -25,7 +25,8 @@ Before installing ParleyJS, ensure your environment meets these requirements:
 - **Package Manager**: npm, yarn, or pnpm
 - **Browser Support**: Chrome 80+, Firefox 80+, Safari 13.1+, Edge 80+
 
-ParleyJS has zero dependencies and works with any modern JavaScript framework or vanilla JavaScript.
+ParleyJS has zero dependencies and works with any modern JavaScript framework or
+vanilla JavaScript.
 
 ---
 
@@ -37,7 +38,8 @@ Install ParleyJS using npm:
 npm install parley-js
 ```
 
-This downloads the latest stable version and adds it to your `package.json` dependencies.
+This downloads the latest stable version and adds it to your `package.json`
+dependencies.
 
 ---
 
@@ -74,30 +76,29 @@ For quick prototyping or non-bundled projects, use the CDN version:
 <script>
     // ParleyJS is available as global "Parley"
     const parley = Parley.create({
-        allowedOrigins: ['https://example.com']
+        allowedOrigins: ['https://example.com'],
     });
 </script>
 ```
 
-The CDN version exposes `Parley` as a global variable. All exports are available on the `Parley` object.
+The CDN version exposes `Parley` as a global variable. All exports are available
+on the `Parley` object.
 
-**Note**: For production applications, use a package manager installation for better security and control over versions.
+**Note**: For production applications, use a package manager installation for
+better security and control over versions.
 
 ---
 
 ## TypeScript Support
 
-ParleyJS includes complete TypeScript definitions. No additional type packages are needed.
+ParleyJS includes complete TypeScript definitions. No additional type packages
+are needed.
 
 ### Import Types
 
 ```typescript
 import { Parley, SYSTEM_EVENTS } from 'parley-js';
-import type {
-    ParleyConfig,
-    MessageHandler,
-    SendOptions
-} from 'parley-js';
+import type { ParleyConfig, MessageHandler, SendOptions } from 'parley-js';
 ```
 
 ### Generic Types for Messages
@@ -127,7 +128,9 @@ const response = await parley.send<UserData, UserResponse>(
 console.log(response.user.name);
 ```
 
-ParleyJS works seamlessly with TypeScript projects. All types are exported from the main package, and generic message types provide full type safety for your communication layer.
+ParleyJS works seamlessly with TypeScript projects. All types are exported from
+the main package, and generic message types provide full type safety for your
+communication layer.
 
 ---
 
@@ -139,13 +142,13 @@ After installation, verify ParleyJS works correctly:
 
 Create `test-parley.js` (or `.ts` for TypeScript):
 
-```javascript
+```typescript
 import { Parley, SYSTEM_EVENTS } from 'parley-js';
 
 // Create a ParleyJS instance
 const parley = Parley.create({
     allowedOrigins: [window.location.origin],
-    debug: true
+    debug: true,
 });
 
 console.log('ParleyJS installed successfully!');
@@ -155,16 +158,19 @@ console.log('Available system events:', Object.keys(SYSTEM_EVENTS));
 ### Run the Test
 
 **In Node.js** (for testing import):
+
 ```bash
 node test-parley.js
 ```
 
 **In Browser** (for full functionality):
+
 ```html
 <script type="module" src="test-parley.js"></script>
 ```
 
-If you see "ParleyJS installed successfully!" without errors, the installation is complete.
+If you see "ParleyJS installed successfully!" without errors, the installation
+is complete.
 
 ---
 
@@ -172,14 +178,16 @@ If you see "ParleyJS installed successfully!" without errors, the installation i
 
 Now that ParleyJS is installed, learn how to use it:
 
-1. **[First Example](./first-example.md)** - Build your first cross-window communication
+1. **[First Example](./first-example.md)** - Build your first cross-window
+   communication
 2. **[Core Concepts](./concepts.md)** - Understand ParleyJS fundamentals
-3. **[API Reference](../api-reference/README.md)** - Explore available methods and options
+3. **[API Reference](../api-reference/index.md)** - Explore available methods
+   and options
 
-For framework-specific integration guides, see [Integration Guides](../guides/README.md).
+For framework-specific integration guides, see
+[Integration Guides](../guides/index.md).
 
 ---
 
-**Previous**: [Getting Started](./README.md)
-**Next**: [First Example](./first-example.md)
-**Back to**: [Getting Started](./README.md)
+**Previous**: [Getting Started](./index.md) **Next**:
+[First Example](./first-example.md) **Back to**: [Getting Started](./index.md)

@@ -1,10 +1,12 @@
-[Home](../README.md) > [Documentation](./README.md) > Framework Reference
+[Home](./index.md) > [Documentation](./index.md) > Framework Reference
 
 # ParleyJS Framework Reference
 
-Quick reference guide for ParleyJS. For complete details, see [API.md](./API.md).
+Quick reference guide for ParleyJS. For complete details, see
+[API.md](./API.md).
 
 ## Table of Contents
+
 1. [Core Concepts](#core-concepts)
 2. [Quick Start](#quick-start)
 3. [Common Patterns](#common-patterns)
@@ -14,13 +16,16 @@ Quick reference guide for ParleyJS. For complete details, see [API.md](./API.md)
 ## Core Concepts
 
 ### What is ParleyJS?
+
 ParleyJS simplifies `window.postMessage()` communication between:
+
 - Parent and child windows (popups)
 - Parent and iframes
 - Workers and main thread
 - Multiple window contexts
 
 It provides:
+
 - Type-safe message handling
 - Automatic origin validation
 - Promise-based request-response patterns
@@ -29,17 +34,18 @@ It provides:
 
 ### Key Terminology
 
-**Channel**: Bidirectional communication endpoint
-**Message Handler**: Function that receives and processes messages
-**Origin**: The scheme + host + port of a window (e.g., 'https://example.com')
-**Request-Response**: Pattern where you send a message and wait for a reply
+**Channel**: Bidirectional communication endpoint **Message Handler**: Function
+that receives and processes messages **Origin**: The scheme + host + port of a
+window (e.g., 'https://example.com') **Request-Response**: Pattern where you
+send a message and wait for a reply
 
 ## Quick Start
 
 ### Creating a Connection
 
 **Parent Window:**
-```typescript
+
+```javascript
 import { Parley } from 'parley-js';
 
 const parley = Parley.create({
@@ -52,7 +58,8 @@ await parley.connect(iframe, 'child');
 ```
 
 **Child Window (Iframe):**
-```typescript
+
+```javascript
 import { Parley } from 'parley-js';
 
 const parley = Parley.create({
@@ -66,41 +73,59 @@ await parley.connect(window.parent, 'parent');
 ### Sending Messages
 
 **Fire-and-forget:**
-```typescript
-await parley.send('notification', { message: 'Hello!' }, {
-    targetId: 'child',
-    expectsResponse: false
-});
+
+```javascript
+await parley.send(
+    'notification',
+    { message: 'Hello!' },
+    {
+        targetId: 'child',
+        expectsResponse: false,
+    }
+);
 ```
 
 **Request-Response:**
-```typescript
-const response = await parley.send('get-data', { id: 123 }, {
-    targetId: 'child'
-});
+
+```javascript
+const response = await parley.send(
+    'get-data',
+    { id: 123 },
+    {
+        targetId: 'child',
+    }
+);
 console.log(response);
 ```
 
 ### Receiving Messages
 
 **Register a handler:**
-```typescript
-parley.on<{ message: string }>('notification', (payload, respond) => {
-    console.log(payload.message);
-    // Optionally respond
-    respond({ received: true });
-});
+
+```javascript
+parley.on <
+    { message: string } >
+    ('notification',
+    (payload, respond) => {
+        console.log(payload.message);
+        // Optionally respond
+        respond({ received: true });
+    });
 ```
 
 ## Common Patterns
 
 ### Pattern: Request-Response
 
-```typescript
+```javascript
 // Sender
-const result = await parley.send('calculate', { a: 5, b: 3 }, {
-    targetId: 'child'
-});
+const result = await parley.send(
+    'calculate',
+    { a: 5, b: 3 },
+    {
+        targetId: 'child',
+    }
+);
 
 // Receiver
 parley.on('calculate', (payload, respond) => {
@@ -110,12 +135,16 @@ parley.on('calculate', (payload, respond) => {
 
 ### Pattern: Event Notification
 
-```typescript
+```javascript
 // Sender
-await parley.send('user-action', { action: 'click' }, {
-    targetId: 'child',
-    expectsResponse: false
-});
+await parley.send(
+    'user-action',
+    { action: 'click' },
+    {
+        targetId: 'child',
+        expectsResponse: false,
+    }
+);
 
 // Receiver
 parley.on('user-action', (payload) => {
@@ -125,11 +154,11 @@ parley.on('user-action', (payload) => {
 
 ### Pattern: Broadcasting
 
-```typescript
+```javascript
 // Send to all connected targets
 await parley.broadcast('config-update', {
     theme: 'dark',
-    language: 'en'
+    language: 'en',
 });
 ```
 
@@ -137,11 +166,11 @@ await parley.broadcast('config-update', {
 
 ### Try-Catch Pattern
 
-```typescript
+```javascript
 try {
     const response = await parley.send('risky-operation', data, {
         targetId: 'child',
-        timeout: 5000
+        timeout: 5000,
     });
 } catch (error) {
     if (error instanceof TimeoutError) {
@@ -168,17 +197,19 @@ try {
 Always specify exact origins. Never use wildcards in production.
 
 **Correct:**
-```typescript
+
+```javascript
 const parley = Parley.create({
     allowedOrigins: ['https://trusted-domain.com'],
 });
 ```
 
 **Dangerous:**
-```typescript
+
+```javascript
 // WRONG - Don't do this!
 const parley = Parley.create({
-    allowedOrigins: ['*'],  // Accepts messages from ANY origin
+    allowedOrigins: ['*'], // Accepts messages from ANY origin
 });
 ```
 
@@ -186,7 +217,7 @@ const parley = Parley.create({
 
 Always validate incoming data:
 
-```typescript
+```javascript
 parley.on('user-data', (payload, respond) => {
     // Validate structure
     if (!payload.id || typeof payload.id !== 'string') {
@@ -206,6 +237,7 @@ parley.on('user-data', (payload, respond) => {
 ### What NOT to Send
 
 Never send through postMessage:
+
 - Passwords or secrets
 - API keys or tokens
 - Personal identifying information (PII)
@@ -214,22 +246,22 @@ Never send through postMessage:
 
 ## Configuration Options
 
-```typescript
+```javascript
 Parley.create({
     // Security (required)
     allowedOrigins: ['https://trusted.com'],
 
     // Timeouts
-    timeout: 5000,              // Default timeout in ms
-    retries: 2,                 // Number of retries
+    timeout: 5000, // Default timeout in ms
+    retries: 2, // Number of retries
 
     // Debugging
-    debug: true,                // Enable debug logging
-    logLevel: 'debug',          // 'debug' | 'info' | 'warn' | 'error'
+    debug: true, // Enable debug logging
+    logLevel: 'debug', // 'debug' | 'info' | 'warn' | 'error'
 
     // Advanced
-    instanceId: 'my-instance',  // Custom instance ID
-    validateMessages: true      // Enable schema validation
+    instanceId: 'my-instance', // Custom instance ID
+    validateMessages: true, // Enable schema validation
 });
 ```
 
@@ -237,7 +269,7 @@ Parley.create({
 
 Monitor connection and message events:
 
-```typescript
+```javascript
 import { SYSTEM_EVENTS } from 'parley-js';
 
 // Connection events
@@ -277,8 +309,9 @@ parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
 ### Navigation
 
 **See Also**:
+
 - [Complete API Reference](./API.md)
 - [Security Best Practices](./SECURITY.md)
 - [Code Examples](./EXAMPLES.md)
 
-**Back to**: [Documentation Home](../README.md)
+**Back to**: [Documentation Home](./index.md)

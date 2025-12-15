@@ -1,8 +1,10 @@
-[Home](../../README.md) > [Documentation](../README.md) > [Guides](./README.md) > Micro-Frontend Architecture
+[Home](../../index.md) > [Documentation](./index.md) > [Guides](./index.md) >
+Micro-Frontend Architecture
 
 # ParleyJS in Micro-Frontend Architectures
 
-Learn how to use ParleyJS to enable communication in micro-frontend architectures.
+Learn how to use ParleyJS to enable communication in micro-frontend
+architectures.
 
 ## Table of Contents
 
@@ -20,17 +22,23 @@ Learn how to use ParleyJS to enable communication in micro-frontend architecture
 
 ## What are Micro-Frontends?
 
-Micro-frontends extend the microservices concept to frontend development. The application is divided into smaller, independent modules that can be developed, tested, and deployed separately.
+Micro-frontends extend the microservices concept to frontend development. The
+application is divided into smaller, independent modules that can be developed,
+tested, and deployed separately.
 
 ### Key Characteristics
 
-**Independent Development**: Each micro-frontend is owned by a separate team with its own codebase.
+**Independent Development**: Each micro-frontend is owned by a separate team
+with its own codebase.
 
-**Technology Agnostic**: Different modules can use different frameworks (React, Vue, Angular, etc.).
+**Technology Agnostic**: Different modules can use different frameworks (React,
+Vue, Angular, etc.).
 
-**Isolated Deployment**: Teams can deploy their modules independently without coordinating releases.
+**Isolated Deployment**: Teams can deploy their modules independently without
+coordinating releases.
 
-**Runtime Integration**: Modules are composed at runtime, typically using iframes or module federation.
+**Runtime Integration**: Modules are composed at runtime, typically using
+iframes or module federation.
 
 ### Common Use Cases
 
@@ -43,11 +51,13 @@ Micro-frontends extend the microservices concept to frontend development. The ap
 
 ## ParleyJS Role in Micro-Frontends
 
-ParleyJS solves the communication challenges inherent in micro-frontend architectures.
+ParleyJS solves the communication challenges inherent in micro-frontend
+architectures.
 
 ### Communication Challenges
 
-When modules run in separate iframes or windows, they need secure communication for:
+When modules run in separate iframes or windows, they need secure communication
+for:
 
 - Sharing authentication state
 - Coordinating navigation
@@ -57,7 +67,8 @@ When modules run in separate iframes or windows, they need secure communication 
 
 ### How ParleyJS Helps
 
-ParleyJS provides the infrastructure for secure, type-safe inter-module communication:
+ParleyJS provides the infrastructure for secure, type-safe inter-module
+communication:
 
 ```typescript
 // Shell application
@@ -65,8 +76,8 @@ const parley = Parley.create({
     allowedOrigins: [
         'https://auth.example.com',
         'https://dashboard.example.com',
-        'https://reports.example.com'
-    ]
+        'https://reports.example.com',
+    ],
 });
 
 // Connect to all micro-frontends
@@ -75,25 +86,28 @@ await parley.connect(dashboardModule.contentWindow, 'dashboard-module');
 await parley.connect(reportsModule.contentWindow, 'reports-module');
 ```
 
-For multi-window communication patterns, see [Multi-Window Communication Guide](./multi-window-communication.md).
+For multi-window communication patterns, see
+[Multi-Window Communication Guide](./multi-window-communication.md).
 
 ---
 
 ## Architecture Patterns
 
-Different micro-frontend architectures require different communication strategies.
+Different micro-frontend architectures require different communication
+strategies.
 
 ### Hub-and-Spoke Pattern
 
-The shell application acts as a central hub, coordinating all module communication.
+The shell application acts as a central hub, coordinating all module
+communication.
 
 ```typescript
 // Shell (Hub)
 const parley = Parley.create({
     allowedOrigins: [
         'https://module-a.example.com',
-        'https://module-b.example.com'
-    ]
+        'https://module-b.example.com',
+    ],
 });
 
 // Module requests data from another module via hub
@@ -101,11 +115,9 @@ parley.on('request-to-module', async (payload, respond) => {
     const { targetModule, request } = payload;
 
     try {
-        const response = await parley.send(
-            request.type,
-            request.data,
-            { targetId: targetModule }
-        );
+        const response = await parley.send(request.type, request.data, {
+            targetId: targetModule,
+        });
         respond({ success: true, data: response });
     } catch (error) {
         respond({ success: false, error: error.message });
@@ -116,7 +128,8 @@ parley.on('request-to-module', async (payload, respond) => {
 **Benefits**: Centralized coordination, easier debugging, clear data flow.
 **Drawbacks**: Shell becomes a potential bottleneck, single point of failure.
 
-For hub-and-spoke implementation details, see [Hub-and-Spoke Pattern](./multi-window-communication.md#hub-and-spoke-pattern).
+For hub-and-spoke implementation details, see
+[Hub-and-Spoke Pattern](./multi-window-communication.md#hub-and-spoke-pattern).
 
 ### Peer-to-Peer Pattern
 
@@ -128,17 +141,23 @@ const moduleB = document.querySelector('#module-b-iframe');
 await parley.connect(moduleB.contentWindow, 'module-b');
 
 // Direct communication
-const data = await parley.send('get-user-data', { userId: 123 }, {
-    targetId: 'module-b'
-});
+const data = await parley.send(
+    'get-user-data',
+    { userId: 123 },
+    {
+        targetId: 'module-b',
+    }
+);
 ```
 
 **Benefits**: Lower latency, less shell complexity, better scalability.
-**Drawbacks**: More complex setup, harder to monitor, increased security surface.
+**Drawbacks**: More complex setup, harder to monitor, increased security
+surface.
 
 ### Hybrid Pattern
 
-Combines hub-and-spoke for coordination with peer-to-peer for high-frequency data exchange.
+Combines hub-and-spoke for coordination with peer-to-peer for high-frequency
+data exchange.
 
 ```typescript
 // Shell handles authentication and global state
@@ -198,17 +217,18 @@ parley.register('auth-state-changed', {
                 properties: {
                     id: { type: 'string' },
                     name: { type: 'string' },
-                    roles: { type: 'array', items: { type: 'string' } }
+                    roles: { type: 'array', items: { type: 'string' } },
                 },
-                required: ['id', 'name', 'roles']
-            }
+                required: ['id', 'name', 'roles'],
+            },
         },
-        required: ['isAuthenticated', 'user']
-    }
+        required: ['isAuthenticated', 'user'],
+    },
 });
 ```
 
-For message validation strategies, see [Message Validation Guide](../security/message-validation.md).
+For message validation strategies, see
+[Message Validation Guide](../security/message-validation.md).
 
 ---
 
@@ -227,7 +247,7 @@ async function loadModule(url: string, targetId: string) {
     iframe.src = url;
     document.body.appendChild(iframe);
 
-    await new Promise(resolve => {
+    await new Promise((resolve) => {
         iframe.addEventListener('load', resolve, { once: true });
     });
 
@@ -249,7 +269,7 @@ const authModule = await loadModule(
 let globalState = {
     isAuthenticated: false,
     user: null,
-    theme: 'light'
+    theme: 'light',
 };
 
 // Broadcast state changes
@@ -274,10 +294,14 @@ parley.on('navigate-to-module', (payload) => {
     showModule(moduleId);
 
     // Tell module to navigate
-    parley.send('navigate', { route }, {
-        targetId: moduleId,
-        expectsResponse: false
-    });
+    parley.send(
+        'navigate',
+        { route },
+        {
+            targetId: moduleId,
+            expectsResponse: false,
+        }
+    );
 });
 ```
 
@@ -290,18 +314,23 @@ parley.on('navigate-to-module', (payload) => {
 ```typescript
 // Module emits events to shell
 async function handleUserAction(action: string) {
-    await parley.send('module-event', {
-        module: 'dashboard',
-        event: action,
-        timestamp: Date.now()
-    }, {
-        targetId: 'shell',
-        expectsResponse: false
-    });
+    await parley.send(
+        'module-event',
+        {
+            module: 'dashboard',
+            event: action,
+            timestamp: Date.now(),
+        },
+        {
+            targetId: 'shell',
+            expectsResponse: false,
+        }
+    );
 }
 ```
 
-**Responding to Global State**: Modules react to shell-broadcasted state changes.
+**Responding to Global State**: Modules react to shell-broadcasted state
+changes.
 
 ```typescript
 // Module responds to global state
@@ -355,7 +384,7 @@ parley.on('state-change', (payload) => {
     stateEvents.push({
         timestamp: Date.now(),
         module: payload.module,
-        change: payload.change
+        change: payload.change,
     });
 
     // Replay capability
@@ -365,7 +394,8 @@ parley.on('state-change', (payload) => {
 });
 ```
 
-For advanced state synchronization patterns, see [State Synchronization Pattern](../patterns/state-synchronization.md).
+For advanced state synchronization patterns, see
+[State Synchronization Pattern](../patterns/state-synchronization.md).
 
 ---
 
@@ -401,10 +431,14 @@ When a module fails, maintain core functionality:
 
 ```typescript
 try {
-    const data = await parley.send('get-user-preferences', {}, {
-        targetId: 'preferences-module',
-        timeout: 3000
-    });
+    const data = await parley.send(
+        'get-user-preferences',
+        {},
+        {
+            targetId: 'preferences-module',
+            timeout: 3000,
+        }
+    );
     applyPreferences(data);
 } catch (error) {
     // Use default preferences if module unavailable
@@ -413,7 +447,8 @@ try {
 }
 ```
 
-For comprehensive error handling strategies, see [Error Handling Pattern](../patterns/error-handling.md).
+For comprehensive error handling strategies, see
+[Error Handling Pattern](../patterns/error-handling.md).
 
 ---
 
@@ -441,13 +476,17 @@ Avoid waiting for responses when not needed:
 
 ```typescript
 // Fire-and-forget for analytics
-parley.send('track-event', {
-    event: 'button-clicked',
-    timestamp: Date.now()
-}, {
-    targetId: 'analytics-module',
-    expectsResponse: false
-});
+parley.send(
+    'track-event',
+    {
+        event: 'button-clicked',
+        timestamp: Date.now(),
+    },
+    {
+        targetId: 'analytics-module',
+        expectsResponse: false,
+    }
+);
 ```
 
 ### Cache Shared Data
@@ -471,13 +510,15 @@ parley.on('get-config', async (payload, respond) => {
 });
 ```
 
-For performance optimization techniques, see [Performance Guide](../performance/README.md).
+For performance optimization techniques, see
+[Performance Guide](../performance/index.md).
 
 ---
 
 ## Security in Micro-Frontends
 
-Security is paramount when modules run in separate iframes with different origins.
+Security is paramount when modules run in separate iframes with different
+origins.
 
 ### Origin Validation
 
@@ -486,22 +527,25 @@ Always validate origins for each micro-frontend:
 ```typescript
 const parley = Parley.create({
     allowedOrigins: [
-        'https://auth.example.com',      // Auth module
-        'https://dashboard.example.com',  // Dashboard module
-        'https://reports.example.com'     // Reports module
-    ]
+        'https://auth.example.com', // Auth module
+        'https://dashboard.example.com', // Dashboard module
+        'https://reports.example.com', // Reports module
+    ],
 });
 ```
 
-Never use wildcard origins in production micro-frontends. Each module origin must be explicitly allowed.
+Never use wildcard origins in production micro-frontends. Each module origin
+must be explicitly allowed.
 
 ### Content Security Policy
 
 Configure CSP headers to restrict iframe sources:
 
 ```html
-<meta http-equiv="Content-Security-Policy"
-      content="frame-src https://auth.example.com https://dashboard.example.com;">
+<meta
+    http-equiv="Content-Security-Policy"
+    content="frame-src https://auth.example.com https://dashboard.example.com;"
+/>
 ```
 
 ### Message Content Validation
@@ -542,7 +586,8 @@ parley.on('request-auth-token', (payload, respond, metadata) => {
 });
 ```
 
-For complete security guidelines, see [Security Guide](../security/README.md) and [Origin Validation](../security/origin-validation.md).
+For complete security guidelines, see [Security Guide](../security/index.md) and
+[Origin Validation](../security/origin-validation.md).
 
 ---
 
@@ -550,24 +595,27 @@ For complete security guidelines, see [Security Guide](../security/README.md) an
 
 ### Related Guides
 
-- [Multi-Window Communication](./multi-window-communication.md) - Managing multiple windows
+- [Multi-Window Communication](./multi-window-communication.md) - Managing
+  multiple windows
 - [iFrame Communication](./iframe-communication.md) - Single iframe patterns
 - [Popup Communication](./popup-communication.md) - Popup window patterns
 
 ### Related Patterns
 
-- [State Synchronization](../patterns/state-synchronization.md) - State sync patterns
+- [State Synchronization](../patterns/state-synchronization.md) - State sync
+  patterns
 - [Error Handling](../patterns/error-handling.md) - Error handling strategies
-- [Request-Response](../patterns/request-response.md) - Request-response patterns
+- [Request-Response](../patterns/request-response.md) - Request-response
+  patterns
 
 ### Related Documentation
 
-- [Security Guide](../security/README.md) - Security best practices
-- [Performance Guide](../performance/README.md) - Performance optimization
-- [API Reference](../api-reference/README.md) - Complete API documentation
+- [Security Guide](../security/index.md) - Security best practices
+- [Performance Guide](../performance/index.md) - Performance optimization
+- [API Reference](../api-reference/index.md) - Complete API documentation
 
 ---
 
 **Previous**: [Multi-Window Communication](./multi-window-communication.md)
-**Next**: [Guides Overview](./README.md)
-**Back to**: [Documentation Home](../README.md)
+**Next**: [Guides Overview](./index.md) **Back to**:
+[Documentation Home](./index.md)
