@@ -8,7 +8,7 @@
 <a href="https://opensource.org/licenses/MIT" target="_blank">![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)</a>
 <a href="https://prettier.io/" target="_blank">![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)</a>
 <a href="https://bundlephobia.com/package/parley-js" target="_blank">![Bundle Size](https://img.shields.io/badge/Bundle-~54KB-green)</a>
-<a href="https://www.npmjs.com/package/parley-js" target="_blank">![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-success)</a>
+<a href="https://www.npmjs.com/package/ignite-parleyjs" target="_blank">![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-success)</a>
 
 **Type-safe, robust framework for window, tab, and iframe communication**
 
@@ -38,21 +38,13 @@
 ## Installation
 
 ```bash
-npm install parley-js
-```
-
-```bash
-yarn add parley-js
-```
-
-```bash
-pnpm add parley-js
+npm install ignite-parleyjs
 ```
 
 ### CDN Usage
 
 ```html
-<script src="https://unpkg.com/parley-js/dist/index.global.js"></script>
+<script src="https://unpkg.com/ignite-parleyjs/dist/index.global.js"></script>
 <script>
     const parley = Parley.create({
         /* options */

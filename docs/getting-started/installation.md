@@ -35,35 +35,11 @@ vanilla JavaScript.
 Install ParleyJS using npm:
 
 ```bash
-npm install parley-js
+npm install ignite-parleyjs
 ```
 
 This downloads the latest stable version and adds it to your `package.json`
 dependencies.
-
----
-
-## Yarn Installation
-
-Install ParleyJS using Yarn:
-
-```bash
-yarn add parley-js
-```
-
-Yarn will add ParleyJS to your project and update your lock file.
-
----
-
-## PNPM Installation
-
-Install ParleyJS using pnpm:
-
-```bash
-pnpm add parley-js
-```
-
-PNPM installs packages efficiently with content-addressable storage.
 
 ---
 
@@ -72,7 +48,7 @@ PNPM installs packages efficiently with content-addressable storage.
 For quick prototyping or non-bundled projects, use the CDN version:
 
 ```html
-<script src="https://unpkg.com/parley-js/dist/index.global.js"></script>
+<script src="https://unpkg.com/ignite-parleyjs/dist/index.global.js"></script>
 <script>
     // ParleyJS is available as global "Parley"
     const parley = Parley.create({

@@ -30,7 +30,7 @@ send messages.
 
 Before starting, you need:
 
-- ParleyJS installed (`npm install parley-js` or use CDN)
+- ParleyJS installed (`npm install ignite-parleyjs` or use CDN)
 - Basic HTML and JavaScript knowledge
 - A local web server (ParleyJS requires HTTP/HTTPS, not `file://`)
 

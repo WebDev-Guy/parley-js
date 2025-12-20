@@ -355,7 +355,7 @@ This guide walks you through your first ParleyJS implementation.
 ## Installation
 
 ```bash
-npm install parley-js
+npm install ignite-parleyjs
 ```
 
 ## Basic Example

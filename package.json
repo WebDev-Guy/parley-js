@@ -1,8 +1,8 @@
 {
-    "name": "parley-js",
+    "name": "ignite-parleyjs",
     "version": "1.0.0",
     "type": "module",
-    "description": "Type-safe, robust framework for window, tab, and iframe communication",
+    "description": "Type-safe, secure cross-window communication with built-in origin validation, JSON Schema message validation, robust heartbeat monitoring, and defensive error handling",
     "main": "./dist/index.js",
     "module": "./dist/index.mjs",
     "types": "./dist/index.d.ts",
@@ -39,14 +39,43 @@
     },
     "keywords": [
         "postmessage",
-        "iframe",
+        "cross-window",
         "window",
+        "tab",
+        "iframe",
+        "popup",
+        "multi-window",
+        "worker",
         "communication",
+        "message-passing",
+        "request-response",
+        "broadcast",
+        "state-synchronization",
+        "origin-validation",
+        "security",
+        "payload-sanitization",
+        "dos-prevention",
+        "heartbeat",
+        "heartbeat-monitoring",
+        "schema-validation",
+        "json-schema",
+        "validation",
+        "type-safe",
         "typescript",
-        "cross-window"
+        "analytics",
+        "micro-frontends",
+        "defensive-error-handling"
     ],
     "author": "Ignite Works, LLC",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/WebDev-Guy/parley-js.git"
+    },
+    "bugs": {
+        "url": "https://github.com/WebDev-Guy/parley-js/issues"
+    },
+    "homepage": "https://www.parleyjs.com",
     "devDependencies": {
         "@types/node": "^24.10.1",
         "@vitest/coverage-v8": "^4.0.15",
