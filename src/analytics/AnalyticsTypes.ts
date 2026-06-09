@@ -140,6 +140,14 @@ export interface AnalyticsAdapter {
      * @param event - Analytics event to handle
      */
     handleEvent(event: AnalyticsEvent): void;
+
+    /**
+     * Release any resources held by the adapter (timers, buffers).
+     *
+     * Called automatically by AnalyticsManager when the adapter is
+     * removed or the manager is cleared.
+     */
+    destroy?(): void;
 }
 
 /**

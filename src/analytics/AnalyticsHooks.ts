@@ -117,10 +117,18 @@ export class AnalyticsManager {
     /**
      * Remove an analytics adapter
      *
+     * Calls the adapter's destroy() method (if implemented) to release
+     * any resources it holds.
+     *
      * @param adapterName - Name of adapter to remove
      */
     public removeAdapter(adapterName: string): void {
+        const removed = this._adapters.filter((a) => a.name === adapterName);
         this._adapters = this._adapters.filter((a) => a.name !== adapterName);
+
+        for (const adapter of removed) {
+            this._destroyAdapter(adapter);
+        }
     }
 
     /**
@@ -204,11 +212,29 @@ export class AnalyticsManager {
 
     /**
      * Clear all handlers and adapters
+     *
+     * Calls destroy() on each adapter that implements it.
      */
     public clear(): void {
+        const adapters = this._adapters;
         this._adapters = [];
         this._handlers.clear();
         this._eventCount = 0;
+
+        for (const adapter of adapters) {
+            this._destroyAdapter(adapter);
+        }
+    }
+
+    /**
+     * Destroy an adapter, guarding against errors in adapter code
+     */
+    private _destroyAdapter(adapter: AnalyticsAdapter): void {
+        try {
+            adapter.destroy?.();
+        } catch (error) {
+            console.error(`Analytics adapter "${adapter.name}" destroy error:`, error);
+        }
     }
 
     /**
@@ -285,6 +311,10 @@ export function createConsoleAdapter(prefix: string = '[Parley Analytics]'): Ana
  *     },
  *     { batchSize: 10, flushInterval: 5000 }
  * ));
+ *
+ * // When finished, release the flush timer (also called automatically
+ * // by AnalyticsManager.removeAdapter() / clear())
+ * adapter.destroy();
  * ```
  */
 export function createBatchingAdapter(
@@ -293,11 +323,13 @@ export function createBatchingAdapter(
         batchSize?: number;
         flushInterval?: number;
     } = {}
-): AnalyticsAdapter & { flush: () => void } {
+): AnalyticsAdapter & { flush: () => void; destroy: () => void } {
     const batchSize = options.batchSize ?? 10;
     const flushInterval = options.flushInterval ?? 5000;
 
     let batch: AnalyticsEvent[] = [];
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let destroyed = false;
 
     const flush = (): void => {
         if (batch.length > 0) {
@@ -307,18 +339,39 @@ export function createBatchingAdapter(
         }
     };
 
-    // Start interval for automatic flushing
-    setInterval(flush, flushInterval);
-
     return {
         name: 'batching',
         handleEvent: (event: AnalyticsEvent) => {
+            if (destroyed) {
+                return;
+            }
+
+            // Start the automatic flush interval on first event so an
+            // unused adapter never schedules a timer
+            if (intervalId === null) {
+                intervalId = setInterval(flush, flushInterval);
+            }
+
             batch.push(event);
             if (batch.length >= batchSize) {
                 flush();
             }
         },
         flush,
+        destroy: () => {
+            if (destroyed) {
+                return;
+            }
+            destroyed = true;
+
+            if (intervalId !== null) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+
+            // Deliver any events still buffered
+            flush();
+        },
     };
 }
 

@@ -149,7 +149,7 @@ const new = newAPI();
 - [ ] Unit tests pass
 - [ ] Integration tests pass
 - [ ] Security tests pass (if applicable)
-- [ ] Coverage threshold maintained (85%+)
+- [ ] Coverage thresholds maintained (per vitest.config.ts, enforced by CI)
 - [ ] Manual testing performed in multiple browsers
 
 ---
