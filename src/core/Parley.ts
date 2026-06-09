@@ -4,19 +4,19 @@
  * @module parley-js/core
  *
  * Provides a type-safe, robust framework for window, tab, and iframe communication.
+ * Acts as a facade over the internal ConnectionManager (connection lifecycle)
+ * and SendPipeline (outbound message path) collaborators.
  */
 
 import { EventEmitter } from '../events/EventEmitter';
 import { Logger } from '../utils/Logger';
 import { generateUUID, getTimestamp } from '../utils/Helpers';
-import { IframeChannel } from '../communication/IframeChannel';
-import { WindowChannel } from '../communication/WindowChannel';
-import type { BaseChannel } from '../communication/BaseChannel';
 import { MessageRegistry } from './MessageRegistry';
 import { TargetManager } from './TargetManager';
 import { HeartbeatManager } from './HeartbeatManager';
+import { ConnectionManager } from './ConnectionManager';
+import { SendPipeline } from './SendPipeline';
 import {
-    createMessage,
     createResponse,
     isResponseMessage,
     isInternalMessage,
@@ -25,21 +25,7 @@ import {
 } from './MessageProtocol';
 import { SYSTEM_EVENTS, type SystemEventName } from '../events/SystemEvents';
 import { ConnectionState } from '../types/ConnectionTypes';
-import type { DisconnectReason } from '../types/ConnectionTypes';
-import {
-    ParleyError,
-    ValidationError,
-    TimeoutError,
-    TargetNotFoundError,
-    ConnectionError,
-} from '../errors/ErrorTypes';
-import {
-    TIMEOUT_ERRORS,
-    TARGET_ERRORS,
-    CONNECTION_ERRORS,
-    VALIDATION_ERRORS,
-    type ErrorCode,
-} from '../errors/ErrorCodes';
+import { ValidationError } from '../errors/ErrorTypes';
 import { DefaultSecurityLayer, type SecurityLayer } from '../security/SecurityLayer';
 import {
     DEFAULT_HEARTBEAT_CONFIG,
@@ -47,18 +33,12 @@ import {
     type ResolvedConfig,
     type ResolvedHeartbeatConfig,
 } from '../types/ConfigTypes';
-import {
-    SYSTEM_MESSAGE_TYPES,
-    type MessageHandler,
-    type MessageMetadata,
-    type MessageRegistrationOptions,
-    type SendOptions,
-    type PendingRequest,
-    type DisconnectPayload,
-    type HeartbeatPingPayload,
-    type HeartbeatPongPayload,
+import type {
+    MessageHandler,
+    MessageMetadata,
+    MessageRegistrationOptions,
+    SendOptions,
 } from '../types/MessageTypes';
-import type { TargetInfo, ChannelOptions } from '../types/ChannelTypes';
 import type { AnalyticsEvent, AnalyticsEventHandler } from '../analytics/AnalyticsTypes';
 
 /**
@@ -110,13 +90,6 @@ export class Parley {
     public static readonly VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '1.0.0';
 
     /**
-     * Maximum payload size in bytes (10MB)
-     * Prevents DoS attacks through extremely large payloads
-     * that would cause browser freezes or memory exhaustion
-     */
-    private readonly MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
-
-    /**
      * Resolved configuration
      */
     private _config: ResolvedConfig;
@@ -142,14 +115,14 @@ export class Parley {
     private _targets: TargetManager;
 
     /**
-     * Communication channels by target ID
+     * Connection lifecycle manager (channels, connect/disconnect, state transitions)
      */
-    private _channels: Map<string, BaseChannel> = new Map();
+    private _connection: ConnectionManager;
 
     /**
-     * Pending requests awaiting responses
+     * Outbound message pipeline (send/broadcast, pending requests, timeouts)
      */
-    private _pendingRequests: Map<string, PendingRequest> = new Map();
+    private _sendPipeline: SendPipeline;
 
     /**
      * Security layer
@@ -165,11 +138,6 @@ export class Parley {
      * Heartbeat manager for connection health monitoring
      */
     private _heartbeatManager: HeartbeatManager | null = null;
-
-    /**
-     * Rate limit trackers per target/global
-     */
-    private _rateLimitTrackers: Map<string, { windowStart: number; count: number }> | null = null;
 
     /**
      * Whether the instance has been destroyed
@@ -189,19 +157,50 @@ export class Parley {
         this._registry = new MessageRegistry(this._logger);
         this._targets = new TargetManager(this._logger);
 
+        // Set up the send pipeline (outbound message path)
+        this._sendPipeline = new SendPipeline({
+            config,
+            logger: this._logger,
+            emitter: this._emitter,
+            registry: this._registry,
+            security: this._security,
+            targets: this._targets,
+            getChannel: (targetId) => this._connection.getChannel(targetId),
+            emitAnalyticsEvent: (event) => {
+                this._emitAnalyticsEvent(event);
+            },
+        });
+
+        // Set up the connection manager (connection lifecycle)
+        this._connection = new ConnectionManager({
+            config,
+            logger: this._logger,
+            emitter: this._emitter,
+            registry: this._registry,
+            targets: this._targets,
+            getHeartbeatManager: () => this._heartbeatManager,
+            onIncomingMessage: (message, source, sourceTargetId) => {
+                this._handleIncomingMessage(message, source, sourceTargetId);
+            },
+            sendSystemMessage: (type, payload, targetId, timeout) =>
+                this._sendPipeline.sendSystemMessage(type, payload, targetId, timeout),
+            rejectPendingForTarget: (targetId, reason) => {
+                this._sendPipeline.rejectPendingForTarget(targetId, reason);
+            },
+        });
+
         // Initialize heartbeat manager if enabled
         if (config.heartbeat.enabled) {
             this._heartbeatManager = new HeartbeatManager(
                 config.heartbeat,
                 this._logger,
                 config.instanceId,
-                this._sendHeartbeatPing.bind(this),
-                this._handleHeartbeatFailure.bind(this)
+                (targetId, payload) => this._connection.sendHeartbeatPing(targetId, payload),
+                (targetId, consecutiveMissed) => {
+                    this._connection.handleHeartbeatFailure(targetId, consecutiveMissed);
+                }
             );
         }
-
-        // Register internal system message handlers
-        this._registerSystemMessageHandlers();
 
         this._logger.info('Parley initialized', {
             version: Parley.VERSION,
@@ -326,80 +325,7 @@ export class Parley {
         options?: SendOptions
     ): Promise<R | undefined> {
         this._assertNotDestroyed();
-
-        // Check rate limit before processing
-        this._checkRateLimit(options?.targetId);
-
-        const expectsResponse = options?.expectsResponse ?? true;
-        const targetId = options?.targetId;
-
-        // Security: Sanitize payload FIRST before validation
-        // This ensures that any prototype pollution or injection attempts are removed
-        // before we validate against the schema. The sanitized payload is what gets sent.
-        const sanitizedPayload = this._security.sanitizePayload(payload);
-
-        // DoS prevention: Validate payload size before further processing
-        this._validatePayloadSize(sanitizedPayload);
-
-        // Validate sanitized payload against schema
-        this._registry.validatePayload(messageType, sanitizedPayload);
-
-        // Create message
-        const message = createMessage({
-            type: messageType,
-            payload: sanitizedPayload,
-            expectsResponse,
-            target: targetId,
-        });
-
-        // Get target(s) to send to
-        const targets = this._getTargetsForSend(targetId);
-
-        if (targets.length === 0) {
-            throw new TargetNotFoundError(
-                targetId
-                    ? `Target "${targetId}" not found or not connected`
-                    : 'No connected targets available',
-                { targetId },
-                TARGET_ERRORS.NOT_CONNECTED
-            );
-        }
-
-        // Emit analytics event
-        this._emitAnalyticsEvent({
-            type: 'message_sent',
-            messageType,
-            messageId: message._id,
-            targetId,
-            timestamp: message._timestamp,
-        });
-
-        // Emit system event
-        await this._emitter.emit(SYSTEM_EVENTS.MESSAGE_SENT, {
-            messageId: message._id,
-            messageType,
-            targetId,
-            expectsResponse,
-            timestamp: message._timestamp,
-        });
-
-        // Send message to target(s)
-        for (const target of targets) {
-            this._sendToTarget(message, target);
-        }
-
-        if (!expectsResponse) {
-            // Fire and forget: return undefined when no response is expected
-            return undefined;
-        }
-
-        // Wait for response with timeout and retry
-        const timeout =
-            options?.timeout ?? this._registry.getTimeout(messageType, this._config.timeout);
-        const retries =
-            options?.retries ?? this._registry.getRetries(messageType, this._config.retries);
-
-        return this._waitForResponse<R>(message, timeout, retries, targetId);
+        return this._sendPipeline.send<T, R>(messageType, payload, options);
     }
 
     /**
@@ -416,36 +342,7 @@ export class Parley {
      */
     public broadcast<T>(messageType: string, payload: T): void {
         this._assertNotDestroyed();
-
-        // Security: Sanitize payload FIRST before validation
-        // This ensures that any prototype pollution or injection attempts are removed
-        // before we validate against the schema. The sanitized payload is what gets sent.
-        const sanitizedPayload = this._security.sanitizePayload(payload);
-
-        // DoS prevention: Validate payload size before further processing
-        this._validatePayloadSize(sanitizedPayload);
-
-        // Validate sanitized payload against schema
-        this._registry.validatePayload(messageType, sanitizedPayload);
-
-        // Create message (no response expected for broadcasts)
-        const message = createMessage({
-            type: messageType,
-            payload: sanitizedPayload,
-            expectsResponse: false,
-        });
-
-        // Send to all connected targets
-        const targets = this._targets.getConnected();
-
-        this._logger.debug('Broadcasting message', {
-            type: messageType,
-            targetCount: targets.length,
-        });
-
-        for (const target of targets) {
-            this._sendToTarget(message, target);
-        }
+        this._sendPipeline.broadcast(messageType, payload);
     }
 
     /**
@@ -546,79 +443,7 @@ export class Parley {
      */
     public async connect(target: HTMLIFrameElement | Window, targetId?: string): Promise<void> {
         this._assertNotDestroyed();
-
-        // Register target
-        const id = this._targets.register(target, { id: targetId });
-
-        // Update state to CONNECTING
-        this._targets.updateState(id, ConnectionState.CONNECTING);
-
-        // Create channel options
-        const channelOptions: ChannelOptions = {
-            allowedOrigins: this._config.allowedOrigins,
-            handshakeTimeout: this._config.timeout,
-            autoReconnect: false,
-            reconnectDelay: 1000,
-            maxReconnectAttempts: 0,
-        };
-
-        // Create appropriate channel
-        const channel =
-            this._config.targetType === 'iframe'
-                ? new IframeChannel(channelOptions, this._logger)
-                : new WindowChannel(channelOptions, this._logger);
-
-        // Set up message handler
-        channel.setMessageHandler((message, source) => {
-            this._handleIncomingMessage(message, source, id);
-        });
-
-        // Store channel
-        this._channels.set(id, channel);
-
-        try {
-            // Connect
-            await channel.connect(target);
-
-            // Update target origin from channel (now known after handshake)
-            const channelOrigin = channel.getTargetOrigin();
-            if (channelOrigin) {
-                this._targets.updateOrigin(id, channelOrigin);
-            }
-
-            // Mark target as connected
-            this._targets.markConnected(id);
-
-            // Emit connection state changed event
-            this._emitter.emitSync(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, {
-                targetId: id,
-                previousState: ConnectionState.CONNECTING,
-                currentState: ConnectionState.CONNECTED,
-                reason: 'handshake_complete',
-                timestamp: getTimestamp(),
-            });
-
-            // Emit connected event
-            const targetInfo = this._targets.get(id)!;
-            await this._emitter.emit(SYSTEM_EVENTS.CONNECTED, {
-                targetId: id,
-                targetType: targetInfo.type,
-                origin: targetInfo.origin,
-                timestamp: getTimestamp(),
-            });
-
-            // Start heartbeat for this target
-            if (this._heartbeatManager) {
-                this._heartbeatManager.start(id);
-            }
-
-            this._logger.info('Connected to target', { targetId: id });
-        } catch (error) {
-            // Clean up on failure
-            this._channels.delete(id);
-            this._targets.unregister(id);
-            throw error;
-        }
+        return this._connection.connect(target, targetId);
     }
 
     /**
@@ -636,103 +461,7 @@ export class Parley {
      */
     public async disconnect(targetId: string): Promise<void> {
         this._assertNotDestroyed();
-
-        const targetInfo = this._targets.get(targetId);
-        if (!targetInfo) {
-            this._logger.warn('Target not found for disconnect', { targetId });
-            return;
-        }
-
-        const previousState = targetInfo.state;
-
-        // Update state to DISCONNECTING
-        this._targets.updateState(targetId, ConnectionState.DISCONNECTING);
-
-        // Emit state change
-        this._emitter.emitSync(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, {
-            targetId,
-            previousState,
-            currentState: ConnectionState.DISCONNECTING,
-            reason: 'manual_disconnect',
-            timestamp: getTimestamp(),
-        });
-
-        // Stop heartbeat immediately
-        if (this._heartbeatManager) {
-            this._heartbeatManager.stop(targetId);
-        }
-
-        // Try to send disconnect notification (with short timeout)
-        try {
-            const disconnectPayload: DisconnectPayload = {
-                senderId: this._config.instanceId,
-                reason: 'manual_disconnect',
-                timestamp: getTimestamp(),
-            };
-
-            // Send disconnect notification - don't wait too long
-            await this._sendSystemMessage(
-                SYSTEM_MESSAGE_TYPES.DISCONNECT,
-                disconnectPayload,
-                targetId,
-                1000 // 1 second timeout for disconnect
-            );
-
-            this._logger.debug('Disconnect notification sent', { targetId });
-        } catch (error) {
-            // Timeout or error - other side might be dead, continue anyway
-            this._logger.warn('Disconnect notification failed', { targetId, error });
-        }
-
-        // Perform local disconnect cleanup
-        this._performLocalDisconnect(targetId, 'manual_disconnect');
-    }
-
-    /**
-     * Perform local disconnect cleanup without notification
-     *
-     * @param targetId - Target ID to disconnect
-     * @param reason - Reason for disconnection
-     */
-    private _performLocalDisconnect(targetId: string, reason: DisconnectReason): void {
-        const channel = this._channels.get(targetId);
-        if (channel) {
-            channel.disconnect();
-            channel.destroy();
-            this._channels.delete(targetId);
-        }
-
-        // Stop heartbeat
-        if (this._heartbeatManager) {
-            this._heartbeatManager.stop(targetId);
-        }
-
-        const previousState = this._targets.get(targetId)?.state ?? ConnectionState.CONNECTED;
-
-        // Mark as disconnected
-        this._targets.markDisconnected(targetId);
-        this._targets.unregister(targetId);
-
-        // Reject any pending requests for this target
-        this._rejectPendingForTarget(targetId, 'Target disconnected');
-
-        // Emit state change
-        this._emitter.emitSync(SYSTEM_EVENTS.CONNECTION_STATE_CHANGED, {
-            targetId,
-            previousState,
-            currentState: ConnectionState.DISCONNECTED,
-            reason,
-            timestamp: getTimestamp(),
-        });
-
-        // Emit disconnected event
-        this._emitter.emitSync(SYSTEM_EVENTS.DISCONNECTED, {
-            targetId,
-            reason,
-            timestamp: getTimestamp(),
-        });
-
-        this._logger.info('Disconnected from target', { targetId, reason });
+        return this._connection.disconnect(targetId);
     }
 
     /**
@@ -778,25 +507,10 @@ export class Parley {
         }
 
         // Disconnect all targets
-        for (const [id, channel] of this._channels) {
-            channel.disconnect();
-            channel.destroy();
-            this._targets.unregister(id);
-        }
-        this._channels.clear();
+        this._connection.destroy();
 
         // Reject all pending requests
-        for (const [_id, pending] of this._pendingRequests) {
-            clearTimeout(pending.timeoutHandle);
-            pending.reject(
-                new ConnectionError(
-                    'Parley instance destroyed',
-                    undefined,
-                    CONNECTION_ERRORS.CLOSED
-                )
-            );
-        }
-        this._pendingRequests.clear();
+        this._sendPipeline.destroy();
 
         // Clean up
         this._emitter.destroy();
@@ -805,161 +519,6 @@ export class Parley {
         this._analyticsHandlers.clear();
 
         this._logger.info('Parley destroyed');
-    }
-
-    /**
-     * Get targets for sending a message
-     */
-    private _getTargetsForSend(targetId?: string): TargetInfo[] {
-        if (targetId) {
-            const target = this._targets.get(targetId);
-            return target?.connected ? [target] : [];
-        }
-        return this._targets.getConnected();
-    }
-
-    /**
-     * Send a message to a specific target
-     */
-    private _sendToTarget(message: MessageProtocol, target: TargetInfo): void {
-        const channel = this._channels.get(target.id);
-        if (!channel) {
-            this._logger.error('No channel for target', { targetId: target.id });
-            return;
-        }
-
-        const targetWindow =
-            target.type === 'iframe'
-                ? (target.target as HTMLIFrameElement).contentWindow
-                : (target.target as Window);
-
-        if (!targetWindow) {
-            this._logger.error('Target window not available', { targetId: target.id });
-            return;
-        }
-
-        channel.send(message, targetWindow, target.origin || '*');
-        this._logger.debug('Message sent to target', {
-            targetId: target.id,
-            messageType: message._type,
-            messageId: message._id,
-        });
-    }
-
-    /**
-     * Wait for a response to a message
-     */
-    private _waitForResponse<R>(
-        message: MessageProtocol,
-        timeout: number,
-        retries: number,
-        targetId?: string
-    ): Promise<R> {
-        return new Promise<R>((resolve, reject) => {
-            try {
-                const resolveUnknown = resolve as (value: unknown) => void;
-                const timeoutHandle = setTimeout(() => {
-                    this._handleTimeout(
-                        message._id,
-                        retries,
-                        timeout,
-                        targetId,
-                        resolveUnknown,
-                        reject
-                    );
-                }, timeout);
-
-                const pendingRequest: PendingRequest<R> = {
-                    resolve,
-                    reject,
-                    timeoutHandle,
-                    timeout,
-                    retriesRemaining: retries,
-                    messageType: message._type,
-                    targetId,
-                    sentAt: message._timestamp,
-                };
-
-                this._pendingRequests.set(message._id, pendingRequest as PendingRequest);
-            } catch (error) {
-                // If anything goes wrong during setup, reject the promise
-                reject(error instanceof Error ? error : new Error(String(error)));
-            }
-        });
-    }
-
-    /**
-     * Handle message timeout
-     */
-    private _handleTimeout(
-        messageId: string,
-        retriesRemaining: number,
-        timeout: number,
-        targetId: string | undefined,
-        resolve: (value: unknown) => void,
-        reject: (error: Error) => void
-    ): void {
-        const pending = this._pendingRequests.get(messageId);
-        if (!pending) {
-            return;
-        }
-
-        if (retriesRemaining > 0) {
-            // Retry
-            this._logger.debug('Retrying message', {
-                messageId,
-                retriesRemaining: retriesRemaining - 1,
-            });
-
-            // Create new timeout
-            const timeoutHandle = setTimeout(() => {
-                this._handleTimeout(
-                    messageId,
-                    retriesRemaining - 1,
-                    timeout,
-                    targetId,
-                    resolve,
-                    reject
-                );
-            }, timeout);
-
-            pending.timeoutHandle = timeoutHandle;
-            pending.retriesRemaining = retriesRemaining - 1;
-        } else {
-            // No more retries
-            this._pendingRequests.delete(messageId);
-
-            const error = new TimeoutError(
-                `Message "${pending.messageType}" timed out after ${timeout}ms`,
-                {
-                    messageId,
-                    timeout,
-                    retriesAttempted: pending.retriesRemaining,
-                },
-                TIMEOUT_ERRORS.NO_RESPONSE
-            );
-
-            // Emit events
-            this._emitter.emitSync(SYSTEM_EVENTS.TIMEOUT, {
-                messageId,
-                messageType: pending.messageType,
-                targetId,
-                timeoutMs: timeout,
-                retriesAttempted: pending.retriesRemaining,
-                timestamp: getTimestamp(),
-            });
-
-            this._emitAnalyticsEvent({
-                type: 'timeout',
-                messageType: pending.messageType,
-                messageId,
-                targetId,
-                timestamp: getTimestamp(),
-                errorCode: TIMEOUT_ERRORS.NO_RESPONSE,
-            });
-
-            reject(error);
-        }
     }
 
     /**
@@ -974,62 +533,11 @@ export class Parley {
         this._targets.updateActivity(sourceTargetId);
 
         if (isResponseMessage(message)) {
-            this._handleResponse(message, sourceTargetId);
+            this._sendPipeline.handleResponse(message, sourceTargetId);
         } else {
             this._handleRequest(message, source, sourceTargetId).catch((error: unknown) => {
                 this._logger.error('Error handling incoming message:', error);
             });
-        }
-    }
-
-    /**
-     * Handle incoming response
-     */
-    private _handleResponse(response: ResponseProtocol, sourceTargetId: string): void {
-        const pending = this._pendingRequests.get(response._requestId);
-        if (!pending) {
-            this._logger.warn('Received response for unknown request', {
-                requestId: response._requestId,
-            });
-            return;
-        }
-
-        // Clear timeout and remove pending request
-        clearTimeout(pending.timeoutHandle);
-        this._pendingRequests.delete(response._requestId);
-
-        // Calculate duration
-        const duration = getTimestamp() - pending.sentAt;
-
-        // Emit events
-        this._emitter.emitSync(SYSTEM_EVENTS.RESPONSE_RECEIVED, {
-            responseId: response._id,
-            requestId: response._requestId,
-            success: response.success,
-            duration,
-            timestamp: getTimestamp(),
-        });
-
-        this._emitAnalyticsEvent({
-            type: 'response_received',
-            messageType: pending.messageType,
-            messageId: response._requestId,
-            targetId: sourceTargetId,
-            timestamp: getTimestamp(),
-            duration,
-            success: response.success,
-        });
-
-        // Resolve or reject
-        if (response.success) {
-            pending.resolve(response.payload);
-        } else {
-            const error = new ParleyError(
-                response.error?.message ?? 'Request failed',
-                (response.error?.code as ErrorCode | undefined) ?? 'ERR_UNKNOWN',
-                response.error?.details
-            );
-            pending.reject(error);
         }
     }
 
@@ -1167,7 +675,7 @@ export class Parley {
      */
     private _sendResponse(response: ResponseProtocol, target: Window, targetId: string): void {
         const targetInfo = this._targets.get(targetId);
-        const channel = this._channels.get(targetId);
+        const channel = this._connection.getChannel(targetId);
 
         if (!channel || !targetInfo) {
             this._logger.error('Cannot send response: no channel', { targetId });
@@ -1213,19 +721,6 @@ export class Parley {
     }
 
     /**
-     * Reject pending requests for a target
-     */
-    private _rejectPendingForTarget(targetId: string, reason: string): void {
-        for (const [id, pending] of this._pendingRequests) {
-            if (pending.targetId === targetId) {
-                clearTimeout(pending.timeoutHandle);
-                pending.reject(new ConnectionError(reason, { targetId }, CONNECTION_ERRORS.CLOSED));
-                this._pendingRequests.delete(id);
-            }
-        }
-    }
-
-    /**
      * Emit analytics event
      */
     private _emitAnalyticsEvent(event: AnalyticsEvent): void {
@@ -1256,278 +751,6 @@ export class Parley {
     private _assertNotDestroyed(): void {
         if (this._destroyed) {
             throw new Error('Parley instance has been destroyed');
-        }
-    }
-
-    // ========================================================================
-    // Payload Validation Methods
-    // ========================================================================
-
-    /**
-     * Validate that payload does not exceed maximum size
-     * Prevents DoS attacks through extremely large payloads
-     *
-     * @param payload - Payload to validate
-     * @throws ValidationError if payload exceeds maximum size
-     */
-    private _validatePayloadSize(payload: unknown): void {
-        try {
-            const serialized = JSON.stringify(payload);
-            // JSON.stringify returns undefined for undefined values, skip size check in that case
-            if (serialized !== undefined && serialized.length > this.MAX_PAYLOAD_SIZE) {
-                throw new ValidationError(
-                    `Payload size ${serialized.length} bytes exceeds maximum of ${this.MAX_PAYLOAD_SIZE} bytes (10MB). ` +
-                        `This prevents DoS attacks through memory exhaustion and browser freezes.`,
-                    {
-                        size: serialized.length,
-                        maxSize: this.MAX_PAYLOAD_SIZE,
-                        rule: 'payloadSize',
-                    },
-                    VALIDATION_ERRORS.SCHEMA_MISMATCH
-                );
-            }
-        } catch (error) {
-            // If it's already a ValidationError from size check, re-throw it
-            if (error instanceof ValidationError) {
-                throw error;
-            }
-
-            // For other errors (like undefined serialization), let them be caught
-            // by the schema validator which will provide appropriate error handling
-            // This allows the normal error propagation path to continue
-        }
-    }
-
-    /**
-     * Check rate limit for message sending
-     *
-     * @param targetId - Optional target ID for per-target rate limiting
-     * @throws Error if rate limit is exceeded
-     */
-    private _checkRateLimit(targetId?: string): void {
-        if (!this._config.rateLimit?.enabled) {
-            return;
-        }
-
-        const now = Date.now();
-        const window = 1000; // 1 second
-
-        // Track messages per target (or globally if no targetId)
-        const key = targetId || '__global__';
-
-        if (!this._rateLimitTrackers) {
-            this._rateLimitTrackers = new Map();
-        }
-
-        let tracker = this._rateLimitTrackers.get(key);
-
-        if (!tracker || now - tracker.windowStart > window) {
-            // New window
-            tracker = { windowStart: now, count: 0 };
-            this._rateLimitTrackers.set(key, tracker);
-        }
-
-        const limit = this._config.rateLimit.messagesPerSecond ?? 100;
-
-        if (tracker.count >= limit) {
-            throw new Error(`Rate limit exceeded for ${key}: ` + `${limit} messages/sec max`);
-        }
-
-        tracker.count++;
-    }
-
-    // ========================================================================
-    // Connection Lifecycle & Heartbeat Methods
-    // ========================================================================
-
-    /**
-     * Register handlers for system messages (disconnect, heartbeat)
-     */
-    private _registerSystemMessageHandlers(): void {
-        // Handle disconnect notifications from other side
-        this._registry.addHandler(
-            SYSTEM_MESSAGE_TYPES.DISCONNECT,
-            (payload: DisconnectPayload, respond: (response: unknown) => void) => {
-                this._handleDisconnectNotification(payload);
-                respond({ acknowledged: true, timestamp: getTimestamp() });
-            },
-            true // internal
-        );
-
-        // Handle heartbeat pings
-        this._registry.addHandler(
-            SYSTEM_MESSAGE_TYPES.HEARTBEAT_PING,
-            (payload: HeartbeatPingPayload, respond: (response: unknown) => void) => {
-                const pongPayload: HeartbeatPongPayload = {
-                    senderId: this._config.instanceId,
-                    timestamp: getTimestamp(),
-                    receivedPingAt: payload.timestamp,
-                };
-                respond(pongPayload);
-            },
-            true // internal
-        );
-
-        // Handle heartbeat pongs (responses)
-        this._registry.addHandler(
-            SYSTEM_MESSAGE_TYPES.HEARTBEAT_PONG,
-            (
-                _payload: HeartbeatPongPayload,
-                _respond: (response: unknown) => void,
-                metadata: MessageMetadata
-            ) => {
-                // Security: Only record success for the target that actually sent this pong
-                // Using metadata.senderId ensures we only reset the heartbeat timer for the sending target
-                // This prevents a malicious target from sending pongs to keep all connections marked as "alive"
-                const senderId = metadata.senderId;
-
-                if (this._heartbeatManager?.isRunning(senderId)) {
-                    this._heartbeatManager.recordSuccess(senderId);
-                    this._targets.recordHeartbeat(senderId);
-                }
-            },
-            true // internal
-        );
-    }
-
-    /**
-     * Handle disconnect notification from other side
-     */
-    private _handleDisconnectNotification(payload: DisconnectPayload): void {
-        this._logger.info('Received disconnect notification', {
-            senderId: payload.senderId,
-            reason: payload.reason,
-        });
-
-        // Find the target that sent this disconnect
-        // For now, we look for any connected target (in most cases there's only one)
-        for (const target of this._targets.getConnected()) {
-            // Perform local disconnect without sending notification back
-            this._performLocalDisconnect(target.id, payload.reason);
-            break; // Only disconnect one target per notification
-        }
-    }
-
-    /**
-     * Send a system message (internal protocol messages)
-     *
-     * @param type - System message type
-     * @param payload - Message payload
-     * @param targetId - Target to send to
-     * @param timeout - Timeout in milliseconds
-     */
-    private async _sendSystemMessage(
-        type: string,
-        payload: unknown,
-        targetId: string,
-        timeout: number = 2000
-    ): Promise<unknown> {
-        const target = this._targets.get(targetId);
-        if (!target || !target.connected) {
-            throw new ConnectionError(
-                `Cannot send system message: target ${targetId} not connected`,
-                { targetId },
-                CONNECTION_ERRORS.NOT_CONNECTED
-            );
-        }
-
-        const channel = this._channels.get(targetId);
-        if (!channel) {
-            throw new ConnectionError(
-                `Cannot send system message: no channel for ${targetId}`,
-                { targetId },
-                CONNECTION_ERRORS.NOT_CONNECTED
-            );
-        }
-
-        const message = createMessage({
-            type,
-            payload,
-            expectsResponse: true,
-            target: targetId,
-        });
-
-        const targetWindow =
-            target.type === 'iframe'
-                ? (target.target as HTMLIFrameElement).contentWindow
-                : (target.target as Window);
-
-        if (!targetWindow) {
-            throw new ConnectionError(
-                `Target window not available for ${targetId}`,
-                { targetId },
-                CONNECTION_ERRORS.NOT_CONNECTED
-            );
-        }
-
-        // Send message
-        channel.send(message, targetWindow, target.origin || '*');
-
-        // Wait for response with timeout
-        return this._waitForResponse(message, timeout, 0, targetId);
-    }
-
-    /**
-     * Send heartbeat ping to a target
-     *
-     * Called by HeartbeatManager
-     */
-    private async _sendHeartbeatPing(
-        targetId: string,
-        payload: HeartbeatPingPayload
-    ): Promise<void> {
-        // Failures propagate to the heartbeat manager's callback
-        await this._sendSystemMessage(
-            SYSTEM_MESSAGE_TYPES.HEARTBEAT_PING,
-            payload,
-            targetId,
-            this._config.heartbeat.timeout
-        );
-
-        // Success - record heartbeat
-        this._targets.recordHeartbeat(targetId);
-        if (this._heartbeatManager) {
-            this._heartbeatManager.recordSuccess(targetId);
-        }
-    }
-
-    /**
-     * Handle heartbeat failure for a target
-     *
-     * Called by HeartbeatManager when heartbeat fails
-     */
-    private _handleHeartbeatFailure(targetId: string, _consecutiveMissed: number): void {
-        const consecutiveMissed = this._targets.recordMissedHeartbeat(targetId);
-
-        // Emit heartbeat missed event
-        this._emitter.emitSync(SYSTEM_EVENTS.HEARTBEAT_MISSED, {
-            targetId,
-            consecutiveMissed,
-            timestamp: getTimestamp(),
-        });
-
-        this._logger.warn('Heartbeat missed', {
-            targetId,
-            consecutiveMissed,
-            maxMissed: this._config.heartbeat.maxMissed,
-        });
-
-        // Check if max missed heartbeats reached
-        if (consecutiveMissed >= this._config.heartbeat.maxMissed) {
-            this._logger.error('Max missed heartbeats reached, marking connection as dead', {
-                targetId,
-                consecutiveMissed,
-            });
-
-            // Emit connection lost event
-            this._emitter.emitSync(SYSTEM_EVENTS.CONNECTION_LOST, {
-                targetId,
-                reason: 'heartbeat_timeout',
-                timestamp: getTimestamp(),
-            });
-
-            // Perform local disconnect
-            this._performLocalDisconnect(targetId, 'heartbeat_timeout');
         }
     }
 
