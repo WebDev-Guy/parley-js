@@ -44,3 +44,9 @@ temp/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 docs-site/docs/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+

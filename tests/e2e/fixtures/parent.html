@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Parley E2E - Parent</title>
+    </head>
+    <body>
+        <h1>Parent window</h1>
+        <script src="/dist/index.global.js"></script>
+        <script>
+            // Helpers invoked from Playwright via page.evaluate()
+
+            window.setupParley = function (childOrigin, opts) {
+                opts = opts || {};
+                window.parley = window.Parley.create({
+                    targetType: 'iframe',
+                    allowedOrigins: [opts.allowedOrigin || childOrigin],
+                    timeout: opts.timeout || 5000,
+                    heartbeat: opts.heartbeat || { enabled: false },
+                    logLevel: 'none',
+                });
+
+                const iframe = document.createElement('iframe');
+                iframe.id = 'child-frame';
+                iframe.src =
+                    childOrigin + (opts.childPath || '/tests/e2e/fixtures/child-iframe.html');
+                document.body.appendChild(iframe);
+                window.childFrame = iframe;
+
+                return window.parley.connect(iframe, 'child').then(function () {
+                    return 'connected';
+                });
+            };
+
+            window.sendEcho = function (payload) {
+                return window.parley.send('echo', payload, { targetId: 'child' });
+            };
+
+            window.disconnectChild = function () {
+                const result = window.parley.disconnect('child');
+                window.childFrame.remove();
+                window.childFrame = null;
+                return result;
+            };
+
+            window.reconnectChild = function (childOrigin) {
+                const iframe = document.createElement('iframe');
+                iframe.id = 'child-frame';
+                iframe.src = childOrigin + '/tests/e2e/fixtures/child-iframe.html';
+                document.body.appendChild(iframe);
+                window.childFrame = iframe;
+                return window.parley.connect(iframe, 'child2').then(function () {
+                    return window.parley.send('echo', { round: 2 }, { targetId: 'child2' });
+                });
+            };
+        </script>
+    </body>
+</html>

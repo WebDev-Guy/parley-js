@@ -30,6 +30,9 @@ and this project adheres to
 - ESLint flat config with typescript-eslint type-checked rules
   (`no-floating-promises`, `no-misused-promises`, `require-await`), wired into
   `npm run lint` and CI
+- Playwright E2E suite (`npm run test:e2e`) exercising real cross-origin iframe
+  and window.open communication in Chromium: handshake round-trip, handshake
+  timeout, origin rejection, reconnect, and popup-close detection
 - Root `SECURITY.md` and `CODE_OF_CONDUCT.md`
 
 ### Changed

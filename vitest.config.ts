@@ -10,9 +10,9 @@ export default defineConfig({
         testTimeout: 10000,
         hookTimeout: 10000,
 
-        // Test file patterns
+        // Test file patterns (E2E specs in tests/e2e run via Playwright, not vitest)
         include: ['tests/**/*.test.ts'],
-        exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
+        exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', 'tests/e2e'],
 
         // Coverage configuration
         coverage: {
@@ -25,7 +25,8 @@ export default defineConfig({
                 '**/*.d.ts',
                 '**/*.config.ts',
                 '**/index.ts',
-                // Exclude files that require integration tests (actual iframe/window communication)
+                // WindowChannel needs a real browser (window.open); it is covered
+                // by the Playwright E2E suite in tests/e2e instead
                 '**/WindowChannel.ts',
             ],
             // Thresholds track current actuals (ratchet upward as coverage improves).

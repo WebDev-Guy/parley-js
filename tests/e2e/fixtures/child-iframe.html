@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Parley E2E - Child iframe</title>
+    </head>
+    <body>
+        <h1>Child iframe</h1>
+        <script src="/dist/index.global.js"></script>
+        <script>
+            // Parent fixture is always served from the 127.0.0.1 origin
+            const PARENT_ORIGIN = 'http://127.0.0.1:4173';
+
+            const parley = window.Parley.create({
+                targetType: 'iframe',
+                allowedOrigins: [PARENT_ORIGIN],
+                heartbeat: { enabled: false },
+                logLevel: 'none',
+            });
+
+            parley.on('echo', function (payload, respond) {
+                respond(Object.assign({ echoed: true, childOrigin: location.origin }, payload));
+            });
+
+            parley.connect(window.parent, 'parent').catch(function (error) {
+                console.error('Child connect failed:', error);
+            });
+        </script>
+    </body>
+</html>
