@@ -709,37 +709,28 @@ For detailed documentation contribution guidelines, see
 
 ## Release Process
 
-Releases are handled by maintainers:
+Releases are automated with
+[changesets](https://github.com/changesets/changesets):
 
-1. **Version Bump**
-
-    ```bash
-    npm version major|minor|patch
-    ```
-
-2. **Update CHANGELOG.md**
-    - Move Unreleased changes to new version
-    - Add release date
-    - List breaking changes
-    - Credit contributors
-
-3. **Tag Release**
+1. **Add a changeset with your PR** (any change that affects the published
+   package):
 
     ```bash
-    git tag v1.x.x
-    git push --tags
+    npx changeset
     ```
 
-4. **Publish to npm**
+    Pick the bump type (patch/minor/major) and describe the change. Commit the
+    generated `.changeset/*.md` file with your PR.
 
-    ```bash
-    npm publish
-    ```
+2. **Version PR** - when changesets land on `main`, the release workflow opens
+   (or updates) a "Version Packages" PR that bumps the version and updates
+   `CHANGELOG.md`.
 
-5. **Create GitHub Release**
-    - Add release notes
-    - Highlight breaking changes
-    - Credit contributors
+3. **Publish** - merging the Version Packages PR publishes to npm automatically
+   with provenance attestation.
+
+Maintainer setup: the release workflow needs an `NPM_TOKEN` repository secret (a
+granular npm automation token with publish rights for `ignite-parleyjs`).
 
 ---
 
