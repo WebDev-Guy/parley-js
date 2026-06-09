@@ -20,8 +20,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Parley } from '../../src/core/Parley';
-import { ValidationError, TimeoutError, TargetNotFoundError } from '../../src/errors/ErrorTypes';
-import { createMockWindow, createConnectedMockWindows, createMockLogger } from '../utils/mock-factory';
+import { ValidationError, TargetNotFoundError } from '../../src/errors/ErrorTypes';
 
 describe('Parley', () => {
     let parley: Parley;
@@ -372,9 +371,9 @@ describe('Parley', () => {
             });
 
             // Missing required field should throw
-            await expect(
-                parley.send('typed:message', { other: 'field' })
-            ).rejects.toThrow(ValidationError);
+            await expect(parley.send('typed:message', { other: 'field' })).rejects.toThrow(
+                ValidationError
+            );
         });
 
         it('should throw after destroy', async () => {
@@ -388,9 +387,9 @@ describe('Parley', () => {
         it('should accept custom timeout option', async () => {
             // Even though this will fail (no connected targets),
             // it should accept the timeout option without error
-            await expect(
-                parley.send('test:message', {}, { timeout: 50 })
-            ).rejects.toThrow(TargetNotFoundError);
+            await expect(parley.send('test:message', {}, { timeout: 50 })).rejects.toThrow(
+                TargetNotFoundError
+            );
         });
 
         it('should accept expectsResponse option', async () => {
@@ -672,9 +671,9 @@ describe('Parley', () => {
             parley.onSystem('system:error', errorHandler);
 
             // Invalid payload should throw ValidationError
-            await expect(
-                parley.send('typed:message', { wrongField: 123 })
-            ).rejects.toThrow(ValidationError);
+            await expect(parley.send('typed:message', { wrongField: 123 })).rejects.toThrow(
+                ValidationError
+            );
         });
 
         it('should throw TimeoutError when response not received', async () => {
@@ -743,7 +742,9 @@ describe('Parley', () => {
                 targetType: 'iframe',
             });
 
-            await expect(parley.send('test:message', undefined)).rejects.toThrow(TargetNotFoundError);
+            await expect(parley.send('test:message', undefined)).rejects.toThrow(
+                TargetNotFoundError
+            );
         });
     });
 

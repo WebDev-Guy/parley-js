@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Logger, type LogLevel } from '../../src/utils/Logger';
+import { Logger } from '../../src/utils/Logger';
 
 describe('Logger', () => {
     let logger: Logger;
@@ -16,10 +16,10 @@ describe('Logger', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => { });
-        consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => { });
-        consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
-        consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+        consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     });
 
     afterEach(() => {

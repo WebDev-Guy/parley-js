@@ -7,8 +7,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IframeChannel } from '../../src/communication/IframeChannel';
 import { ConnectionError } from '../../src/errors/ErrorTypes';
-import { createMockWindow, createMockIframe, createMockLogger } from '../utils/mock-factory';
-import { waitForEvent, delay, createDeferred } from '../utils/test-helpers';
+import { createMockIframe, createMockLogger } from '../utils/mock-factory';
+import { delay } from '../utils/test-helpers';
 
 describe('IframeChannel', () => {
     let channel: IframeChannel;
@@ -232,7 +232,7 @@ describe('IframeChannel', () => {
             };
 
             try {
-                await channel.send(message);
+                channel.send(message);
             } catch {
                 // Expected - no actual iframe
             }

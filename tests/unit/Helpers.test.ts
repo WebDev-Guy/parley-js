@@ -4,13 +4,8 @@
  * @module tests/unit
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import {
-    generateUUID,
-    getTimestamp,
-    getCurrentOrigin,
-    deepClone,
-} from '../../src/utils/Helpers';
+import { describe, it, expect } from 'vitest';
+import { generateUUID, getTimestamp, getCurrentOrigin, deepClone } from '../../src/utils/Helpers';
 
 describe('Helpers', () => {
     describe('generateUUID()', () => {
@@ -78,7 +73,7 @@ describe('Helpers', () => {
         it('should increase with time', async () => {
             const time1 = getTimestamp();
             // Sleep 10ms to ensure time difference
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise((resolve) => setTimeout(resolve, 10));
             const time2 = getTimestamp();
 
             expect(time2).toBeGreaterThanOrEqual(time1);

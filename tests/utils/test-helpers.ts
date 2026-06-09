@@ -64,7 +64,11 @@ export async function waitForEvents<T = unknown>(
     return new Promise((resolve, reject) => {
         const events: T[] = [];
         const timer = setTimeout(() => {
-            reject(new Error(`Timeout waiting for ${count} events: ${eventName} (got ${events.length})`));
+            reject(
+                new Error(
+                    `Timeout waiting for ${count} events: ${eventName} (got ${events.length})`
+                )
+            );
         }, timeout);
 
         const handler = (data: T) => {
@@ -206,7 +210,7 @@ export function expectError(
                 expect((error as { code: string }).code).toBe(expectedError.code);
             }
         } else {
-            throw new Error('Expected Error instance');
+            throw new Error('Expected Error instance', { cause: error });
         }
     }
 }

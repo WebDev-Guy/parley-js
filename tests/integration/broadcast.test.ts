@@ -295,10 +295,10 @@ describe('Broadcast Pattern Integration', () => {
 
     describe('Broadcast with system events', () => {
         it('should emit system:broadcast event', () => {
-            let broadcastEvent: any;
+            let _broadcastEvent: any;
 
             broadcaster.onSystem('system:broadcast', (event) => {
-                broadcastEvent = event;
+                _broadcastEvent = event;
             });
 
             broadcaster.register('notify', { schema: { type: 'object' } });
@@ -310,10 +310,10 @@ describe('Broadcast Pattern Integration', () => {
         });
 
         it('should include broadcast metadata in event', () => {
-            let broadcastEvent: any;
+            let _broadcastEvent: any;
 
             broadcaster.onSystem('system:broadcast', (event) => {
-                broadcastEvent = event;
+                _broadcastEvent = event;
             });
 
             // broadcast() called

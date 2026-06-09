@@ -6,7 +6,6 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Parley } from '../../src/core/Parley';
-import { ValidationError } from '../../src/errors/ErrorTypes';
 
 describe('Schema Validation Integration', () => {
     let parley: Parley;
@@ -74,16 +73,16 @@ describe('Schema Validation Integration', () => {
                 },
             });
 
-            let validMessageReceived = false;
-            let invalidMessageReceived = false;
+            let _validMessageReceived = false;
+            let _invalidMessageReceived = false;
 
-            parley.on('data:received', (payload) => {
-                validMessageReceived = true;
+            parley.on('data:received', (_payload) => {
+                _validMessageReceived = true;
             });
 
             parley.onSystem('system:error', (error) => {
                 if (error.code === 'VALIDATION_ERROR') {
-                    invalidMessageReceived = true;
+                    _invalidMessageReceived = true;
                 }
             });
 

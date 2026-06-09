@@ -49,7 +49,7 @@ export function createMockWindow(id: string): MockWindow {
         get closed() {
             return closed;
         },
-        postMessage: vi.fn((data: unknown, targetOrigin: string) => {
+        postMessage: vi.fn((_data: unknown, _targetOrigin: string) => {
             // Simulate postMessage behavior - does nothing by default
             // In tests, connect two mock windows to enable communication
         }),
@@ -197,7 +197,11 @@ export function createTestMessage<T = unknown>(
 export function createTestConfig(overrides: Partial<ParleyConfig> = {}): ParleyConfig {
     return {
         targetType: 'window',
-        allowedOrigins: ['https://example.com', 'https://parent.example.com', 'https://child.example.com'],
+        allowedOrigins: [
+            'https://example.com',
+            'https://parent.example.com',
+            'https://child.example.com',
+        ],
         timeout: 5000,
         logLevel: 'silent',
         heartbeat: {

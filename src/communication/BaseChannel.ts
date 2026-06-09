@@ -251,7 +251,7 @@ export abstract class BaseChannel {
         }
 
         // Check if this is a Parley message
-        const data = event.data;
+        const data: unknown = event.data;
         if (!this._isParleyMessage(data)) {
             // Not a Parley message, ignore silently
             return;

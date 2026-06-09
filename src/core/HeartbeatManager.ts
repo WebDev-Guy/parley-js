@@ -153,15 +153,16 @@ export class HeartbeatManager {
         this._logger.debug('Starting heartbeat', { targetId, interval: this._config.interval });
 
         // Send initial heartbeat after a short delay
+        // _ping() handles its own errors and never rejects
         setTimeout(() => {
             if (this._intervals.has(targetId)) {
-                this._ping(targetId);
+                void this._ping(targetId);
             }
         }, 1000);
 
         // Start periodic heartbeat
         const interval = setInterval(() => {
-            this._ping(targetId);
+            void this._ping(targetId);
         }, this._config.interval);
 
         this._intervals.set(targetId, interval);

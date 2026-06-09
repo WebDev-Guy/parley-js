@@ -279,7 +279,7 @@ describe('EventEmitter', () => {
             emitter.on('test', handler2);
 
             // Suppress console.error for this test
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
             await emitter.emit('test', 'data');
 
@@ -354,7 +354,7 @@ describe('EventEmitter', () => {
             emitter.on('test', handler1);
             emitter.on('test', handler2);
 
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
             emitter.emitSync('test', 'data');
 
@@ -548,7 +548,7 @@ describe('EventEmitter', () => {
         it('should not warn when max listeners is 0 (unlimited)', () => {
             emitter.setMaxListeners(0);
 
-            const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
+            const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
             // Add many listeners
             for (let i = 0; i < 200; i++) {
@@ -590,13 +590,12 @@ describe('EventEmitter', () => {
 
         it('should handle removing handler during emit', async () => {
             const handler1 = vi.fn();
-            let unsubscribe: () => void;
             const handler2 = vi.fn(() => {
                 unsubscribe();
             });
             const handler3 = vi.fn();
 
-            unsubscribe = emitter.on('test', handler1);
+            const unsubscribe = emitter.on('test', handler1);
             emitter.on('test', handler2);
             emitter.on('test', handler3);
 

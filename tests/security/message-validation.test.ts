@@ -147,7 +147,12 @@ describe('Message Structure Validation Security', () => {
 
     describe('Optional field validation', () => {
         it('should accept valid message with _target', () => {
-            const valid = createMessage({ type: 'test', payload: {}, expectsResponse: false, target: 'target-id' });
+            const valid = createMessage({
+                type: 'test',
+                payload: {},
+                expectsResponse: false,
+                target: 'target-id',
+            });
             expect(() => validateMessageProtocol(valid)).not.toThrow();
         });
 
@@ -179,7 +184,7 @@ describe('Message Structure Validation Security', () => {
 
         it('should not allow field overwriting', () => {
             const message = createMessage({ type: 'test', payload: {} });
-            const originalId = message._id;
+            const _originalId = message._id;
 
             // Attempt to overwrite
             try {

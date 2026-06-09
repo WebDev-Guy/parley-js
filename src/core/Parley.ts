@@ -38,6 +38,7 @@ import {
     TARGET_ERRORS,
     CONNECTION_ERRORS,
     VALIDATION_ERRORS,
+    type ErrorCode,
 } from '../errors/ErrorCodes';
 import { DefaultSecurityLayer, type SecurityLayer } from '../security/SecurityLayer';
 import {
@@ -869,7 +870,7 @@ export class Parley {
                 }, timeout);
 
                 const pendingRequest: PendingRequest<R> = {
-                    resolve: resolve as (value: unknown) => void,
+                    resolve,
                     reject,
                     timeoutHandle,
                     timeout,
@@ -882,7 +883,7 @@ export class Parley {
                 this._pendingRequests.set(message._id, pendingRequest as PendingRequest);
             } catch (error) {
                 // If anything goes wrong during setup, reject the promise
-                reject(error);
+                reject(error instanceof Error ? error : new Error(String(error)));
             }
         });
     }
@@ -975,7 +976,9 @@ export class Parley {
         if (isResponseMessage(message)) {
             this._handleResponse(message, sourceTargetId);
         } else {
-            this._handleRequest(message as MessageProtocol, source, sourceTargetId);
+            this._handleRequest(message, source, sourceTargetId).catch((error: unknown) => {
+                this._logger.error('Error handling incoming message:', error);
+            });
         }
     }
 
@@ -1023,7 +1026,7 @@ export class Parley {
         } else {
             const error = new ParleyError(
                 response.error?.message ?? 'Request failed',
-                (response.error?.code as any) ?? 'ERR_UNKNOWN',
+                (response.error?.code as ErrorCode | undefined) ?? 'ERR_UNKNOWN',
                 response.error?.details
             );
             pending.reject(error);
@@ -1473,22 +1476,18 @@ export class Parley {
         targetId: string,
         payload: HeartbeatPingPayload
     ): Promise<void> {
-        try {
-            await this._sendSystemMessage(
-                SYSTEM_MESSAGE_TYPES.HEARTBEAT_PING,
-                payload,
-                targetId,
-                this._config.heartbeat.timeout
-            );
+        // Failures propagate to the heartbeat manager's callback
+        await this._sendSystemMessage(
+            SYSTEM_MESSAGE_TYPES.HEARTBEAT_PING,
+            payload,
+            targetId,
+            this._config.heartbeat.timeout
+        );
 
-            // Success - record heartbeat
-            this._targets.recordHeartbeat(targetId);
-            if (this._heartbeatManager) {
-                this._heartbeatManager.recordSuccess(targetId);
-            }
-        } catch (error) {
-            // Let the failure be handled by the heartbeat manager's callback
-            throw error;
+        // Success - record heartbeat
+        this._targets.recordHeartbeat(targetId);
+        if (this._heartbeatManager) {
+            this._heartbeatManager.recordSuccess(targetId);
         }
     }
 

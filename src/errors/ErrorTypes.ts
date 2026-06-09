@@ -58,7 +58,7 @@ export class ParleyError extends Error {
 
         // Maintains proper stack trace for where error was thrown (V8 engines)
         const ErrorWithCapture = Error as typeof Error & {
-            captureStackTrace?: (target: object, constructor: Function) => void;
+            captureStackTrace?: (target: object, constructor: unknown) => void;
         };
         if (ErrorWithCapture.captureStackTrace) {
             ErrorWithCapture.captureStackTrace(this, this.constructor);

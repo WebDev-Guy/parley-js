@@ -16,7 +16,7 @@ describe('Schema Validation DoS Prevention', () => {
 
     describe('Deep nesting protection', () => {
         it('should validate deeply nested schema', () => {
-            let schema: any = { type: 'object', properties: {} };
+            const schema: any = { type: 'object', properties: {} };
             let current = schema.properties;
 
             // 50 levels deep
@@ -35,7 +35,7 @@ describe('Schema Validation DoS Prevention', () => {
         });
 
         it('should reject or handle extremely deep nesting', () => {
-            let schema: any = { type: 'object', properties: {} };
+            const schema: any = { type: 'object', properties: {} };
             let current = schema.properties;
 
             // 1000 levels deep
@@ -51,7 +51,7 @@ describe('Schema Validation DoS Prevention', () => {
             // Not crash the system
             expect(() => {
                 // Very deeply nested data
-                let data: any = {};
+                const data: any = {};
                 let d = data;
                 for (let i = 0; i < 100; i++) {
                     d.level = {};
@@ -99,7 +99,7 @@ describe('Schema Validation DoS Prevention', () => {
             const start = Date.now();
 
             // Long string that doesn't match
-            const result = validator.validate({ text: 'aaaaaaaaaaaaaaaaaaac' }, schema);
+            validator.validate({ text: 'aaaaaaaaaaaaaaaaaaac' }, schema);
 
             const elapsed = Date.now() - start;
 
@@ -159,7 +159,7 @@ describe('Schema Validation DoS Prevention', () => {
             const start = Date.now();
 
             expect(() => {
-                let data: any = {};
+                const data: any = {};
                 let current = data;
                 for (let i = 0; i < 100; i++) {
                     current.child = {};
@@ -215,7 +215,10 @@ describe('Schema Validation DoS Prevention', () => {
             expect(validResult.valid).toBe(true);
 
             // Large array - validates as array type (minItems/maxItems not enforced by this validator)
-            const largeResult = validator.validate({ items: Array.from({ length: 100 }, (_, i) => i) }, schema);
+            const largeResult = validator.validate(
+                { items: Array.from({ length: 100 }, (_, i) => i) },
+                schema
+            );
             expect(largeResult.valid).toBe(true); // Type validation passes even without constraint enforcement
         });
     });

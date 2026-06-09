@@ -261,7 +261,7 @@ export function validateConfig(config: ParleyConfig): void {
 
     if (config.targetType !== 'iframe' && config.targetType !== 'window') {
         throw new Error(
-            `Configuration error: targetType must be 'iframe' or 'window', received: ${config.targetType}`
+            `Configuration error: targetType must be 'iframe' or 'window', received: ${String(config.targetType)}`
         );
     }
 

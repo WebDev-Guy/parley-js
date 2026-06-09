@@ -10,6 +10,10 @@ and this project adheres to
 
 ### Fixed
 
+- Heartbeat pings and async message handling no longer create unhandled promise
+  rejections (floating promises found by the new type-aware lint rules)
+- `EventEmitter` now logs errors thrown by async event handlers instead of
+  letting them surface as unhandled rejections
 - `createBatchingAdapter()` no longer leaks its flush interval: the timer starts
   lazily on the first event and is cleared by the new `destroy()` method, which
   also flushes any buffered events
@@ -23,6 +27,9 @@ and this project adheres to
 - Optional `destroy()` method on the `AnalyticsAdapter` interface;
   `AnalyticsManager.removeAdapter()` and `clear()` call it automatically
 - `npm run size` script with per-format bundle budgets via size-limit
+- ESLint flat config with typescript-eslint type-checked rules
+  (`no-floating-promises`, `no-misused-promises`, `require-await`), wired into
+  `npm run lint` and CI
 - Root `SECURITY.md` and `CODE_OF_CONDUCT.md`
 
 ### Changed

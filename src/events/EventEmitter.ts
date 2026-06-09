@@ -202,7 +202,12 @@ export class EventEmitter {
             }
 
             try {
-                entry.handler(data);
+                const result = entry.handler(data);
+                if (result instanceof Promise) {
+                    result.catch((error: unknown) => {
+                        console.error(`Error in async event handler for "${event}":`, error);
+                    });
+                }
             } catch (error) {
                 // Log error but don't break other handlers
                 console.error(`Error in event handler for "${event}":`, error);

@@ -86,7 +86,7 @@ export function deepClone<T>(obj: T): T {
     }
 
     try {
-        return JSON.parse(JSON.stringify(obj));
+        return JSON.parse(JSON.stringify(obj)) as T;
     } catch {
         throw new Error('Object cannot be serialized to JSON');
     }
@@ -112,7 +112,7 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
         return false;
     }
 
-    const proto = Object.getPrototypeOf(value);
+    const proto: unknown = Object.getPrototypeOf(value);
     return proto === Object.prototype || proto === null;
 }
 
