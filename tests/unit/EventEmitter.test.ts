@@ -632,4 +632,80 @@ describe('EventEmitter', () => {
             expect(handler2).toHaveBeenCalledWith('second');
         });
     });
+
+    describe('destroy()', () => {
+        it('should remove all listeners', () => {
+            const local = new EventEmitter();
+            local.on('a', vi.fn());
+            local.on('b', vi.fn());
+
+            local.destroy();
+
+            expect(local.eventNames()).toEqual([]);
+            expect(local.isDestroyed).toBe(true);
+        });
+
+        it('should not invoke handlers emitted after destroy', async () => {
+            const local = new EventEmitter();
+            const handler = vi.fn();
+            local.on('test', handler);
+
+            local.destroy();
+            await local.emit('test', 'data');
+            local.emitSync('test', 'data');
+
+            expect(handler).not.toHaveBeenCalled();
+        });
+
+        it('should warn and return a no-op unsubscribe for on() after destroy', () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const local = new EventEmitter();
+            local.destroy();
+
+            const handler = vi.fn();
+            const unsubscribe = local.on('test', handler);
+
+            expect(warnSpy).toHaveBeenCalled();
+            expect(local.listenerCount('test')).toBe(0);
+            expect(() => unsubscribe()).not.toThrow();
+
+            warnSpy.mockRestore();
+        });
+
+        it('should warn and return a no-op unsubscribe for once() after destroy', () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const local = new EventEmitter();
+            local.destroy();
+
+            local.once('test', vi.fn());
+
+            expect(warnSpy).toHaveBeenCalled();
+            expect(local.listenerCount('test')).toBe(0);
+
+            warnSpy.mockRestore();
+        });
+    });
+
+    describe('onLimitExceeded behavior', () => {
+        it('should throw by default when the limit is exceeded', () => {
+            const local = new EventEmitter(2);
+            local.on('test', vi.fn());
+            local.on('test', vi.fn());
+
+            expect(() => local.on('test', vi.fn())).toThrow(/Max listeners/);
+        });
+
+        it('should warn and still register in warn mode', () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const local = new EventEmitter(2, 'warn');
+            local.on('test', vi.fn());
+            local.on('test', vi.fn());
+
+            expect(() => local.on('test', vi.fn())).not.toThrow();
+            expect(warnSpy).toHaveBeenCalled();
+            expect(local.listenerCount('test')).toBe(3);
+
+            warnSpy.mockRestore();
+        });
+    });
 });

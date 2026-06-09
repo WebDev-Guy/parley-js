@@ -21,6 +21,14 @@ interface ListenerEntry<T = unknown> {
 }
 
 /**
+ * Behavior when the max listener limit is exceeded
+ *
+ * - 'throw': throw an Error (default; surfaces leaks early)
+ * - 'warn': log a console warning and register the listener anyway
+ */
+export type MaxListenersExceededBehavior = 'throw' | 'warn';
+
+/**
  * Internal event emitter class for Parley
  *
  * Provides a type-safe pub/sub implementation with support for:
@@ -57,12 +65,28 @@ export class EventEmitter {
     private _maxListeners: number = 100;
 
     /**
+     * What to do when the max listener limit is exceeded
+     */
+    private readonly _onLimitExceeded: MaxListenersExceededBehavior;
+
+    /**
+     * Whether destroy() has been called
+     */
+    private _destroyed: boolean = false;
+
+    /**
      * Creates a new EventEmitter instance
      *
      * @param maxListeners - Maximum listeners per event (default: 100)
+     * @param onLimitExceeded - Behavior when the limit is exceeded
+     *                          (default: 'throw')
      */
-    constructor(maxListeners: number = 100) {
+    constructor(
+        maxListeners: number = 100,
+        onLimitExceeded: MaxListenersExceededBehavior = 'throw'
+    ) {
         this._maxListeners = maxListeners;
+        this._onLimitExceeded = onLimitExceeded;
     }
 
     /**
@@ -272,6 +296,25 @@ export class EventEmitter {
     }
 
     /**
+     * Destroy the emitter
+     *
+     * Removes all listeners and rejects future subscriptions. Subscribing
+     * after destroy logs a warning and returns a no-op unsubscribe instead
+     * of throwing, because teardown ordering races are common.
+     */
+    public destroy(): void {
+        this._destroyed = true;
+        this._listeners.clear();
+    }
+
+    /**
+     * Whether destroy() has been called
+     */
+    public get isDestroyed(): boolean {
+        return this._destroyed;
+    }
+
+    /**
      * Internal method to add a listener
      *
      * @param event - Event name
@@ -284,6 +327,13 @@ export class EventEmitter {
         handler: EventHandler<T>,
         once: boolean
     ): () => void {
+        if (this._destroyed) {
+            console.warn(`Listener for "${event}" ignored: this EventEmitter has been destroyed.`);
+            return () => {
+                // No-op: nothing was registered
+            };
+        }
+
         let listeners = this._listeners.get(event);
 
         if (!listeners) {
@@ -294,11 +344,15 @@ export class EventEmitter {
         // Prevent memory leaks by enforcing max listener limit
         // Follows Node.js EventEmitter pattern of throwing on limit exceeded
         if (this._maxListeners > 0 && listeners.length >= this._maxListeners) {
-            throw new Error(
+            const message =
                 `Max listeners (${this._maxListeners}) exceeded for event "${event}". ` +
-                    'This likely indicates a memory leak. ' +
-                    `Use emitter.setMaxListeners(n) to increase the limit if this is intentional.`
-            );
+                'This likely indicates a memory leak. ' +
+                `Use emitter.setMaxListeners(n) to increase the limit if this is intentional.`;
+
+            if (this._onLimitExceeded === 'throw') {
+                throw new Error(message);
+            }
+            console.warn(message);
         }
 
         const entry: ListenerEntry = {

@@ -47,6 +47,7 @@ export type { HeartbeatSendFunction, HeartbeatFailureHandler } from './core/Hear
 export { BaseChannel } from './communication/BaseChannel';
 export { IframeChannel } from './communication/IframeChannel';
 export { WindowChannel } from './communication/WindowChannel';
+export { HandshakeController, type HandshakeState } from './communication/HandshakeController';
 
 // Validation
 export { SchemaValidator, validateSchema } from './validation/SchemaValidator';
@@ -98,11 +99,16 @@ export {
     SERIALIZATION_ERRORS,
     CONNECTION_ERRORS,
     CONFIG_ERRORS,
+    GENERAL_ERRORS,
     type ErrorCode,
 } from './errors/ErrorCodes';
 
 // Events
-export { EventEmitter, type EventHandler } from './events/EventEmitter';
+export {
+    EventEmitter,
+    type EventHandler,
+    type MaxListenersExceededBehavior,
+} from './events/EventEmitter';
 export {
     SYSTEM_EVENTS,
     type SystemEventName,
