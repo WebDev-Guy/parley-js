@@ -335,8 +335,18 @@ export class SendPipeline {
             );
         }
 
+        if (!target.origin) {
+            // BaseChannel.send() rejects wildcard origins, so fail fast with a
+            // clear error instead of falling back to '*'
+            throw new ConnectionError(
+                `Cannot send system message: origin for target ${targetId} has not been established`,
+                { targetId },
+                CONNECTION_ERRORS.NOT_CONNECTED
+            );
+        }
+
         // Send message
-        channel.send(message, targetWindow, target.origin || '*');
+        channel.send(message, targetWindow, target.origin);
 
         // Wait for response with timeout
         return this._waitForResponse(message, timeout, 0, targetId);
@@ -461,7 +471,17 @@ export class SendPipeline {
             return;
         }
 
-        channel.send(message, targetWindow, target.origin || '*');
+        if (!target.origin) {
+            // BaseChannel.send() rejects wildcard origins, so fail fast with a
+            // clear error instead of falling back to '*'
+            throw new ConnectionError(
+                `Cannot send message: origin for target ${target.id} has not been established`,
+                { targetId: target.id },
+                CONNECTION_ERRORS.NOT_CONNECTED
+            );
+        }
+
+        channel.send(message, targetWindow, target.origin);
         this._logger.debug('Message sent to target', {
             targetId: target.id,
             messageType: message._type,
@@ -484,6 +504,7 @@ export class SendPipeline {
                 const timeoutHandle = setTimeout(() => {
                     this._handleTimeout(
                         message._id,
+                        retries,
                         retries,
                         timeout,
                         targetId,
@@ -517,6 +538,7 @@ export class SendPipeline {
     private _handleTimeout(
         messageId: string,
         retriesRemaining: number,
+        totalRetries: number,
         timeout: number,
         targetId: string | undefined,
         resolve: (value: unknown) => void,
@@ -539,6 +561,7 @@ export class SendPipeline {
                 this._handleTimeout(
                     messageId,
                     retriesRemaining - 1,
+                    totalRetries,
                     timeout,
                     targetId,
                     resolve,
@@ -549,7 +572,7 @@ export class SendPipeline {
             pending.timeoutHandle = timeoutHandle;
             pending.retriesRemaining = retriesRemaining - 1;
         } else {
-            // No more retries
+            // No more retries: every configured retry has been attempted
             this._pendingRequests.delete(messageId);
 
             const error = new TimeoutError(
@@ -557,7 +580,7 @@ export class SendPipeline {
                 {
                     messageId,
                     timeout,
-                    retriesAttempted: pending.retriesRemaining,
+                    retriesAttempted: totalRetries,
                 },
                 TIMEOUT_ERRORS.NO_RESPONSE
             );
@@ -568,7 +591,7 @@ export class SendPipeline {
                 messageType: pending.messageType,
                 targetId,
                 timeoutMs: timeout,
-                retriesAttempted: pending.retriesRemaining,
+                retriesAttempted: totalRetries,
                 timestamp: getTimestamp(),
             });
 

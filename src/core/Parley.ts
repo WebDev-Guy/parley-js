@@ -682,7 +682,15 @@ export class Parley {
             return;
         }
 
-        channel.send(response, target, targetInfo.origin || '*');
+        if (!targetInfo.origin) {
+            // BaseChannel.send() rejects wildcard origins, so don't fall back to '*'
+            this._logger.error('Cannot send response: target origin not established', {
+                targetId,
+            });
+            return;
+        }
+
+        channel.send(response, target, targetInfo.origin);
 
         // Emit events
         this._emitter.emitSync(SYSTEM_EVENTS.RESPONSE_SENT, {
