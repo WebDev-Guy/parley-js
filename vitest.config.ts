@@ -28,12 +28,14 @@ export default defineConfig({
                 // Exclude files that require integration tests (actual iframe/window communication)
                 '**/WindowChannel.ts',
             ],
-            // Thresholds for unit tests - integration tests would cover remaining code
+            // Thresholds track current actuals (ratchet upward as coverage improves).
+            // WindowChannel.ts is excluded above because it needs a real browser;
+            // it is exercised by the integration suite instead.
             thresholds: {
-                lines: 55,
-                functions: 55,
-                branches: 50,
-                statements: 55,
+                lines: 65,
+                functions: 65,
+                branches: 60,
+                statements: 65,
             },
         },
 

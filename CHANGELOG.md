@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `createBatchingAdapter()` no longer leaks its flush interval: the timer starts
+  lazily on the first event and is cleared by the new `destroy()` method, which
+  also flushes any buffered events
+- Package `exports` map now points at files that actually exist: `import`
+  resolves to `./dist/index.js` (ESM) and `require` to `./dist/index.cjs`
+  (CommonJS). Previously `import` pointed at a missing `index.mjs` and `require`
+  at the ESM build
+
+### Added
+
+- Optional `destroy()` method on the `AnalyticsAdapter` interface;
+  `AnalyticsManager.removeAdapter()` and `clear()` call it automatically
+- `npm run size` script with per-format bundle budgets via size-limit
+- Root `SECURITY.md` and `CODE_OF_CONDUCT.md`
+
+### Changed
+
+- CI: removed redundant workflow (wrong Node version), deduplicated coverage
+  run, bundle size now checked per format
+- Coverage thresholds in `vitest.config.ts` raised to current actuals;
+  documentation now references the enforced thresholds instead of a fixed
+  percentage claim
+
 ## [1.0.0] - 2025-12-11
 
 ### Added

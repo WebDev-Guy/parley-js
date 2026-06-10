@@ -37,12 +37,10 @@ jobs:
       - name: Run type check
         run: npm run typecheck
       
-      - name: Run tests
-        run: npm test
-      
-      - name: Generate coverage report
+      - name: Run tests with coverage
+        # Fails if coverage is below thresholds defined in vitest.config.ts
         run: npm run test:coverage
-      
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -50,12 +48,6 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
-      
-      - name: Check coverage thresholds
-        run: |
-          echo "Checking coverage thresholds..."
-          # This will fail if coverage is below thresholds defined in vitest.config.ts
-          npm run test:coverage
   
   security:
     name: Security Tests
@@ -123,11 +115,4 @@ jobs:
         run: npm run build
       
       - name: Check bundle size
-        run: |
-          SIZE=$(stat -c%s "dist/index.js")
-          MAX_SIZE=$((56 * 1024)) # 56KB
-          if [ $SIZE -gt $MAX_SIZE ]; then
-            echo "Bundle size ($SIZE bytes) exceeds maximum ($MAX_SIZE bytes)"
-            exit 1
-          fi
-          echo "Bundle size: $SIZE bytes (within limit)"
+        run: npm run size

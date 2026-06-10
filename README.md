@@ -23,7 +23,8 @@
 
 ## Features
 
-- **85%+ Test Coverage** - Comprehensive unit, integration, and security tests
+- **Thoroughly Tested** - 800+ unit, integration, and security tests with
+  coverage thresholds enforced in CI
 - **Security-First Design** - Origin validation, payload sanitization, DoS
   prevention
 - **Type-Safe** - Full TypeScript with JSDoc comments
@@ -40,6 +41,9 @@
 ```bash
 npm install ignite-parleyjs
 ```
+
+Requires Node.js 20 or later for development and tooling. The library itself
+runs in any modern browser (see Browser Support below).
 
 ### CDN Usage
 
@@ -350,8 +354,8 @@ parley.onAnalytics((event) => {
 
 ## Testing
 
-Parley-js maintains **85%+ test coverage** across unit, integration, and
-security tests.
+Parley-js ships with 800+ tests across unit, integration, and security suites.
+Coverage thresholds are enforced in CI.
 
 ### Run Tests
 
@@ -375,9 +379,9 @@ testing documentation.
 
 ### Coverage Requirements
 
-- Overall: **85%+** code coverage
-- Core modules: **90%+** coverage
-- Security layer: **95%+** coverage
+Coverage thresholds are defined in `vitest.config.ts` and enforced by CI.
+Contributions must not reduce coverage below those thresholds; raising them over
+time is encouraged.
 
 ## Security
 

@@ -33,7 +33,7 @@ uphold this code. Please report unacceptable behavior to the maintainers.
 
 ### Prerequisites
 
-- Node.js 18 or higher
+- Node.js 20 or higher
 - npm, yarn, or pnpm
 - Git
 
@@ -158,8 +158,9 @@ git push
 
 ## Testing
 
-Parley-js maintains **85%+ test coverage**. All contributions must include
-tests.
+All contributions must include tests. Coverage thresholds are defined in
+`vitest.config.ts` and enforced in CI - contributions must not reduce coverage
+below them.
 
 ### Test Requirements
 
@@ -208,9 +209,9 @@ npm run test:watch
 
 ### Coverage Requirements
 
-- Overall: **85%+**
-- Core modules: **90%+**
-- Security layer: **95%+**
+- Coverage must meet the thresholds in `vitest.config.ts` (enforced by CI)
+- New code should come with tests that exercise its main paths and edge cases
+- Raising the thresholds over time is encouraged
 
 See [TESTING.md](./docs/TESTING.md) for comprehensive testing guidelines.
 
@@ -407,8 +408,9 @@ export function myFunction(paramName: string): ReturnType {
 
 ## Testing
 
-Parley-js maintains **85%+ test coverage**. All contributions must include
-tests.
+All contributions must include tests. Coverage thresholds are defined in
+`vitest.config.ts` and enforced in CI - contributions must not reduce coverage
+below them.
 
 ### Test Requirements
 
@@ -483,9 +485,9 @@ describe('Parley', () => {
 
 ### Coverage Requirements
 
-- Overall: **85%+**
-- Core modules: **90%+**
-- Security layer: **95%+**
+- Coverage must meet the thresholds in `vitest.config.ts` (enforced by CI)
+- New code should come with tests that exercise its main paths and edge cases
+- Raising the thresholds over time is encouraged
 
 See [TESTING.md](./docs/TESTING.md) for comprehensive testing guidelines.
 
@@ -684,7 +686,7 @@ For detailed documentation contribution guidelines, see
     - [ ] Code formatted
     - [ ] Type checking passes
     - [ ] All tests pass
-    - [ ] Coverage maintained/improved (85%+)
+    - [ ] Coverage maintained/improved (thresholds in vitest.config.ts)
     - [ ] CHANGELOG.md updated
     - [ ] No security vulnerabilities introduced
 
