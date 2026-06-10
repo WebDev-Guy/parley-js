@@ -46,6 +46,7 @@
         "docs:preview": "vitepress preview docs",
         "size": "size-limit",
         "changeset": "changeset",
+        "version:packages": "changeset version && npm install --package-lock-only",
         "release": "npm run build && changeset publish"
     },
     "publishConfig": {

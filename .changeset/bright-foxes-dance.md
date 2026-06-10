@@ -16,3 +16,9 @@ Bug fixes, hardening, and tooling improvements:
   the pending `connect()` instead of hanging
 - New `EventEmitter.destroy()` and `onLimitExceeded` option
 - New `GENERAL_ERRORS.UNKNOWN` error code
+- Internal refactor: `Parley` is now a facade over `ConnectionManager` and
+  `SendPipeline` (no public API change)
+- Tooling: ESLint flat config with type-checked rules, Playwright E2E suite
+  for real cross-origin communication, per-format bundle budgets via
+  size-limit, automated releases with changesets and npm provenance, and
+  CI cleanup; added `SECURITY.md` and `CODE_OF_CONDUCT.md`

@@ -1,57 +1,5 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-### Fixed
-
-- Heartbeat pings and async message handling no longer create unhandled promise
-  rejections (floating promises found by the new type-aware lint rules)
-- `EventEmitter` now logs errors thrown by async event handlers instead of
-  letting them surface as unhandled rejections
-- `createBatchingAdapter()` no longer leaks its flush interval: the timer starts
-  lazily on the first event and is cleared by the new `destroy()` method, which
-  also flushes any buffered events
-- Package `exports` map now points at files that actually exist: `import`
-  resolves to `./dist/index.js` (ESM) and `require` to `./dist/index.cjs`
-  (CommonJS). Previously `import` pointed at a missing `index.mjs` and `require`
-  at the ESM build
-- Disconnecting or cleaning up a channel mid-handshake now rejects the pending
-  connect() promise instead of leaving it hanging forever
-
-### Added
-
-- Optional `destroy()` method on the `AnalyticsAdapter` interface;
-  `AnalyticsManager.removeAdapter()` and `clear()` call it automatically
-- `npm run size` script with per-format bundle budgets via size-limit
-- ESLint flat config with typescript-eslint type-checked rules
-  (`no-floating-promises`, `no-misused-promises`, `require-await`), wired into
-  `npm run lint` and CI
-- Playwright E2E suite (`npm run test:e2e`) exercising real cross-origin iframe
-  and window.open communication in Chromium: handshake round-trip, handshake
-  timeout, origin rejection, reconnect, and popup-close detection
-- `HandshakeController`: explicit handshake state machine
-  (`idle | awaiting-ack | completed | timed-out | failed`) used by both
-  channels; late or duplicate handshake events are now explicit no-ops, and
-  channels expose a readonly `handshakeState` getter
-- `EventEmitter.destroy()` removes all listeners and rejects future
-  subscriptions with a warning (no-op unsubscribe) instead of silent
-  registration; new `onLimitExceeded: 'throw' | 'warn'` constructor option
-- Root `SECURITY.md` and `CODE_OF_CONDUCT.md`
-
-### Changed
-
-- CI: removed redundant workflow (wrong Node version), deduplicated coverage
-  run, bundle size now checked per format
-- Coverage thresholds in `vitest.config.ts` raised to current actuals;
-  documentation now references the enforced thresholds instead of a fixed
-  percentage claim
-
 ## [1.0.0] - 2025-12-11
 
 ### Added
