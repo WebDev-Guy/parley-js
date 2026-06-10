@@ -30,8 +30,6 @@ export default defineConfig({
                 '**/WindowChannel.ts',
             ],
             // Thresholds track current actuals (ratchet upward as coverage improves).
-            // WindowChannel.ts is excluded above because it needs a real browser;
-            // it is exercised by the integration suite instead.
             thresholds: {
                 lines: 65,
                 functions: 65,
