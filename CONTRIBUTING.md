@@ -33,7 +33,7 @@ uphold this code. Please report unacceptable behavior to the maintainers.
 
 ### Prerequisites
 
-- Node.js 20 or higher
+- Node.js 20.19 or higher
 - npm, yarn, or pnpm
 - Git
 
