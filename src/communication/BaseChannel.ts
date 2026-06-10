@@ -185,7 +185,7 @@ export abstract class BaseChannel {
      */
     public destroy(): void {
         this._teardownMessageListener();
-        this._emitter.removeAllListeners();
+        this._emitter.destroy();
         this._messageHandler = null;
         this._state = 'disconnected';
         this._logger.debug('Channel destroyed');

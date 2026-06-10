@@ -21,6 +21,8 @@ and this project adheres to
   resolves to `./dist/index.js` (ESM) and `require` to `./dist/index.cjs`
   (CommonJS). Previously `import` pointed at a missing `index.mjs` and `require`
   at the ESM build
+- Disconnecting or cleaning up a channel mid-handshake now rejects the pending
+  connect() promise instead of leaving it hanging forever
 
 ### Added
 
@@ -33,6 +35,13 @@ and this project adheres to
 - Playwright E2E suite (`npm run test:e2e`) exercising real cross-origin iframe
   and window.open communication in Chromium: handshake round-trip, handshake
   timeout, origin rejection, reconnect, and popup-close detection
+- `HandshakeController`: explicit handshake state machine
+  (`idle | awaiting-ack | completed | timed-out | failed`) used by both
+  channels; late or duplicate handshake events are now explicit no-ops, and
+  channels expose a readonly `handshakeState` getter
+- `EventEmitter.destroy()` removes all listeners and rejects future
+  subscriptions with a warning (no-op unsubscribe) instead of silent
+  registration; new `onLimitExceeded: 'throw' | 'warn'` constructor option
 - Root `SECURITY.md` and `CODE_OF_CONDUCT.md`
 
 ### Changed

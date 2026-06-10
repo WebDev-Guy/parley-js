@@ -799,7 +799,7 @@ export class Parley {
         this._pendingRequests.clear();
 
         // Clean up
-        this._emitter.removeAllListeners();
+        this._emitter.destroy();
         this._registry.clear();
         this._targets.destroy();
         this._analyticsHandlers.clear();

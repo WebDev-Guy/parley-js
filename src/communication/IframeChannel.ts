@@ -7,6 +7,7 @@
  */
 
 import { BaseChannel } from './BaseChannel';
+import { HandshakeController, type HandshakeState } from './HandshakeController';
 import { Logger } from '../utils/Logger';
 import { ConnectionError } from '../errors/ErrorTypes';
 import { CONNECTION_ERRORS } from '../errors/ErrorCodes';
@@ -58,11 +59,9 @@ export class IframeChannel extends BaseChannel {
     private _targetOrigin: string = '';
 
     /**
-     * Pending handshake promise resolvers
+     * Handshake state machine
      */
-    private _handshakeResolve: (() => void) | null = null;
-    private _handshakeReject: ((error: Error) => void) | null = null;
-    private _handshakeTimeout: ReturnType<typeof setTimeout> | null = null;
+    private readonly _handshake: HandshakeController;
 
     /**
      * Memoized connection promise to prevent race conditions
@@ -80,6 +79,14 @@ export class IframeChannel extends BaseChannel {
         super(options, logger);
         this._logger =
             logger?.child('IframeChannel') ?? new Logger(undefined, '[Parley][IframeChannel]');
+        this._handshake = new HandshakeController(this._logger);
+    }
+
+    /**
+     * Current handshake state
+     */
+    public get handshakeState(): HandshakeState {
+        return this._handshake.state;
     }
 
     /**
@@ -398,21 +405,7 @@ export class IframeChannel extends BaseChannel {
      * Wait for handshake to complete
      */
     private _waitForHandshake(): Promise<void> {
-        return new Promise((resolve, reject) => {
-            this._handshakeResolve = resolve;
-            this._handshakeReject = reject;
-
-            this._handshakeTimeout = setTimeout(() => {
-                this._handshakeReject?.(
-                    new ConnectionError(
-                        'Handshake timeout',
-                        undefined,
-                        CONNECTION_ERRORS.HANDSHAKE_FAILED
-                    )
-                );
-                this._clearHandshake();
-            }, this._options.handshakeTimeout);
-        });
+        return this._handshake.start(this._options.handshakeTimeout);
     }
 
     /**
@@ -437,8 +430,7 @@ export class IframeChannel extends BaseChannel {
         this.send(ackMessage, source, event.origin);
 
         // Complete handshake
-        this._handshakeResolve?.();
-        this._clearHandshake();
+        this._handshake.acknowledge();
     }
 
     /**
@@ -446,27 +438,14 @@ export class IframeChannel extends BaseChannel {
      */
     private _handleHandshakeAck(): void {
         this._logger.debug('Received handshake ack');
-        this._handshakeResolve?.();
-        this._clearHandshake();
-    }
-
-    /**
-     * Clear handshake state
-     */
-    private _clearHandshake(): void {
-        if (this._handshakeTimeout) {
-            clearTimeout(this._handshakeTimeout);
-            this._handshakeTimeout = null;
-        }
-        this._handshakeResolve = null;
-        this._handshakeReject = null;
+        this._handshake.acknowledge();
     }
 
     /**
      * Clean up channel resources
      */
     private _cleanup(): void {
-        this._clearHandshake();
+        this._handshake.reset();
         this._teardownMessageListener();
         this._iframe = null;
         this._parentWindow = null;
