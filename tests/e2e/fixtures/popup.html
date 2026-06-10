@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Parley E2E - Popup</title>
+    </head>
+    <body>
+        <h1>Popup window</h1>
+        <script src="/dist/index.global.js"></script>
+        <script>
+            // Opener fixture is always served from the 127.0.0.1 origin
+            const OPENER_ORIGIN = 'http://127.0.0.1:4173';
+
+            const parley = window.Parley.create({
+                targetType: 'window',
+                allowedOrigins: [OPENER_ORIGIN],
+                heartbeat: { enabled: false },
+                logLevel: 'none',
+            });
+
+            parley.on('echo', function (payload, respond) {
+                respond(Object.assign({ echoed: true, popupOrigin: location.origin }, payload));
+            });
+
+            parley.connect(window.opener, 'opener').catch(function (error) {
+                console.error('Popup connect failed:', error);
+            });
+        </script>
+    </body>
+</html>

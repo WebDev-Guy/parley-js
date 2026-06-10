@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Parley E2E - Child with wrong allowed origin</title>
+    </head>
+    <body>
+        <h1>Child that only trusts an origin the parent is not served from</h1>
+        <script src="/dist/index.global.js"></script>
+        <script>
+            // Count raw message events BEFORE Parley sees them: proves the
+            // parent's handshake traffic reaches this window at the transport
+            // level, so a failed connection can only mean origin validation
+            // dropped it
+            window.rawMessageCount = 0;
+            window.addEventListener('message', function () {
+                window.rawMessageCount++;
+            });
+
+            // Deliberately allows an origin the parent is NOT served from, so the
+            // child's origin validation must drop the parent's handshake messages.
+            const parley = window.Parley.create({
+                targetType: 'iframe',
+                allowedOrigins: ['https://attacker.invalid'],
+                heartbeat: { enabled: false },
+                logLevel: 'none',
+            });
+
+            window.parleyConnected = false;
+            parley.onSystem(window.Parley.SYSTEM_EVENTS.CONNECTED, function () {
+                window.parleyConnected = true;
+            });
+
+            parley.connect(window.parent, 'parent').catch(function () {
+                // Expected: handshake cannot complete across mismatched origins
+            });
+        </script>
+    </body>
+</html>

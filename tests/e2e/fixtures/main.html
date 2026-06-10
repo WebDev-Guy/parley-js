@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Parley E2E - Popup opener</title>
+    </head>
+    <body>
+        <h1>Opener window</h1>
+        <script src="/dist/index.global.js"></script>
+        <script>
+            window.openPopupAndConnect = function (popupOrigin) {
+                window.parley = window.Parley.create({
+                    targetType: 'window',
+                    allowedOrigins: [popupOrigin],
+                    timeout: 10000,
+                    // Fast heartbeat so a closed popup is detected quickly
+                    heartbeat: { enabled: true, interval: 500, timeout: 400, maxMissed: 2 },
+                    logLevel: 'none',
+                });
+
+                window.connectionLost = new Promise(function (resolve) {
+                    window.parley.onSystem(
+                        window.Parley.SYSTEM_EVENTS.CONNECTION_LOST,
+                        function (event) {
+                            resolve({ event: 'connection_lost', targetId: event.targetId });
+                        }
+                    );
+                    window.parley.onSystem(
+                        window.Parley.SYSTEM_EVENTS.DISCONNECTED,
+                        function (event) {
+                            resolve({ event: 'disconnected', targetId: event.targetId });
+                        }
+                    );
+                });
+
+                window.popupRef = window.open(
+                    popupOrigin + '/tests/e2e/fixtures/popup.html',
+                    'parley-popup'
+                );
+
+                return window.parley.connect(window.popupRef, 'popup').then(function () {
+                    return 'connected';
+                });
+            };
+
+            window.sendEchoToPopup = function (payload) {
+                return window.parley.send('echo', payload, { targetId: 'popup' });
+            };
+
+            window.closePopup = function () {
+                window.popupRef.close();
+                return window.connectionLost;
+            };
+        </script>
+    </body>
+</html>

@@ -48,8 +48,15 @@ export default tseslint.config(
         },
     },
     {
-        // Config files run under Node without a TS project
-        files: ['*.config.js', '*.config.ts'],
+        // Config files and plain-JS scripts run under Node without a TS project
+        files: ['*.config.js', '*.config.ts', '**/*.mjs'],
         extends: [tseslint.configs.disableTypeChecked],
+        languageOptions: {
+            globals: {
+                console: 'readonly',
+                process: 'readonly',
+                URL: 'readonly',
+            },
+        },
     }
 );

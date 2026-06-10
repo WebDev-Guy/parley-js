@@ -39,6 +39,8 @@
         "test:coverage": "vitest run --coverage",
         "test:watch": "vitest watch",
         "test:debug": "vitest --inspect-brk --single-thread",
+        "test:e2e": "npm run build && playwright test",
+        "test:e2e:ui": "npm run build && playwright test --ui",
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
         "docs:preview": "vitepress preview docs",
@@ -102,6 +104,7 @@
     "homepage": "https://www.parleyjs.com",
     "devDependencies": {
         "@eslint/js": "^10.0.1",
+        "@playwright/test": "^1.60.0",
         "@size-limit/file": "^12.1.0",
         "@types/node": "^24.10.1",
         "@vitest/coverage-v8": "^4.0.15",
