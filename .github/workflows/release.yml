@@ -35,7 +35,7 @@ jobs:
       - name: Create release PR or publish to npm
         uses: changesets/action@v1
         with:
-          # Opens/updates a "Version Packages" PR when changesets exist;
+          # Opens/updates a 'chore: version packages' PR when changesets exist;
           # publishes to npm (with provenance) when that PR is merged
           publish: npm run release
           title: 'chore: version packages'

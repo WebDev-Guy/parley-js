@@ -723,11 +723,11 @@ Releases are automated with
     generated `.changeset/*.md` file with your PR.
 
 2. **Version PR** - when changesets land on `main`, the release workflow opens
-   (or updates) a "Version Packages" PR that bumps the version and updates
-   `CHANGELOG.md`.
+   (or updates) a version PR titled `chore: version packages` that bumps the
+   version and updates `CHANGELOG.md`.
 
-3. **Publish** - merging the Version Packages PR publishes to npm automatically
-   with provenance attestation.
+3. **Publish** - merging the `chore: version packages` PR publishes to npm
+   automatically with provenance attestation.
 
 Maintainer setup: the release workflow needs an `NPM_TOKEN` repository secret (a
 granular npm automation token with publish rights for `ignite-parleyjs`).
