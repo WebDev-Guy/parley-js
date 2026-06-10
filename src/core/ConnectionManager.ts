@@ -447,8 +447,12 @@ export class ConnectionManager {
         // Handle disconnect notifications from other side
         this._registry.addHandler(
             SYSTEM_MESSAGE_TYPES.DISCONNECT,
-            (payload: DisconnectPayload, respond: (response: unknown) => void) => {
-                this._handleDisconnectNotification(payload);
+            (
+                payload: DisconnectPayload,
+                respond: (response: unknown) => void,
+                metadata: MessageMetadata
+            ) => {
+                this._handleDisconnectNotification(payload, metadata.senderId);
                 respond({ acknowledged: true, timestamp: getTimestamp() });
             },
             true // internal
@@ -493,20 +497,31 @@ export class ConnectionManager {
 
     /**
      * Handle disconnect notification from other side
+     *
+     * @param payload - Disconnect payload from the remote peer
+     * @param senderTargetId - Local target ID of the peer that sent the
+     *        notification (from message metadata, not the spoofable payload)
      */
-    private _handleDisconnectNotification(payload: DisconnectPayload): void {
+    private _handleDisconnectNotification(
+        payload: DisconnectPayload,
+        senderTargetId: string
+    ): void {
         this._logger.info('Received disconnect notification', {
             senderId: payload.senderId,
+            targetId: senderTargetId,
             reason: payload.reason,
         });
 
-        // Find the target that sent this disconnect
-        // For now, we look for any connected target (in most cases there's only one)
-        for (const target of this._targets.getConnected()) {
-            // Perform local disconnect without sending notification back
-            this.performLocalDisconnect(target.id, payload.reason);
-            break; // Only disconnect one target per notification
+        const target = this._targets.get(senderTargetId);
+        if (!target) {
+            this._logger.warn('Disconnect notification from unknown target', {
+                targetId: senderTargetId,
+            });
+            return;
         }
+
+        // Perform local disconnect without sending notification back
+        this.performLocalDisconnect(senderTargetId, payload.reason);
     }
 
     /**
