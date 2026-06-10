@@ -36,7 +36,9 @@ jobs:
         uses: changesets/action@v1
         with:
           # Opens/updates a 'chore: version packages' PR when changesets exist;
-          # publishes to npm (with provenance) when that PR is merged
+          # publishes to npm (with provenance) when that PR is merged.
+          # version:packages also syncs package-lock.json with the new version.
+          version: npm run version:packages
           publish: npm run release
           title: 'chore: version packages'
           commit: 'chore: version packages'
