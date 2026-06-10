@@ -16,11 +16,12 @@ import type { Logger } from '../utils/Logger';
 /**
  * Handshake lifecycle states
  *
- * - 'idle': no handshake in progress
+ * - 'idle': no handshake in progress (also the state after reset(),
+ *   which rejects any in-flight handshake as cancelled)
  * - 'awaiting-ack': handshake started, waiting for acknowledgment
  * - 'completed': acknowledgment received, handshake succeeded
  * - 'timed-out': no acknowledgment within the timeout window
- * - 'failed': handshake failed or was cancelled
+ * - 'failed': fail() was called while awaiting acknowledgment
  */
 export type HandshakeState = 'idle' | 'awaiting-ack' | 'completed' | 'timed-out' | 'failed';
 
