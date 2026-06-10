@@ -9,7 +9,7 @@
  * - Ignoring notifications from unknown targets
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ConnectionManager } from '../../src/core/ConnectionManager';
 import { MessageRegistry } from '../../src/core/MessageRegistry';
 import { TargetManager } from '../../src/core/TargetManager';
@@ -24,6 +24,7 @@ describe('ConnectionManager', () => {
     let registry: MessageRegistry;
     let targets: TargetManager;
     let emitter: EventEmitter;
+    let manager: ConnectionManager;
     let rejectPendingForTarget: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
@@ -33,7 +34,7 @@ describe('ConnectionManager', () => {
         emitter = new EventEmitter();
         rejectPendingForTarget = vi.fn();
 
-        new ConnectionManager({
+        manager = new ConnectionManager({
             config: { instanceId: 'local-instance' } as ResolvedConfig,
             logger: logger as any,
             emitter,
@@ -44,6 +45,13 @@ describe('ConnectionManager', () => {
             sendSystemMessage: () => Promise.resolve(undefined),
             rejectPendingForTarget,
         });
+    });
+
+    afterEach(() => {
+        manager.destroy();
+        targets.destroy();
+        registry.clear();
+        emitter.destroy();
     });
 
     describe('disconnect notification handling', () => {
