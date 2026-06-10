@@ -312,9 +312,9 @@ export class EventEmitter {
     /**
      * Destroy the emitter
      *
-     * Removes all listeners and rejects future subscriptions. Subscribing
-     * after destroy logs a warning and returns a no-op unsubscribe instead
-     * of throwing, because teardown ordering races are common.
+     * Removes all listeners and ignores future subscriptions: on()/once()
+     * after destroy log a warning and return a no-op unsubscribe rather
+     * than throwing, because teardown ordering races are common.
      */
     public destroy(): void {
         this._destroyed = true;
