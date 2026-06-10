@@ -302,7 +302,7 @@ export function createConsoleAdapter(prefix: string = '[Parley Analytics]'): Ana
  * @example
  * ```typescript
  * const manager = new AnalyticsManager({ enabled: true });
- * manager.addAdapter(createBatchingAdapter(
+ * const adapter = createBatchingAdapter(
  *     (events) => {
  *         fetch('/analytics', {
  *             method: 'POST',
@@ -310,10 +310,13 @@ export function createConsoleAdapter(prefix: string = '[Parley Analytics]'): Ana
  *         });
  *     },
  *     { batchSize: 10, flushInterval: 5000 }
- * ));
+ * );
+ * manager.addAdapter(adapter);
  *
- * // When finished, release the flush timer (also called automatically
- * // by AnalyticsManager.removeAdapter() / clear())
+ * // When finished, release the flush timer; removeAdapter() and
+ * // manager.clear() call destroy() automatically
+ * manager.removeAdapter('batching');
+ * // or, when using the adapter standalone:
  * adapter.destroy();
  * ```
  */
