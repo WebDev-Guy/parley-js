@@ -6,9 +6,6 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Parley } from '../../src/core/Parley';
-import { TimeoutError, ValidationError } from '../../src/errors/ErrorTypes';
-import { createConnectedMockWindows, createMockIframe, createMockLogger } from '../utils/mock-factory';
-import { waitForEvent, delay } from '../utils/test-helpers';
 
 describe('Iframe Communication Integration', () => {
     let parentParley: Parley;
@@ -70,9 +67,9 @@ describe('Iframe Communication Integration', () => {
                 },
             });
 
-            let receivedMessage: any;
+            let _receivedMessage: any;
             childParley.on('message:send', (payload) => {
-                receivedMessage = payload;
+                _receivedMessage = payload;
             });
 
             // Would need actual connected iframes to test
@@ -91,9 +88,9 @@ describe('Iframe Communication Integration', () => {
                 },
             });
 
-            let receivedResponse: any;
+            let _receivedResponse: any;
             parentParley.on('child:response', (payload) => {
-                receivedResponse = payload;
+                _receivedResponse = payload;
             });
 
             expect(childParley).toBeDefined();
@@ -194,7 +191,7 @@ describe('Iframe Communication Integration', () => {
         });
 
         it('should handle large payloads', async () => {
-            const largePayload = {
+            const _largePayload = {
                 data: 'x'.repeat(5_000_000), // 5MB
             };
 
@@ -255,15 +252,15 @@ describe('Iframe Communication Integration', () => {
         });
 
         it('should emit system events on connect/disconnect', async () => {
-            let connectedEvent: any;
-            let disconnectedEvent: any;
+            let _connectedEvent: any;
+            let _disconnectedEvent: any;
 
             parentParley.onSystem('system:connected', (data) => {
-                connectedEvent = data;
+                _connectedEvent = data;
             });
 
             parentParley.onSystem('system:disconnected', (data) => {
-                disconnectedEvent = data;
+                _disconnectedEvent = data;
             });
 
             // After connection and then disconnection
@@ -282,10 +279,10 @@ describe('Iframe Communication Integration', () => {
         });
 
         it('should emit error events on failure', async () => {
-            let errorEvent: any;
+            let _errorEvent: any;
 
             parentParley.onSystem('system:error', (error) => {
-                errorEvent = error;
+                _errorEvent = error;
             });
 
             // Trigger error condition

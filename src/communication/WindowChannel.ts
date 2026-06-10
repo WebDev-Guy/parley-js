@@ -10,12 +10,7 @@ import { BaseChannel } from './BaseChannel';
 import { Logger } from '../utils/Logger';
 import { ConnectionError } from '../errors/ErrorTypes';
 import { CONNECTION_ERRORS } from '../errors/ErrorCodes';
-import {
-    createMessage,
-    INTERNAL_MESSAGE_TYPES,
-    isResponseMessage,
-    type MessageProtocol,
-} from '../core/MessageProtocol';
+import { createMessage, INTERNAL_MESSAGE_TYPES, isResponseMessage } from '../core/MessageProtocol';
 import type { ChannelOptions } from '../types/ChannelTypes';
 
 /**
@@ -246,14 +241,14 @@ export class WindowChannel extends BaseChannel {
             return;
         }
 
-        const data = event.data;
+        const data: unknown = event.data;
         if (!this._isParleyMessage(data)) {
             return;
         }
 
         // Handle handshake messages
         if (!isResponseMessage(data)) {
-            const message = data as MessageProtocol;
+            const message = data;
 
             if (message._type === INTERNAL_MESSAGE_TYPES.HANDSHAKE_INIT) {
                 this._handleHandshakeInit(event);

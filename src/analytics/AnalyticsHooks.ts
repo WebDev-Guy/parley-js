@@ -262,7 +262,7 @@ export class AnalyticsManager {
         if ('duration' in rest) {
             delete (rest as Record<string, unknown>).duration;
         }
-        return rest as AnalyticsEvent;
+        return rest;
     }
 }
 

@@ -119,6 +119,15 @@ export const CONFIG_ERRORS = {
 } as const;
 
 /**
+ * General error codes
+ * Used when no more specific category applies
+ */
+export const GENERAL_ERRORS = {
+    /** Error of unknown origin (e.g. unrecognized code from a remote peer) */
+    UNKNOWN: 'ERR_UNKNOWN',
+} as const;
+
+/**
  * Union type of all error codes
  */
 export type ErrorCode =
@@ -128,7 +137,8 @@ export type ErrorCode =
     | (typeof SECURITY_ERRORS)[keyof typeof SECURITY_ERRORS]
     | (typeof SERIALIZATION_ERRORS)[keyof typeof SERIALIZATION_ERRORS]
     | (typeof CONNECTION_ERRORS)[keyof typeof CONNECTION_ERRORS]
-    | (typeof CONFIG_ERRORS)[keyof typeof CONFIG_ERRORS];
+    | (typeof CONFIG_ERRORS)[keyof typeof CONFIG_ERRORS]
+    | (typeof GENERAL_ERRORS)[keyof typeof GENERAL_ERRORS];
 
 /**
  * All error codes consolidated for easy access
@@ -141,4 +151,5 @@ export const ERROR_CODES = {
     ...SERIALIZATION_ERRORS,
     ...CONNECTION_ERRORS,
     ...CONFIG_ERRORS,
+    ...GENERAL_ERRORS,
 } as const;

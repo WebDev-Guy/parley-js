@@ -8,7 +8,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WindowChannel } from '../../src/communication/WindowChannel';
 import { ConnectionError } from '../../src/errors/ErrorTypes';
 import { createMockWindow, createMockLogger } from '../utils/mock-factory';
-import { delay } from '../utils/test-helpers';
 
 describe('WindowChannel', () => {
     let channel: WindowChannel;
@@ -184,10 +183,7 @@ describe('WindowChannel', () => {
 
             channel.disconnect();
 
-            expect(removeEventListenerSpy).toHaveBeenCalledWith(
-                'message',
-                expect.any(Function)
-            );
+            expect(removeEventListenerSpy).toHaveBeenCalledWith('message', expect.any(Function));
 
             removeEventListenerSpy.mockRestore();
         });
@@ -331,19 +327,23 @@ describe('WindowChannel', () => {
 
             // The send() method may throw or silently fail depending on the implementation
             // Let's test that the send doesn't successfully post a message
-            const postMessageSpy = vi.spyOn(mockWindow, 'postMessage');
+            vi.spyOn(mockWindow, 'postMessage');
 
             try {
-                (channel as any).send({
-                    _parley: '__parley__',
-                    _v: '1.0.0',
-                    _id: 'test',
-                    _type: 'test:type',
-                    _origin: 'https://example.com',
-                    _timestamp: Date.now(),
-                    _expectsResponse: false,
-                    payload: {},
-                }, mockWindow, 'https://example.com');
+                (channel as any).send(
+                    {
+                        _parley: '__parley__',
+                        _v: '1.0.0',
+                        _id: 'test',
+                        _type: 'test:type',
+                        _origin: 'https://example.com',
+                        _timestamp: Date.now(),
+                        _expectsResponse: false,
+                        payload: {},
+                    },
+                    mockWindow,
+                    'https://example.com'
+                );
             } catch {
                 // Expected - postMessage on closed window may throw
             }
@@ -360,16 +360,20 @@ describe('WindowChannel', () => {
             // This is a safety feature - it's a no-op rather than throwing
             const postMessageSpy = vi.fn();
 
-            (channel as any).send({
-                _parley: '__parley__',
-                _v: '1.0.0',
-                _id: 'test',
-                _type: 'test:type',
-                _origin: 'https://example.com',
-                _timestamp: Date.now(),
-                _expectsResponse: false,
-                payload: {},
-            }, null, 'https://example.com');
+            (channel as any).send(
+                {
+                    _parley: '__parley__',
+                    _v: '1.0.0',
+                    _id: 'test',
+                    _type: 'test:type',
+                    _origin: 'https://example.com',
+                    _timestamp: Date.now(),
+                    _expectsResponse: false,
+                    payload: {},
+                },
+                null,
+                'https://example.com'
+            );
 
             // Verify no message was sent (no crash, just no-op)
             expect(postMessageSpy).not.toHaveBeenCalled();

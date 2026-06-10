@@ -127,7 +127,7 @@ export class DefaultSecurityLayer extends SecurityLayer {
         try {
             // JSON parse/stringify creates a clean object
             // without prototype chain or non-serializable values
-            return JSON.parse(JSON.stringify(payload));
+            return JSON.parse(JSON.stringify(payload)) as T;
         } catch {
             // If serialization fails, return a safe empty object/array
             return (Array.isArray(payload) ? [] : {}) as T;

@@ -17,7 +17,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { BaseChannel, type MessageEventHandler } from '../../src/communication/BaseChannel';
-import type { MessageProtocol, ResponseProtocol } from '../../src/core/MessageProtocol';
+import type { ResponseProtocol } from '../../src/core/MessageProtocol';
 import type { ChannelOptions } from '../../src/types/ChannelTypes';
 import { createMockLogger, createTestMessage } from '../utils/mock-factory';
 

@@ -7,7 +7,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Parley } from '../../src/core/Parley';
 import { TimeoutError, ValidationError } from '../../src/errors/ErrorTypes';
-import { delay } from '../utils/test-helpers';
 
 describe('Error Recovery Integration', () => {
     let parley: Parley;
@@ -75,10 +74,10 @@ describe('Error Recovery Integration', () => {
 
     describe('Error event emission', () => {
         it('should emit error event on failure', async () => {
-            let errorEvent: any;
+            let _errorEvent: any;
 
             parley.onSystem('system:error', (error) => {
-                errorEvent = error;
+                _errorEvent = error;
             });
 
             parley.register('failing:message', {
@@ -93,10 +92,10 @@ describe('Error Recovery Integration', () => {
         });
 
         it('should provide error code and message', () => {
-            let capturedError: any;
+            let _capturedError: any;
 
             parley.onSystem('system:error', (error) => {
-                capturedError = error;
+                _capturedError = error;
             });
 
             // Trigger error
@@ -107,10 +106,10 @@ describe('Error Recovery Integration', () => {
         });
 
         it('should not expose stack traces', () => {
-            let capturedError: any;
+            let _capturedError: any;
 
             parley.onSystem('system:error', (error) => {
-                capturedError = error;
+                _capturedError = error;
             });
 
             // Trigger error
@@ -122,14 +121,14 @@ describe('Error Recovery Integration', () => {
 
     describe('Continued operation after error', () => {
         it('should continue operating after error', async () => {
-            let successMessage: any;
+            let _successMessage: any;
 
             parley.register('test:message', {
                 schema: { type: 'object' },
             });
 
             parley.on('test:message', (payload) => {
-                successMessage = payload;
+                _successMessage = payload;
             });
 
             // First message fails
@@ -154,10 +153,10 @@ describe('Error Recovery Integration', () => {
         });
 
         it('should recover connection after transient error', () => {
-            let connectionStable = false;
+            let _connectionStable = false;
 
             parley.onSystem('system:connected', () => {
-                connectionStable = true;
+                _connectionStable = true;
             });
 
             // Transient error occurs
@@ -174,13 +173,13 @@ describe('Error Recovery Integration', () => {
                 schema: { type: 'object' },
             });
 
-            parley.on('handler:error', (payload) => {
+            parley.on('handler:error', (_payload) => {
                 throw new Error('Handler failed!');
             });
 
-            let nextMessageProcessed = false;
+            let _nextMessageProcessed = false;
             parley.on('next:message', () => {
-                nextMessageProcessed = true;
+                _nextMessageProcessed = true;
             });
 
             // Message 1 causes handler error
@@ -191,16 +190,16 @@ describe('Error Recovery Integration', () => {
         });
 
         it('should not prevent other handlers from running', () => {
-            let handler1Called = false;
-            let handler2Called = false;
+            let _handler1Called = false;
+            let _handler2Called = false;
 
             parley.on('test:message', () => {
-                handler1Called = true;
+                _handler1Called = true;
                 throw new Error('Handler 1 error');
             });
 
             parley.on('test:message', () => {
-                handler2Called = true;
+                _handler2Called = true;
             });
 
             // Message received
@@ -223,9 +222,9 @@ describe('Error Recovery Integration', () => {
                 throw new Error('Expected error');
             });
 
-            let normalMsgProcessed = false;
+            let _normalMsgProcessed = false;
             parley.on('normal:msg', () => {
-                normalMsgProcessed = true;
+                _normalMsgProcessed = true;
             });
 
             // error:msg causes handler to throw
@@ -242,14 +241,14 @@ describe('Error Recovery Integration', () => {
                 schema: { type: 'object' },
             });
 
-            let timeoutErrorCaught = false;
+            let _timeoutErrorCaught = false;
 
             try {
                 // Send with expectsResponse but no response
                 // TimeoutError thrown after configured timeout
             } catch (error) {
                 if (error instanceof TimeoutError) {
-                    timeoutErrorCaught = true;
+                    _timeoutErrorCaught = true;
                 }
             }
 
@@ -267,14 +266,14 @@ describe('Error Recovery Integration', () => {
                 },
             });
 
-            let validationErrorCaught = false;
+            let _validationErrorCaught = false;
 
             try {
                 // Send with invalid payload
                 // ValidationError thrown
             } catch (error) {
                 if (error instanceof ValidationError) {
-                    validationErrorCaught = true;
+                    _validationErrorCaught = true;
                 }
             }
 
@@ -309,10 +308,10 @@ describe('Error Recovery Integration', () => {
         });
 
         it('should provide diagnostic info on persistent failures', () => {
-            let lastError: any;
+            let _lastError: any;
 
             parley.onSystem('system:error', (error) => {
-                lastError = error;
+                _lastError = error;
             });
 
             // After exhausting retries
@@ -362,9 +361,9 @@ describe('Error Recovery Integration', () => {
         it('should clean up on destroy despite errors', async () => {
             parley.register('test', { schema: { type: 'object' } });
 
-            let errorEmitted = false;
+            let _errorEmitted = false;
             parley.onSystem('system:error', () => {
-                errorEmitted = true;
+                _errorEmitted = true;
             });
 
             // Errors may have occurred

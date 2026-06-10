@@ -141,7 +141,7 @@ describe('Payload Sanitization Security', () => {
                 constructor: { prototype: { injected: true } },
             };
 
-            const sanitized = securityLayer.sanitizePayload(payload);
+            securityLayer.sanitizePayload(payload);
             const obj = {};
             // Original object should not be polluted
             expect((obj as any).injected).toBeUndefined();
@@ -218,7 +218,7 @@ describe('Payload Sanitization Security', () => {
                 bool: true,
                 arr: [1, 2, { nested: true }],
                 obj: { nested: 'value' },
-                fn: () => { }, // Remove this
+                fn: () => {}, // Remove this
                 sym: Symbol(), // Remove this
                 undef: undefined, // Remove this
             };

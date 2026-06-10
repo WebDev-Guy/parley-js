@@ -6,8 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Parley } from '../../src/core/Parley';
-import { createMockWindow, createMockLogger } from '../utils/mock-factory';
-import { delay } from '../utils/test-helpers';
+import { createMockWindow } from '../utils/mock-factory';
 
 describe('Window Communication Integration', () => {
     let openerParley: Parley;
@@ -64,10 +63,10 @@ describe('Window Communication Integration', () => {
         });
 
         it('should detect closed window', async () => {
-            let disconnectEvent: any;
+            let _disconnectEvent: any;
 
             openerParley.onSystem('system:disconnected', (data) => {
-                disconnectEvent = data;
+                _disconnectEvent = data;
             });
 
             // In real scenario, would close window and verify disconnect event
@@ -108,9 +107,9 @@ describe('Window Communication Integration', () => {
                 },
             });
 
-            let received: any;
+            let _received: any;
             openedParley.on('window:message', (payload) => {
-                received = payload;
+                _received = payload;
             });
 
             // Opener would send message to opened window
@@ -144,15 +143,15 @@ describe('Window Communication Integration', () => {
                 schema: { type: 'object' },
             });
 
-            let openerReceived: any;
-            let openedReceived: any;
+            let _openerReceived: any;
+            let _openedReceived: any;
 
             openerParley.on('opened:message', (payload) => {
-                openerReceived = payload;
+                _openerReceived = payload;
             });
 
             openedParley.on('opener:message', (payload) => {
-                openedReceived = payload;
+                _openedReceived = payload;
             });
 
             // Both directions work independently
@@ -224,10 +223,10 @@ describe('Window Communication Integration', () => {
         });
 
         it('should recover from transient failures', async () => {
-            let errorCount = 0;
+            let _errorCount = 0;
 
             openerParley.onSystem('system:error', () => {
-                errorCount++;
+                _errorCount++;
             });
 
             // Trigger transient error

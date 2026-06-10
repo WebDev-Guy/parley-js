@@ -190,9 +190,7 @@ describe('filterByType', () => {
     it('should match only the listed event types', () => {
         const filter = filterByType(['error', 'timeout']);
 
-        expect(filter(makeEvent({ type: 'error', errorCode: 'X' } as Partial<AnalyticsEvent>))).toBe(
-            true
-        );
+        expect(filter(makeEvent({ type: 'error', errorCode: 'X' }))).toBe(true);
         expect(filter(makeEvent())).toBe(false);
     });
 });

@@ -4,14 +4,14 @@
  * @module tests/integration
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Parley } from '../../src/core/Parley';
 import { createMockWindow } from '../utils/mock-factory';
 import { delay } from '../utils/test-helpers';
 
 describe('Heartbeat Monitoring Integration', () => {
     let parley: Parley;
-    let targetWindow: any;
+    let _targetWindow: any;
 
     beforeEach(() => {
         parley = Parley.create({
@@ -25,7 +25,7 @@ describe('Heartbeat Monitoring Integration', () => {
             },
         });
 
-        targetWindow = createMockWindow('target', 'https://target.example.com');
+        _targetWindow = createMockWindow('target', 'https://target.example.com');
     });
 
     afterEach(() => {
@@ -147,9 +147,9 @@ describe('Heartbeat Monitoring Integration', () => {
 
             const disconnectParley = Parley.create(config);
 
-            let disconnectEvent: any;
+            let _disconnectEvent: any;
             disconnectParley.onSystem('system:disconnected', (data) => {
-                disconnectEvent = data;
+                _disconnectEvent = data;
             });
 
             // Miss maxMissed consecutive heartbeats
@@ -320,10 +320,10 @@ describe('Heartbeat Monitoring Integration', () => {
         });
 
         it('should emit system:connected event', () => {
-            let connectedEvent: any;
+            let _connectedEvent: any;
 
             parley.onSystem('system:connected', (data) => {
-                connectedEvent = data;
+                _connectedEvent = data;
             });
 
             // Connect to target
@@ -333,10 +333,10 @@ describe('Heartbeat Monitoring Integration', () => {
         });
 
         it('should emit system:disconnected event', () => {
-            let disconnectEvent: any;
+            let _disconnectEvent: any;
 
             parley.onSystem('system:disconnected', (data) => {
-                disconnectEvent = data;
+                _disconnectEvent = data;
             });
 
             // Max heartbeats missed

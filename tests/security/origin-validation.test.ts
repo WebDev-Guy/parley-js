@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Parley } from '../../src/core/Parley';
-import { validateOrigin, assertOrigin } from '../../src/security/OriginValidator';
+import { validateOrigin } from '../../src/security/OriginValidator';
 
 describe('Origin Validation Security', () => {
     let allowedOrigins: string[];
@@ -51,11 +51,7 @@ describe('Origin Validation Security', () => {
         });
 
         it('should allow multiple allowed origins', () => {
-            const multiAllowed = [
-                'https://site1.com',
-                'https://site2.com',
-                'https://site3.com',
-            ];
+            const multiAllowed = ['https://site1.com', 'https://site2.com', 'https://site3.com'];
 
             expect(validateOrigin('https://site1.com', multiAllowed).valid).toBe(true);
             expect(validateOrigin('https://site2.com', multiAllowed).valid).toBe(true);
@@ -150,7 +146,7 @@ describe('Origin Validation Security', () => {
         });
 
         it('should handle default ports correctly', () => {
-            const https443Allowed = ['https://example.com:443'];
+            const _https443Allowed = ['https://example.com:443'];
             const httpsDefaultAllowed = ['https://example.com'];
 
             // https://example.com is same as https://example.com:443

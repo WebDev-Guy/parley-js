@@ -37,9 +37,9 @@ describe('Full Lifecycle Integration', () => {
             });
 
             // 3. Set up handler
-            let messageReceived = false;
-            parley.on('user:data', (payload) => {
-                messageReceived = true;
+            let _messageReceived = false;
+            parley.on('user:data', (_payload) => {
+                _messageReceived = true;
             });
 
             // 4. Connect to target (mocked in test)
@@ -124,15 +124,15 @@ describe('Full Lifecycle Integration', () => {
         });
 
         it('should support multiple handlers for same message type', () => {
-            let handler1Called = false;
-            let handler2Called = false;
+            let _handler1Called = false;
+            let _handler2Called = false;
 
             parley.on('event:type', () => {
-                handler1Called = true;
+                _handler1Called = true;
             });
 
             parley.on('event:type', () => {
-                handler2Called = true;
+                _handler2Called = true;
             });
 
             // Message received
@@ -142,15 +142,15 @@ describe('Full Lifecycle Integration', () => {
         });
 
         it('should support system event handlers', () => {
-            let connectedCalled = false;
-            let errorCalled = false;
+            let _connectedCalled = false;
+            let _errorCalled = false;
 
             parley.onSystem('system:connected', () => {
-                connectedCalled = true;
+                _connectedCalled = true;
             });
 
             parley.onSystem('system:error', () => {
-                errorCalled = true;
+                _errorCalled = true;
             });
 
             // System events trigger handlers
@@ -159,10 +159,10 @@ describe('Full Lifecycle Integration', () => {
         });
 
         it('should support analytics event handlers', () => {
-            let analyticsCalled = false;
+            let _analyticsCalled = false;
 
-            parley.onAnalyticsEvent((event) => {
-                analyticsCalled = true;
+            parley.onAnalyticsEvent((_event) => {
+                _analyticsCalled = true;
             });
 
             // Analytics events tracked
@@ -216,10 +216,10 @@ describe('Full Lifecycle Integration', () => {
         });
 
         it('should maintain handlers across reconnection', () => {
-            let handlerCalled = false;
+            let _handlerCalled = false;
 
             parley.on('persistent:message', () => {
-                handlerCalled = true;
+                _handlerCalled = true;
             });
 
             // After disconnect and reconnect
@@ -243,8 +243,8 @@ describe('Full Lifecycle Integration', () => {
                 schema: { type: 'object' },
             });
 
-            parley.on('test:message', () => { });
-            parley.onSystem('system:connected', () => { });
+            parley.on('test:message', () => {});
+            parley.onSystem('system:connected', () => {});
 
             // Destroy
             parley.destroy();
@@ -281,7 +281,7 @@ describe('Full Lifecycle Integration', () => {
         });
 
         it('should handle errors during handler setup', () => {
-            parley.on('test:message', (payload, respond) => {
+            parley.on('test:message', (_payload, _respond) => {
                 throw new Error('Handler failed');
             });
 
@@ -356,7 +356,7 @@ describe('Full Lifecycle Integration', () => {
                 },
             });
 
-            parley.on('api:response', (payload) => {
+            parley.on('api:response', (_payload) => {
                 // Handle response
             });
 
@@ -398,7 +398,7 @@ describe('Full Lifecycle Integration', () => {
             });
 
             // Internal state before operations
-            const stateBefore = { ...parley };
+            const _stateBefore = { ...parley };
 
             // Perform operations
             // Internal state should be consistent

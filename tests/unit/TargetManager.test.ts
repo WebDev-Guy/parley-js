@@ -16,7 +16,7 @@
  * - count / clear() / destroy() - Management
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TargetManager } from '../../src/core/TargetManager';
 import { ConnectionState } from '../../src/types/ConnectionTypes';
 import { TargetNotFoundError } from '../../src/errors/ErrorTypes';
@@ -498,7 +498,7 @@ describe('TargetManager', () => {
             const initialActivity = manager.get('child-window')?.lastActivity;
 
             // Small delay to ensure different timestamp
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise((resolve) => setTimeout(resolve, 10));
 
             manager.updateActivity('child-window');
 
@@ -570,7 +570,7 @@ describe('TargetManager', () => {
     describe('edge cases', () => {
         it('should handle special characters in ID', () => {
             const mockWindow = createMockWindow('child');
-            const id = manager.register(mockWindow as unknown as Window, {
+            manager.register(mockWindow as unknown as Window, {
                 id: 'child:window-1.test',
             });
 

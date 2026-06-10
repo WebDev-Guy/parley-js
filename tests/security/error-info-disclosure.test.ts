@@ -39,10 +39,10 @@ describe('Error Information Disclosure Security', () => {
         });
 
         it('should not expose stack traces in production', () => {
-            let capturedError: any;
+            let _capturedError: any;
 
             parley.onSystem('system:error', (error) => {
-                capturedError = error;
+                _capturedError = error;
             });
 
             // Trigger error
