@@ -13,6 +13,20 @@
 export type EventHandler<T = unknown> = (data: T) => void | Promise<void>;
 
 /**
+ * Check for any thenable, not just same-realm Promise instances
+ *
+ * In a cross-window library, handlers may return Promises created in
+ * another realm (window/iframe), which fail `instanceof Promise` checks.
+ */
+function isThenable(value: unknown): value is PromiseLike<void> {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as PromiseLike<void>).then === 'function'
+    );
+}
+
+/**
  * Internal listener entry with handler and options
  */
 interface ListenerEntry<T = unknown> {
@@ -158,8 +172,8 @@ export class EventEmitter {
 
             try {
                 const result = entry.handler(data);
-                if (result instanceof Promise) {
-                    promises.push(result);
+                if (isThenable(result)) {
+                    promises.push(Promise.resolve(result));
                 }
             } catch (error) {
                 // Log error but don't break other handlers
@@ -203,8 +217,8 @@ export class EventEmitter {
 
             try {
                 const result = entry.handler(data);
-                if (result instanceof Promise) {
-                    result.catch((error: unknown) => {
+                if (isThenable(result)) {
+                    Promise.resolve(result).catch((error: unknown) => {
                         console.error(`Error in async event handler for "${event}":`, error);
                     });
                 }
