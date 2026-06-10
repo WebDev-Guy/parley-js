@@ -42,7 +42,7 @@
 npm install ignite-parleyjs
 ```
 
-Requires Node.js 20 or later for development and tooling. The library itself
+Requires Node.js 20.19 or later for development and tooling. The library itself
 runs in any modern browser (see Browser Support below).
 
 ### CDN Usage
