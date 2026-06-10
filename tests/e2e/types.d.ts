@@ -31,8 +31,12 @@ declare global {
         connectionLost: Promise<FixtureDisconnectEvent>;
         popupRef: Window | null;
 
+        // parent.html (origin-rejection test)
+        injectForgedHandshake: () => boolean;
+
         // child-wrong-origin.html
-        receivedAnything: boolean;
+        rawMessageCount: number;
+        parleyConnected: boolean;
     }
 }
 

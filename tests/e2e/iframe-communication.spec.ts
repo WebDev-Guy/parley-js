@@ -73,14 +73,20 @@ test.describe('cross-origin iframe communication', () => {
         expect(failure.connected).toBe(false);
         expect(failure.code).toBe('ERR_CONNECTION_HANDSHAKE_FAILED');
 
-        // The child's origin validation must have dropped every parent message
-        const childFrame = page.frameLocator('#child-frame');
-        await expect(childFrame.locator('h1')).toBeVisible();
-        const childReceived = await page
-            .frames()
-            .find((f) => f.url().includes('child-wrong-origin'))
-            ?.evaluate(() => window.receivedAnything);
-        expect(childReceived).toBe(false);
+        // Now prove the block is receive-side origin validation, not a
+        // transport failure: post a forged Parley handshake straight into
+        // the child frame from the untrusted parent origin
+        const childFrame = page.frames().find((f) => f.url().includes('child-wrong-origin'));
+        expect(childFrame).toBeDefined();
+
+        await page.evaluate(() => window.injectForgedHandshake());
+        await expect
+            .poll(() => childFrame!.evaluate(() => window.rawMessageCount))
+            .toBeGreaterThan(0);
+
+        // The forged message arrived at the window but Parley dropped it
+        const parleyConnected = await childFrame!.evaluate(() => window.parleyConnected);
+        expect(parleyConnected).toBe(false);
     });
 
     test('reconnects to a fresh iframe after disconnecting', async ({ page }) => {

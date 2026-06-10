@@ -36,6 +36,24 @@
                 return window.parley.send('echo', payload, { targetId: 'child' });
             };
 
+            // Post a forged Parley handshake directly into the child frame.
+            // The child must drop it via receive-side origin validation.
+            window.injectForgedHandshake = function () {
+                window.childFrame.contentWindow.postMessage(
+                    {
+                        _parley: '__parley__',
+                        _type: '__parley_handshake_init__',
+                        _id: 'forged-handshake-1',
+                        _timestamp: Date.now(),
+                        _origin: location.origin,
+                        _expectsResponse: false,
+                        payload: { ready: true },
+                    },
+                    '*'
+                );
+                return true;
+            };
+
             window.disconnectChild = function () {
                 const result = window.parley.disconnect('child');
                 window.childFrame.remove();

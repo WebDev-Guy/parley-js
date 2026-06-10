@@ -6,7 +6,10 @@
  * (127.0.0.1 and localhost) to give the browser two distinct origins
  * without TLS or hosts-file changes.
  *
- * Usage: node tests/e2e/server.mjs <port>
+ * Usage: node tests/e2e/server.mjs <port> [host]
+ *
+ * Binds to loopback only (default 127.0.0.1) - the server exposes the
+ * whole repository root, so it must never listen on external interfaces.
  */
 
 import { createServer } from 'node:http';
@@ -16,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const PORT = Number(process.argv[2] ?? 4173);
+const HOST = process.argv[3] ?? '127.0.0.1';
 
 const MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -50,6 +54,6 @@ const server = createServer(async (req, res) => {
     }
 });
 
-server.listen(PORT, () => {
-    console.log(`E2E static server listening on port ${PORT}`);
+server.listen(PORT, HOST, () => {
+    console.log(`E2E static server listening on ${HOST}:${PORT}`);
 });

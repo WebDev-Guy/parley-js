@@ -31,12 +31,14 @@ export default defineConfig({
     ],
     webServer: [
         {
-            command: 'node tests/e2e/server.mjs 4173',
+            command: 'node tests/e2e/server.mjs 4173 127.0.0.1',
             url: 'http://127.0.0.1:4173/package.json',
             reuseExistingServer: !process.env.CI,
         },
         {
-            command: 'node tests/e2e/server.mjs 4174',
+            // Bound to whatever localhost resolves to on this machine;
+            // browsers try both loopback families for localhost
+            command: 'node tests/e2e/server.mjs 4174 localhost',
             url: 'http://localhost:4174/package.json',
             reuseExistingServer: !process.env.CI,
         },
