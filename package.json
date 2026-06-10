@@ -1,6 +1,6 @@
 {
     "name": "ignite-parleyjs",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "type": "module",
     "description": "Type-safe, secure cross-window communication with built-in origin validation, JSON Schema message validation, robust heartbeat monitoring, and defensive error handling",
     "main": "./dist/index.cjs",
