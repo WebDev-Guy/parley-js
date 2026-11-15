@@ -57,6 +57,11 @@
     - `broadcast()` keeps going when one target fails
     - `register()` after `on()` attaches the schema instead of throwing
     - `Parley.create()` rejects an empty `allowedOrigins` list
+- Performance: `send()` is about 2x faster (1 KB: 43k to 90k ops/s; 1 MB: 21 ms
+  to 9 ms). Payloads are serialized once per send instead of three times, and
+  `system:message_sent` / `system:message_received` listeners no longer delay
+  delivery or handlers. `createMessage()` / `createResponse()` accept
+  `clonePayload: false` to skip the defensive copy. New `npm run bench`.
 - 595cef7: Fixed disconnect notifications tearing down the wrong connection: the
   handler now disconnects the target that actually sent the notification
   (identified via message metadata) instead of the first connected target. With

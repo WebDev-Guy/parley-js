@@ -39,6 +39,7 @@
         "test:coverage": "vitest run --coverage",
         "test:watch": "vitest watch",
         "test:debug": "vitest --inspect-brk --single-thread",
+        "bench": "vitest bench --run",
         "test:e2e": "npm run build && playwright test",
         "test:e2e:ui": "npm run build && playwright test --ui",
         "docs:dev": "vitepress dev docs",

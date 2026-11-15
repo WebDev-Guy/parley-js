@@ -177,6 +177,12 @@ export interface CreateMessageOptions<T> {
 
     /** Target identifier */
     target?: string;
+
+    /**
+     * Deep-clone the payload (default: true). Internal callers pass false
+     * when the payload is already a fresh, sanitized copy.
+     */
+    clonePayload?: boolean;
 }
 
 /**
@@ -198,6 +204,12 @@ export interface CreateResponseOptions<T> {
         message: string;
         details?: unknown;
     };
+
+    /**
+     * Deep-clone the payload (default: true). Internal callers pass false
+     * when the payload is already a fresh, sanitized copy.
+     */
+    clonePayload?: boolean;
 }
 
 /**
@@ -216,7 +228,7 @@ export interface CreateResponseOptions<T> {
  * ```
  */
 export function createMessage<T>(options: CreateMessageOptions<T>): MessageProtocol<T> {
-    const { type, payload, expectsResponse = true, target } = options;
+    const { type, payload, expectsResponse = true, target, clonePayload = true } = options;
 
     return {
         _parley: PARLEY_MESSAGE_IDENTIFIER,
@@ -227,7 +239,7 @@ export function createMessage<T>(options: CreateMessageOptions<T>): MessageProto
         _origin: getCurrentOrigin(),
         _target: target,
         _expectsResponse: expectsResponse,
-        payload: deepClone(payload),
+        payload: clonePayload ? deepClone(payload) : payload,
     };
 }
 
@@ -258,7 +270,7 @@ export function createMessage<T>(options: CreateMessageOptions<T>): MessageProto
  * ```
  */
 export function createResponse<T>(options: CreateResponseOptions<T>): ResponseProtocol<T> {
-    const { requestId, success, payload, error } = options;
+    const { requestId, success, payload, error, clonePayload = true } = options;
 
     const response: ResponseProtocol<T> = {
         _parley: PARLEY_MESSAGE_IDENTIFIER,
@@ -271,7 +283,7 @@ export function createResponse<T>(options: CreateResponseOptions<T>): ResponsePr
     };
 
     if (success && payload !== undefined) {
-        response.payload = deepClone(payload);
+        response.payload = clonePayload ? deepClone(payload) : payload;
     }
 
     if (!success && error) {
@@ -333,10 +345,13 @@ export function isResponseMessage(data: unknown): data is ResponseProtocol {
  * @returns True if message is an internal protocol message
  */
 export function isInternalMessage(message: MessageProtocol): boolean {
-    return Object.values(INTERNAL_MESSAGE_TYPES).includes(
-        message._type as (typeof INTERNAL_MESSAGE_TYPES)[keyof typeof INTERNAL_MESSAGE_TYPES]
-    );
+    return INTERNAL_TYPE_SET.has(message._type);
 }
+
+/**
+ * Internal protocol message types, for O(1) lookup on every inbound message
+ */
+const INTERNAL_TYPE_SET: ReadonlySet<string> = new Set(Object.values(INTERNAL_MESSAGE_TYPES));
 
 /**
  * Expected field types for request messages ('payload' must exist, any type)

@@ -638,7 +638,8 @@ export class Parley {
 
         // For non-internal messages, emit received event and analytics
         if (!isInternal) {
-            await this._emitter.emit(SYSTEM_EVENTS.MESSAGE_RECEIVED, {
+            // Don't make handlers wait on (possibly slow, async) system listeners
+            this._emitter.emitSync(SYSTEM_EVENTS.MESSAGE_RECEIVED, {
                 messageId: message._id,
                 messageType: message._type,
                 // Browser-verified origin, never the self-reported message._origin
@@ -726,6 +727,8 @@ export class Parley {
                 requestId: message._id,
                 success: true,
                 payload: this._security.sanitizePayload(responsePayload),
+                // sanitizePayload already produced a fresh copy
+                clonePayload: false,
             });
 
             this._sendResponse(response, source, sourceTargetId);
