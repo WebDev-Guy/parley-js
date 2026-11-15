@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # npm dev tooling (the published package has no runtime dependencies)
+  - package-ecosystem: npm
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    groups:
+      dev-tooling-minor-patch:
+        update-types: [minor, patch]
+
+  # GitHub Actions - keeps the SHA-pinned actions current
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies]
+    groups:
+      actions:
+        patterns: ['*']

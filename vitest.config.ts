@@ -30,11 +30,12 @@ export default defineConfig({
                 '**/WindowChannel.ts',
             ],
             // Thresholds track current actuals (ratchet upward as coverage improves).
+            // Ratcheted 2026-11 (#33) to actuals: 67.61 / 68.25 / 63.07 / 67.58.
             thresholds: {
-                lines: 65,
-                functions: 65,
-                branches: 60,
-                statements: 65,
+                lines: 67,
+                functions: 68,
+                branches: 63,
+                statements: 67,
             },
         },
 
