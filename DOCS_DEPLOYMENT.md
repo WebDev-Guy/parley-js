@@ -102,7 +102,7 @@ git push origin main
 **Option B: Manual workflow dispatch**
 
 1. Go to **Actions** tab in GitHub
-2. Click **Deploy Documentation** workflow
+2. Click **Deploy to GitHub Pages** workflow
 3. Click **Run workflow**
 4. Select branch: `main`
 5. Click **Run workflow**
@@ -194,7 +194,7 @@ parley-js/
 │   └── [other markdown files]
 ├── .github/
 │   └── workflows/
-│       └── deploy-docs.yml     # GitHub Actions workflow
+│       └── deploy-pages.yml    # GitHub Pages deployment workflow
 └── package.json                # npm scripts for docs
 ```
 
@@ -211,18 +211,22 @@ npm run docs:preview    # Preview production build
 
 ## Automatic Deployment
 
-The GitHub Actions workflow (`.github/workflows/deploy-docs.yml`) automatically:
+The GitHub Actions workflow (`.github/workflows/deploy-pages.yml`) is the only
+workflow that deploys GitHub Pages. It automatically:
 
 1. Triggers on:
-    - Push to `main` branch (only if `docs/**` changed)
+    - Every push to `main` (releases are merged from `development` into `main`,
+      so the site updates with each release)
     - Manual workflow dispatch
 
 2. Build process:
     - Checks out repository
     - Sets up Node.js 20
     - Installs dependencies (`npm ci`)
-    - Builds documentation (`npm run docs:build`)
-    - Uploads build artifact
+    - Builds the library (`npm run build`) so a broken build stops the deploy
+    - Builds documentation (`npm run docs:build`, which fails on dead links)
+      into `docs-site/docs/`
+    - Uploads `docs-site/` (landing page + docs) as the Pages artifact
 
 3. Deployment:
     - Deploys to GitHub Pages
