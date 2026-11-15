@@ -110,7 +110,8 @@ export interface ParleyConfig {
      * Default retry count
      *
      * Number of times to retry a failed message before giving up.
-     * Retries use exponential backoff.
+     * Each retry re-sends the same message (same id) after another `timeout`
+     * interval; there is no backoff.
      *
      * @default 0
      */

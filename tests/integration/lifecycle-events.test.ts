@@ -226,6 +226,81 @@ describe('Previously unreachable behavior (#41)', () => {
         });
     });
 
+    describe('register() onError option', () => {
+        it('is called when an inbound payload fails schema validation', async () => {
+            vi.useFakeTimers();
+            const p = create();
+            const win = fakeWindow();
+            await connect(p, win, 'A');
+
+            const onError = vi.fn();
+            p.register('user:update', {
+                schema: { type: 'object', required: ['id'] },
+                onError,
+            });
+            const handler = vi.fn();
+            p.on('user:update', handler);
+
+            deliver(request('user:update', {}), win);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(handler).not.toHaveBeenCalled();
+            expect(onError).toHaveBeenCalledTimes(1);
+            const [error, metadata] = onError.mock.calls[0] as [
+                { code: string },
+                { senderId: string; origin: string },
+            ];
+            expect(error.code).toBe('ERR_VALIDATION_SCHEMA_MISMATCH');
+            expect(metadata).toMatchObject({ senderId: 'A', origin: ORIGIN });
+        });
+
+        it('is called with a ParleyError when a handler throws', async () => {
+            vi.useFakeTimers();
+            const p = create();
+            const win = fakeWindow();
+            await connect(p, win, 'A');
+
+            const onError = vi.fn();
+            p.register('job:run', { onError });
+            p.on('job:run', () => {
+                throw new Error('boom');
+            });
+
+            deliver(request('job:run', {}), win);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(onError).toHaveBeenCalledTimes(1);
+            const [error] = onError.mock.calls[0] as [{ name: string; message: string }];
+            expect(error.name).toBe('ParleyError');
+            expect(error.message).toBe('boom');
+        });
+
+        it('a throwing onError does not break message handling', async () => {
+            vi.useFakeTimers();
+            const p = create();
+            const win = fakeWindow();
+            await connect(p, win, 'A');
+
+            p.register('job:run', {
+                onError: () => {
+                    throw new Error('callback failure');
+                },
+            });
+            p.on('job:run', () => {
+                throw new Error('boom');
+            });
+            win.postMessage.mockClear();
+
+            deliver(request('job:run', {}, true), win);
+            await vi.advanceTimersByTimeAsync(0);
+
+            const reply = win.postMessage.mock.calls
+                .map((c) => c[0] as { success?: boolean; error?: { code: string } })
+                .find((m) => 'success' in m);
+            expect(reply).toMatchObject({ success: false, error: { code: 'ERR_HANDLER_ERROR' } });
+        });
+    });
+
     describe('heartbeat pong', () => {
         it('has no request handler, so a peer cannot fake liveness with one', async () => {
             vi.useFakeTimers();

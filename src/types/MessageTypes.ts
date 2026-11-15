@@ -120,7 +120,11 @@ export interface MessageRegistrationOptions {
 
     /**
      * Error handler for this message type
-     * Called when an error occurs during message handling
+     *
+     * Called when an inbound message of this type fails schema validation
+     * (a ValidationError) or one of its handlers throws (the thrown error,
+     * wrapped in a ParleyError if it is not one). Errors thrown by onError
+     * itself are logged and ignored.
      */
     onError?: (error: ParleyError, metadata: MessageMetadata) => void;
 }
@@ -238,7 +242,10 @@ export interface JsonSchema {
     /** Description (documentation only) */
     description?: string;
 
-    /** Default value */
+    /**
+     * Default value (annotation only, as in JSON Schema: it is not applied
+     * to payloads and not used for validation)
+     */
     default?: unknown;
 
     /** Allow additional properties (for objects) */

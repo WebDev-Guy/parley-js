@@ -28,8 +28,8 @@ import {
 } from './MessageProtocol';
 import { SYSTEM_EVENTS, type SystemEventName } from '../events/SystemEvents';
 import { ConnectionState } from '../types/ConnectionTypes';
-import { ValidationError } from '../errors/ErrorTypes';
-import { SECURITY_ERRORS, VALIDATION_ERRORS } from '../errors/ErrorCodes';
+import { ParleyError, ValidationError } from '../errors/ErrorTypes';
+import { GENERAL_ERRORS, SECURITY_ERRORS, VALIDATION_ERRORS } from '../errors/ErrorCodes';
 import { DefaultSecurityLayer, type SecurityLayer } from '../security/SecurityLayer';
 import {
     DEFAULT_HEARTBEAT_CONFIG,
@@ -678,6 +678,17 @@ export class Parley {
             return;
         }
 
+        // Create metadata
+        const metadata: MessageMetadata = {
+            messageId: message._id,
+            senderId: sourceTargetId,
+            // Browser-verified origin (event.origin); message._origin is
+            // self-reported by the sender and must not be trusted
+            origin,
+            timestamp: message._timestamp,
+            expectsResponse: message._expectsResponse,
+        };
+
         // Validate payload (skip for internal messages)
         if (!isInternal) {
             try {
@@ -688,6 +699,8 @@ export class Parley {
                         type: message._type,
                         errors: error.validationErrors,
                     });
+
+                    this._notifyTypeError(message._type, error, metadata);
 
                     if (message._expectsResponse) {
                         this._sendErrorResponse(message, source, sourceTargetId, {
@@ -701,17 +714,6 @@ export class Parley {
                 throw error;
             }
         }
-
-        // Create metadata
-        const metadata: MessageMetadata = {
-            messageId: message._id,
-            senderId: sourceTargetId,
-            // Browser-verified origin (event.origin); message._origin is
-            // self-reported by the sender and must not be trusted
-            origin,
-            timestamp: message._timestamp,
-            expectsResponse: message._expectsResponse,
-        };
 
         // Track if response was sent using shared object for atomicity
         const responseHandled = { sent: false };
@@ -744,6 +746,18 @@ export class Parley {
             } catch (error) {
                 this._logger.error('Handler error', { type: message._type, error });
 
+                this._notifyTypeError(
+                    message._type,
+                    error instanceof ParleyError
+                        ? error
+                        : new ParleyError(
+                              error instanceof Error ? error.message : 'Handler error',
+                              GENERAL_ERRORS.UNKNOWN,
+                              { cause: error }
+                          ),
+                    metadata
+                );
+
                 // Emit error event
                 this._emitter.emitSync(SYSTEM_EVENTS.ERROR, {
                     code: 'ERR_HANDLER_ERROR',
@@ -766,6 +780,30 @@ export class Parley {
                     });
                 }
             }
+        }
+    }
+
+    /**
+     * Invoke the onError option registered for a message type, if any
+     *
+     * Called when an inbound message of that type fails schema validation
+     * or one of its handlers throws. Errors thrown by onError itself are
+     * logged and swallowed.
+     */
+    private _notifyTypeError(
+        messageType: string,
+        error: ParleyError,
+        metadata: MessageMetadata
+    ): void {
+        const onError = this._registry.get(messageType)?.options.onError;
+        if (!onError) {
+            return;
+        }
+
+        try {
+            onError(error, metadata);
+        } catch (callbackError) {
+            this._logger.error('onError callback threw', { type: messageType, callbackError });
         }
     }
 
