@@ -15,7 +15,12 @@ import { getTimestamp } from '../utils/Helpers';
 import type { BaseChannel } from '../communication/BaseChannel';
 import { MessageRegistry } from './MessageRegistry';
 import { TargetManager } from './TargetManager';
-import { createMessage, type MessageProtocol, type ResponseProtocol } from './MessageProtocol';
+import {
+    createMessage,
+    isInternalMessageType,
+    type MessageProtocol,
+    type ResponseProtocol,
+} from './MessageProtocol';
 import { SYSTEM_EVENTS } from '../events/SystemEvents';
 import {
     ParleyError,
@@ -422,24 +427,27 @@ export class SendPipeline {
         // Calculate duration
         const duration = getTimestamp() - pending.sentAt;
 
-        // Emit events
-        this._emitter.emitSync(SYSTEM_EVENTS.RESPONSE_RECEIVED, {
-            responseId: response._id,
-            requestId: response._requestId,
-            success: response.success,
-            duration,
-            timestamp: getTimestamp(),
-        });
+        // Emit events (app traffic only; heartbeat/disconnect responses are
+        // protocol traffic and are reported via the connection-health events)
+        if (!isInternalMessageType(pending.messageType)) {
+            this._emitter.emitSync(SYSTEM_EVENTS.RESPONSE_RECEIVED, {
+                responseId: response._id,
+                requestId: response._requestId,
+                success: response.success,
+                duration,
+                timestamp: getTimestamp(),
+            });
 
-        this._emitAnalyticsEvent({
-            type: 'response_received',
-            messageType: pending.messageType,
-            messageId: response._requestId,
-            targetId: sourceTargetId,
-            timestamp: getTimestamp(),
-            duration,
-            success: response.success,
-        });
+            this._emitAnalyticsEvent({
+                type: 'response_received',
+                messageType: pending.messageType,
+                messageId: response._requestId,
+                targetId: sourceTargetId,
+                timestamp: getTimestamp(),
+                duration,
+                success: response.success,
+            });
+        }
 
         // Resolve or reject
         if (response.success) {
@@ -639,24 +647,27 @@ export class SendPipeline {
                 TIMEOUT_ERRORS.NO_RESPONSE
             );
 
-            // Emit events
-            this._emitter.emitSync(SYSTEM_EVENTS.TIMEOUT, {
-                messageId,
-                messageType: pending.messageType,
-                targetId,
-                timeoutMs: timeout,
-                retriesAttempted: totalRetries,
-                timestamp: getTimestamp(),
-            });
+            // Emit events (app traffic only; a missed heartbeat is reported
+            // as system:heartbeat_missed instead)
+            if (!isInternalMessageType(pending.messageType)) {
+                this._emitter.emitSync(SYSTEM_EVENTS.TIMEOUT, {
+                    messageId,
+                    messageType: pending.messageType,
+                    targetId,
+                    timeoutMs: timeout,
+                    retriesAttempted: totalRetries,
+                    timestamp: getTimestamp(),
+                });
 
-            this._emitAnalyticsEvent({
-                type: 'timeout',
-                messageType: pending.messageType,
-                messageId,
-                targetId,
-                timestamp: getTimestamp(),
-                errorCode: TIMEOUT_ERRORS.NO_RESPONSE,
-            });
+                this._emitAnalyticsEvent({
+                    type: 'timeout',
+                    messageType: pending.messageType,
+                    messageId,
+                    targetId,
+                    timestamp: getTimestamp(),
+                    errorCode: TIMEOUT_ERRORS.NO_RESPONSE,
+                });
+            }
 
             reject(error);
 

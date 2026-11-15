@@ -736,7 +736,7 @@ export class Parley {
                 clonePayload: false,
             });
 
-            this._sendResponse(response, source, sourceTargetId);
+            this._sendResponse(response, source, sourceTargetId, isInternal);
         };
 
         // Call handlers
@@ -810,7 +810,12 @@ export class Parley {
     /**
      * Send a response
      */
-    private _sendResponse(response: ResponseProtocol, target: Window, targetId: string): void {
+    private _sendResponse(
+        response: ResponseProtocol,
+        target: Window,
+        targetId: string,
+        internal = false
+    ): void {
         const targetInfo = this._targets.get(targetId);
         const channel = this._connection.getChannel(targetId);
 
@@ -828,6 +833,12 @@ export class Parley {
         }
 
         channel.send(response, target, targetInfo.origin);
+
+        // Responses to protocol traffic (heartbeat pings, disconnect
+        // notifications) are not app-level events
+        if (internal) {
+            return;
+        }
 
         // Emit events
         this._emitter.emitSync(SYSTEM_EVENTS.RESPONSE_SENT, {
@@ -862,7 +873,7 @@ export class Parley {
             error,
         });
 
-        this._sendResponse(response, target, targetId);
+        this._sendResponse(response, target, targetId, isInternalMessage(originalMessage));
     }
 
     /**

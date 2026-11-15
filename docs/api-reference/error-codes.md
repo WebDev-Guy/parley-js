@@ -346,7 +346,7 @@ function describe(error: unknown): string {
     switch (error.code) {
         case ERROR_CODES.NO_RESPONSE:
             return 'The other window did not answer';
-        case ERROR_CODES.NOT_CONNECTED: // ERR_TARGET_NOT_CONNECTED
+        case ERROR_CODES.TARGET_NOT_CONNECTED: // e.g. send() with no target
             return 'Not connected';
         case ERROR_CODES.RATE_LIMITED:
             return 'Too many messages';
@@ -356,11 +356,20 @@ function describe(error: unknown): string {
 }
 ```
 
-Note that `ERROR_CODES` merges the category objects, so where two categories use
-the same key the later one wins: `ERROR_CODES.NOT_CONNECTED` is
-`'ERR_CONNECTION_NOT_CONNECTED'` and `ERROR_CODES.CLOSED` is
-`'ERR_CONNECTION_CLOSED'`. Use `TARGET_ERRORS.NOT_CONNECTED` for
-`'ERR_TARGET_NOT_CONNECTED'`.
+`ERROR_CODES` merges the category objects. Two keys exist in two categories, so
+`ERROR_CODES` also provides unambiguous names for them (1.1.0):
+
+| Use                                    | Value                            |
+| -------------------------------------- | -------------------------------- |
+| `ERROR_CODES.TARGET_NOT_CONNECTED`     | `'ERR_TARGET_NOT_CONNECTED'`     |
+| `ERROR_CODES.CONNECTION_NOT_CONNECTED` | `'ERR_CONNECTION_NOT_CONNECTED'` |
+| `ERROR_CODES.TARGET_CLOSED`            | `'ERR_TARGET_CLOSED'`            |
+| `ERROR_CODES.CONNECTION_CLOSED`        | `'ERR_CONNECTION_CLOSED'`        |
+
+The short keys `ERROR_CODES.NOT_CONNECTED` and `ERROR_CODES.CLOSED` are
+deprecated: they resolve to the _connection_ codes only, so they never match
+`'ERR_TARGET_NOT_CONNECTED'` (what `send()` throws when no target is connected)
+or `'ERR_TARGET_CLOSED'`.
 
 ### Inbound problems: system:error and onError
 

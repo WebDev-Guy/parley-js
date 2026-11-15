@@ -154,4 +154,30 @@ export const ERROR_CODES = {
     ...CONNECTION_ERRORS,
     ...CONFIG_ERRORS,
     ...GENERAL_ERRORS,
+
+    // NOT_CONNECTED and CLOSED exist in both TARGET_ERRORS and
+    // CONNECTION_ERRORS, so the spread above keeps only the CONNECTION
+    // values. These unambiguous names make every code reachable.
+
+    /** `ERR_TARGET_NOT_CONNECTED` (e.g. `send()` with no connected target) */
+    TARGET_NOT_CONNECTED: TARGET_ERRORS.NOT_CONNECTED,
+    /** `ERR_CONNECTION_NOT_CONNECTED` */
+    CONNECTION_NOT_CONNECTED: CONNECTION_ERRORS.NOT_CONNECTED,
+    /** `ERR_TARGET_CLOSED` */
+    TARGET_CLOSED: TARGET_ERRORS.CLOSED,
+    /** `ERR_CONNECTION_CLOSED` */
+    CONNECTION_CLOSED: CONNECTION_ERRORS.CLOSED,
+
+    /**
+     * `ERR_CONNECTION_NOT_CONNECTED`
+     * @deprecated Ambiguous: does NOT match `ERR_TARGET_NOT_CONNECTED`. Use
+     * `TARGET_NOT_CONNECTED` or `CONNECTION_NOT_CONNECTED`.
+     */
+    NOT_CONNECTED: CONNECTION_ERRORS.NOT_CONNECTED,
+    /**
+     * `ERR_CONNECTION_CLOSED`
+     * @deprecated Ambiguous: does NOT match `ERR_TARGET_CLOSED`. Use
+     * `TARGET_CLOSED` or `CONNECTION_CLOSED`.
+     */
+    CLOSED: CONNECTION_ERRORS.CLOSED,
 } as const;

@@ -359,8 +359,9 @@ Emitted when a response is sent to a request.
 
 **When Fired**: When a response is posted: a handler called `respond()`
 (`success: true`), or Parley sent an error response (`success: false`, for
-example `ERR_HANDLER_ERROR`, `ERR_NO_HANDLER` or a schema failure). Also fires
-for internal heartbeat and disconnect responses.
+example `ERR_HANDLER_ERROR`, `ERR_NO_HANDLER` or a schema failure). Application
+messages only: responses to Parley's internal heartbeat and disconnect messages
+do not emit it (since 1.1.0).
 
 **Event Data**:
 
@@ -396,7 +397,8 @@ Emitted when a response is received for a request.
 **Event Name**: `system:response_received`
 
 **When Fired**: When a response arrives for a pending request (success or
-error). Also fires for internal heartbeat and disconnect responses.
+error). Application messages only: responses to Parley's internal heartbeat and
+disconnect messages do not emit it (since 1.1.0).
 
 **Event Data**:
 
@@ -514,10 +516,10 @@ Emitted when a request times out without receiving a response.
 **Event Name**: `system:timeout`
 
 **When Fired**: When a `send()` request finally times out, after all retries
-(the `send()` promise rejects with `TimeoutError` at the same time). Internal
-requests time out through the same path, so an unanswered heartbeat ping also
-emits `system:timeout` (with `messageType: '__parley_heartbeat_ping'`), as does
-an unacknowledged disconnect notification.
+(the `send()` promise rejects with `TimeoutError` at the same time). Application
+messages only (since 1.1.0): an unanswered heartbeat ping is reported as
+`system:heartbeat_missed`, not as a timeout, and an unacknowledged disconnect
+notification emits nothing.
 
 **Event Data**:
 
