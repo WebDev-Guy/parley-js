@@ -723,8 +723,8 @@ If acknowledgment not received within 1 second:
 const SYSTEM_MESSAGE_TYPES = {
     DISCONNECT: 'system:disconnect',
     HEARTBEAT_PING: 'system:heartbeat_ping',
-    HEARTBEAT_PONG: 'system:heartbeat_pong',
 };
+// The pong is the response to HEARTBEAT_PING, not a separate message type
 ```
 
 ### Disconnect Reasons

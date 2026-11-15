@@ -202,12 +202,6 @@ export interface ParleyConfig {
          * @default 100
          */
         messagesPerSecond?: number;
-
-        /**
-         * Burst size for initial messages without throttling
-         * @default 10
-         */
-        burstSize?: number;
     };
 }
 
@@ -249,19 +243,8 @@ export interface ResolvedConfig {
     rateLimit?: {
         enabled: boolean;
         messagesPerSecond: number;
-        burstSize: number;
     };
 }
-
-/**
- * Default configuration values
- */
-export const DEFAULT_CONFIG = {
-    timeout: 5000,
-    retries: 0,
-    logLevel: 'none' as LogLevel,
-    analyticsEnabled: false,
-} as const;
 
 /**
  * Validate configuration object

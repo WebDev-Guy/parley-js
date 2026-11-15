@@ -132,7 +132,7 @@ describe('Correctness fixes (#31)', () => {
         Object.defineProperty(window, 'opener', { value: opener, configurable: true });
 
         const channel = new WindowChannel(
-            { allowedOrigins: [ORIGIN], handshakeTimeout: 2000 } as never,
+            { allowedOrigins: [ORIGIN], handshakeTimeout: 2000 },
             createMockLogger() as never
         );
 

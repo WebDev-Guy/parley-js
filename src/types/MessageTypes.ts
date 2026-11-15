@@ -19,8 +19,6 @@ export const SYSTEM_MESSAGE_TYPES = {
     DISCONNECT: '__parley_disconnect',
     /** Heartbeat ping */
     HEARTBEAT_PING: '__parley_heartbeat_ping',
-    /** Heartbeat pong (response) */
-    HEARTBEAT_PONG: '__parley_heartbeat_pong',
 } as const;
 
 /**

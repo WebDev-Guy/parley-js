@@ -74,27 +74,7 @@ export interface ChannelOptions {
 
     /** Timeout for handshake in milliseconds */
     handshakeTimeout: number;
-
-    /** Whether to auto-reconnect on disconnect */
-    autoReconnect: boolean;
-
-    /** Delay between reconnect attempts in milliseconds */
-    reconnectDelay: number;
-
-    /** Maximum reconnect attempts (0 = unlimited) */
-    maxReconnectAttempts: number;
 }
-
-/**
- * Default channel options
- */
-export const DEFAULT_CHANNEL_OPTIONS: ChannelOptions = {
-    allowedOrigins: [],
-    handshakeTimeout: 5000,
-    autoReconnect: false,
-    reconnectDelay: 1000,
-    maxReconnectAttempts: 3,
-};
 
 /**
  * Window reference type that accounts for cross-origin limitations

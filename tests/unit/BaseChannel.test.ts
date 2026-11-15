@@ -91,9 +91,6 @@ describe('BaseChannel', () => {
     const defaultOptions: ChannelOptions = {
         allowedOrigins: ['https://example.com', 'https://other.com'],
         handshakeTimeout: 5000,
-        autoReconnect: false,
-        reconnectDelay: 1000,
-        maxReconnectAttempts: 3,
     };
 
     beforeEach(() => {

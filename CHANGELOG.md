@@ -62,6 +62,21 @@
   `system:message_sent` / `system:message_received` listeners no longer delay
   delivery or handlers. `createMessage()` / `createResponse()` accept
   `clonePayload: false` to skip the defensive copy. New `npm run bench`.
+- Documented behavior that never ran now works:
+    - `system:handshake_start` / `system:handshake_complete` /
+      `system:handshake_failed` are emitted
+    - `heartbeat.maxFailures`: after that many consecutive timed-out requests to
+      a target (`send()` with a `targetId` and `expectsResponse`), the
+      connection is closed with reason `max_failures_reached`
+    - `destroy()` emits `system:disconnected` (reason `destroyed`) per target
+- Removed code and options that never had any effect: the
+  `SYSTEM_MESSAGE_TYPES.HEARTBEAT_PONG` constant and its request handler (pongs
+  are the response to a ping), `ChannelOptions.autoReconnect` / `reconnectDelay`
+  / `maxReconnectAttempts` (reconnection is not implemented),
+  `rateLimit.burstSize`, and the never-emitted `timeout` / `error` values of
+  `DisconnectReason`.
+- Production bundles are ~10% smaller (internal property names are mangled;
+  wire-protocol fields and protected subclass API are preserved).
 - 595cef7: Fixed disconnect notifications tearing down the wrong connection: the
   handler now disconnects the target that actually sent the notification
   (identified via message metadata) instead of the first connected target. With

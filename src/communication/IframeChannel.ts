@@ -23,7 +23,6 @@ import type { ChannelOptions } from '../types/ChannelTypes';
  * Handles:
  * - Connection handshake
  * - Message sending/receiving
- * - Automatic reconnection (if configured)
  *
  * @example
  * ```typescript
