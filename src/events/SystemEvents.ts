@@ -243,7 +243,7 @@ export interface ConnectionLostEventData {
     targetId: string;
 
     /** Reason for connection loss */
-    reason: 'heartbeat_timeout' | 'max_failures_reached';
+    reason: 'heartbeat_timeout' | 'max_failures_reached' | 'connection_lost' | 'cleanup';
 
     /** Timestamp when connection was determined lost */
     timestamp: number;

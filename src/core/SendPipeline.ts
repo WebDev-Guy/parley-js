@@ -68,6 +68,12 @@ export interface SendPipelineDependencies {
 
     /** Callback to emit analytics events */
     emitAnalyticsEvent: (event: AnalyticsEvent) => void;
+
+    /**
+     * Called when a targeted request that expected a response either gets a
+     * response (true) or finally times out (false). Drives heartbeat.maxFailures.
+     */
+    onSendOutcome?: (targetId: string, success: boolean) => void;
 }
 
 /**
@@ -132,6 +138,17 @@ export class SendPipeline {
     private _emitAnalyticsEvent: (event: AnalyticsEvent) => void;
 
     /**
+     * Callback for request outcomes (see SendPipelineDependencies.onSendOutcome)
+     */
+    private _onSendOutcome?: (targetId: string, success: boolean) => void;
+
+    /**
+     * IDs of user requests whose outcome counts toward heartbeat.maxFailures
+     * (targeted, expecting a response; not internal system messages)
+     */
+    private _trackedRequests: Set<string> = new Set();
+
+    /**
      * Pending requests awaiting responses
      */
     private _pendingRequests: Map<string, PendingRequest> = new Map();
@@ -155,6 +172,7 @@ export class SendPipeline {
         this._targets = deps.targets;
         this._getChannel = deps.getChannel;
         this._emitAnalyticsEvent = deps.emitAnalyticsEvent;
+        this._onSendOutcome = deps.onSendOutcome;
     }
 
     /**
@@ -245,6 +263,10 @@ export class SendPipeline {
             options?.timeout ?? this._registry.getTimeout(messageType, this._config.timeout);
         const retries =
             options?.retries ?? this._registry.getRetries(messageType, this._config.retries);
+
+        if (targetId !== undefined) {
+            this._trackedRequests.add(message._id);
+        }
 
         return this._waitForResponse<R>(message, timeout, retries, targetId);
     }
@@ -394,6 +416,9 @@ export class SendPipeline {
         clearTimeout(pending.timeoutHandle);
         this._pendingRequests.delete(response._requestId);
 
+        // Any response (success or error) means the target is reachable
+        this._reportOutcome(response._requestId, pending.targetId, true);
+
         // Calculate duration
         const duration = getTimestamp() - pending.sentAt;
 
@@ -441,6 +466,7 @@ export class SendPipeline {
                 clearTimeout(pending.timeoutHandle);
                 pending.reject(new ConnectionError(reason, { targetId }, CONNECTION_ERRORS.CLOSED));
                 this._pendingRequests.delete(id);
+                this._trackedRequests.delete(id);
             }
         }
     }
@@ -461,6 +487,7 @@ export class SendPipeline {
             );
         }
         this._pendingRequests.clear();
+        this._trackedRequests.clear();
     }
 
     /**
@@ -632,6 +659,23 @@ export class SendPipeline {
             });
 
             reject(error);
+
+            // Reported after rejecting so the caller sees the timeout before
+            // any max-failures disconnect it may trigger
+            this._reportOutcome(messageId, targetId, false);
+        }
+    }
+
+    /**
+     * Report the outcome of a tracked request exactly once
+     */
+    private _reportOutcome(
+        requestId: string,
+        targetId: string | undefined,
+        success: boolean
+    ): void {
+        if (this._trackedRequests.delete(requestId) && targetId !== undefined) {
+            this._onSendOutcome?.(targetId, success);
         }
     }
 

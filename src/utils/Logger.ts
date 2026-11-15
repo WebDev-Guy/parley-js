@@ -207,10 +207,3 @@ export class Logger {
         }
     }
 }
-
-/**
- * Create a default logger instance
- *
- * This can be used as a singleton logger across the application.
- */
-export const defaultLogger = new Logger();

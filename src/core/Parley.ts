@@ -174,6 +174,9 @@ export class Parley {
             emitAnalyticsEvent: (event) => {
                 this._emitAnalyticsEvent(event);
             },
+            onSendOutcome: (targetId, success) => {
+                this._connection.recordSendOutcome(targetId, success);
+            },
         });
 
         // Set up the connection manager (connection lifecycle)
@@ -262,7 +265,6 @@ export class Parley {
                 ? {
                       enabled: config.rateLimit.enabled ?? false,
                       messagesPerSecond: config.rateLimit.messagesPerSecond ?? 100,
-                      burstSize: config.rateLimit.burstSize ?? 10,
                   }
                 : undefined,
         };
@@ -523,11 +525,12 @@ export class Parley {
             this._heartbeatManager = null;
         }
 
-        // Disconnect all targets
-        this._connection.destroy();
-
-        // Reject all pending requests
+        // Reject all pending requests (before disconnecting, so they reject
+        // with 'Parley instance destroyed' rather than 'Target disconnected')
         this._sendPipeline.destroy();
+
+        // Disconnect all targets (emits system:disconnected, reason 'destroyed')
+        this._connection.destroy();
 
         // Clean up
         this._emitter.destroy();
