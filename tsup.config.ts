@@ -4,8 +4,9 @@
  * @module parley-js
  */
 
-import { defineConfig } from 'tsup';
+import { defineConfig, type Options } from 'tsup';
 import pkg from './package.json';
+import { MANGLE_PROPS, RESERVED_PROPS } from './build/mangle-props';
 
 // Shared configuration
 const sharedConfig = {
@@ -27,6 +28,16 @@ const sharedConfig = {
 export default defineConfig((options) => {
     const isDev = options.env?.NODE_ENV === 'development';
 
+    // Production: shorten internal '_' property names (~10% smaller bundle).
+    // Wire-protocol fields and protected subclass API are reserved - see
+    // build/mangle-props.ts. Dev builds keep real names for debugging.
+    const esbuildOptions: Options['esbuildOptions'] = isDev
+        ? undefined
+        : (esbuild) => {
+              esbuild.mangleProps = MANGLE_PROPS;
+              esbuild.reserveProps = RESERVED_PROPS;
+          };
+
     return [
         // CJS and ESM builds (no footer)
         {
@@ -36,6 +47,7 @@ export default defineConfig((options) => {
             clean: true, // Clean only on first build
             sourcemap: isDev,
             minify: !isDev,
+            esbuildOptions,
             define: {
                 ...sharedConfig.define,
                 __DEV__: isDev ? 'true' : 'false',
@@ -48,6 +60,7 @@ export default defineConfig((options) => {
             globalName: 'ParleyLib',
             sourcemap: isDev,
             minify: !isDev,
+            esbuildOptions,
             define: {
                 ...sharedConfig.define,
                 __DEV__: isDev ? 'true' : 'false',
