@@ -10,7 +10,7 @@
  * connected targets (every channel sees every message event).
  */
 
-import { bench, describe, vi } from 'vitest';
+import { describe, test, vi } from 'vitest';
 import { Parley } from '../../src/core/Parley';
 
 const ORIGIN = 'https://example.com';
@@ -73,28 +73,34 @@ const large = payloadOfSize(1024 * 1024);
 const one = await connected(1);
 const five = await connected(5);
 
+// Vitest 5: `bench` is a test-context fixture. Each benchmark is registered
+// with bench(name, fn) and executed with .run(); results appear in the
+// reporter output.
 describe('send (fire-and-forget)', () => {
-    bench('1 KB payload', async () => {
-        await one.parley.send('bench', small, { targetId: 't0', expectsResponse: false });
+    test('1 KB payload', async ({ bench }) => {
+        await bench('1 KB payload', async () => {
+            await one.parley.send('bench', small, { targetId: 't0', expectsResponse: false });
+        }).run();
     });
 
-    bench(
-        '1 MB payload',
-        async () => {
+    test('1 MB payload', async ({ bench }) => {
+        await bench('1 MB payload', async () => {
             await one.parley.send('bench', large, { targetId: 't0', expectsResponse: false });
-        },
-        { iterations: 20 }
-    );
+        }).run({ iterations: 20 });
+    });
 });
 
 describe('inbound dispatch', () => {
     const smallMsg = request('bench', small);
 
-    bench('1 KB payload, 1 target', () => {
-        window.dispatchEvent(event(smallMsg, one.windows[0]));
-    });
-
-    bench('1 KB payload, 5 targets', () => {
-        window.dispatchEvent(event(smallMsg, five.windows[4]));
+    test('1 KB payload: 1 target vs 5 targets', async ({ bench }) => {
+        await bench.compare(
+            bench('1 KB payload, 1 target', () => {
+                window.dispatchEvent(event(smallMsg, one.windows[0]));
+            }),
+            bench('1 KB payload, 5 targets', () => {
+                window.dispatchEvent(event(smallMsg, five.windows[4]));
+            })
+        );
     });
 });

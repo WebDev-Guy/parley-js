@@ -150,12 +150,8 @@ await parley.send(
             id: 123,
             username: 'alice',
             email: 'alice@example.com',
-            profile: {
-                /* large nested object */
-            },
-            settings: {
-                /* large nested object */
-            },
+            profile: fullProfile, // large nested object
+            settings: fullSettings, // large nested object
         },
         newName: 'Alice Smith',
     },
