@@ -122,7 +122,7 @@
         "happy-dom": "^21.0.4",
         "prettier": "^3.7.3",
         "size-limit": "^12.1.0",
-        "tsup": "^8.0.0",
+        "tsup": "^9.0.0",
         "typescript": "^5.3.0",
         "typescript-eslint": "^8.61.0",
         "vitepress": "^1.6.4",
