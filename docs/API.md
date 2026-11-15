@@ -832,7 +832,10 @@ const parley = Parley.create({
 
 ```typescript
 interface ParleyConfig {
-    /** List of allowed origins */
+    /**
+     * List of allowed origins. '*', 'null' and empty strings are rejected
+     * by Parley.create(): list each trusted http(s) origin explicitly.
+     */
     allowedOrigins: string[];
 
     /** Enforce origin validation (default: true) */
@@ -861,6 +864,12 @@ interface ParleyConfig {
 
     /** Heartbeat configuration for connection health monitoring */
     heartbeat?: HeartbeatConfig;
+
+    /**
+     * Send handler error messages to the remote window in ERR_HANDLER_ERROR
+     * responses (default: false, which sends the generic 'Handler error')
+     */
+    exposeHandlerErrors?: boolean;
 }
 ```
 

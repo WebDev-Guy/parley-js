@@ -173,6 +173,18 @@ export interface ParleyConfig {
     heartbeat?: HeartbeatConfig;
 
     /**
+     * Include handler error messages in error responses sent to the remote window
+     *
+     * When a message handler throws, the sender receives an `ERR_HANDLER_ERROR`
+     * response. By default its message is the generic 'Handler error' so that
+     * internal details (stack contents, database errors, etc.) are not
+     * disclosed across origins. Enable only when both sides are trusted.
+     *
+     * @default false
+     */
+    exposeHandlerErrors?: boolean;
+
+    /**
      * Rate limiting configuration
      *
      * Prevents DoS attacks by limiting the number of messages that can be sent
@@ -229,6 +241,9 @@ export interface ResolvedConfig {
 
     /** Heartbeat configuration with defaults applied */
     heartbeat: ResolvedHeartbeatConfig;
+
+    /** Whether handler error messages are sent to the remote window */
+    exposeHandlerErrors: boolean;
 
     /** Rate limit configuration */
     rateLimit?: {
@@ -287,6 +302,22 @@ export function validateConfig(config: ParleyConfig): void {
         for (const origin of config.allowedOrigins) {
             if (typeof origin !== 'string') {
                 throw new Error('Configuration error: allowedOrigins must contain only strings');
+            }
+
+            const normalized = origin.trim().toLowerCase();
+
+            if (normalized === '') {
+                throw new Error(
+                    'Configuration error: allowedOrigins must not contain empty strings'
+                );
+            }
+
+            // '*' would accept any sender; 'null' is the opaque origin shared by
+            // sandboxed iframes, data: URLs and file:// pages
+            if (normalized === '*' || normalized === 'null') {
+                throw new Error(
+                    `Configuration error: allowedOrigins must not contain '${normalized}'; list each trusted http(s) origin`
+                );
             }
         }
     }

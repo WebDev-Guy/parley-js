@@ -8,6 +8,8 @@
  */
 
 import type { MessageProtocol } from '../core/MessageProtocol';
+import { SerializationError } from '../errors/ErrorTypes';
+import { SERIALIZATION_ERRORS } from '../errors/ErrorCodes';
 
 /**
  * Abstract security layer class
@@ -114,6 +116,8 @@ export class DefaultSecurityLayer extends SecurityLayer {
      *
      * @param payload - Payload to sanitize
      * @returns Sanitized payload
+     * @throws SerializationError if the payload cannot be serialized
+     *         (e.g. circular references or BigInt values)
      */
     sanitizePayload<T>(payload: T): T {
         if (payload === null || payload === undefined) {
@@ -128,9 +132,18 @@ export class DefaultSecurityLayer extends SecurityLayer {
             // JSON parse/stringify creates a clean object
             // without prototype chain or non-serializable values
             return JSON.parse(JSON.stringify(payload)) as T;
-        } catch {
-            // If serialization fails, return a safe empty object/array
-            return (Array.isArray(payload) ? [] : {}) as T;
+        } catch (error) {
+            // Never silently replace the payload with {} / [] - the caller
+            // would send (or respond with) data it never meant to send
+            const reason = error instanceof Error ? error.message : String(error);
+            const circular = /circular/i.test(reason);
+            throw new SerializationError(
+                `Payload cannot be serialized: ${reason}`,
+                { reason },
+                circular
+                    ? SERIALIZATION_ERRORS.CIRCULAR_REFERENCE
+                    : SERIALIZATION_ERRORS.SERIALIZE_FAILED
+            );
         }
     }
 

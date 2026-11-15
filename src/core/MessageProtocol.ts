@@ -339,90 +339,81 @@ export function isInternalMessage(message: MessageProtocol): boolean {
 }
 
 /**
- * Validate a message protocol structure
- *
- * @param message - Message to validate
- * @throws ValidationError if the message structure is invalid
+ * Expected field types for request messages ('payload' must exist, any type)
  */
-export function validateMessageProtocol(message: unknown): asserts message is MessageProtocol {
-    if (!isParleyMessage(message)) {
+const MESSAGE_FIELD_TYPES = {
+    _v: 'string',
+    _id: 'string',
+    _type: 'string',
+    _timestamp: 'number',
+    _origin: 'string',
+    _expectsResponse: 'boolean',
+    payload: 'any',
+} as const;
+
+/**
+ * Expected field types for response messages
+ */
+const RESPONSE_FIELD_TYPES = {
+    _v: 'string',
+    _id: 'string',
+    _requestId: 'string',
+    _timestamp: 'number',
+    _origin: 'string',
+    success: 'boolean',
+} as const;
+
+/**
+ * Assert that data is a Parley message whose fields have the expected types
+ *
+ * @param data - Untrusted data to check
+ * @param fieldTypes - Required fields and their `typeof` ('any' = presence only)
+ * @param kind - 'Message' or 'Response', used in error messages
+ * @throws ValidationError describing the first problem found
+ */
+function assertProtocolFields(
+    data: unknown,
+    fieldTypes: Readonly<Record<string, string>>,
+    kind: string
+): void {
+    if (!isParleyMessage(data)) {
         throw new ValidationError(
-            'Message is not a valid Parley message',
-            { received: typeof message },
+            `${kind} is not a valid Parley message`,
+            { received: typeof data },
             VALIDATION_ERRORS.INVALID_PROTOCOL
         );
     }
 
-    const msg = message as unknown as Record<string, unknown>;
+    const record = data as unknown as Record<string, unknown>;
 
-    // Check required fields
-    const requiredFields = [
-        '_v',
-        '_id',
-        '_type',
-        '_timestamp',
-        '_origin',
-        '_expectsResponse',
-        'payload',
-    ];
-    for (const field of requiredFields) {
-        if (!(field in msg)) {
+    for (const [field, expected] of Object.entries(fieldTypes)) {
+        if (!(field in record)) {
             throw new ValidationError(
                 `Missing required field: ${field}`,
                 { field },
                 VALIDATION_ERRORS.REQUIRED_FIELD_MISSING
             );
         }
-    }
 
-    // Validate field types
-    if (typeof msg._v !== 'string') {
-        throw new ValidationError(
-            'Protocol version must be a string',
-            { field: '_v', received: typeof msg._v },
-            VALIDATION_ERRORS.TYPE_MISMATCH
-        );
+        const received = typeof record[field];
+        if (expected !== 'any' && received !== expected) {
+            throw new ValidationError(
+                `Field ${field} must be a ${expected}`,
+                { field, received },
+                VALIDATION_ERRORS.TYPE_MISMATCH
+            );
+        }
     }
+}
 
-    if (typeof msg._id !== 'string') {
-        throw new ValidationError(
-            'Message ID must be a string',
-            { field: '_id', received: typeof msg._id },
-            VALIDATION_ERRORS.TYPE_MISMATCH
-        );
-    }
-
-    if (typeof msg._type !== 'string') {
-        throw new ValidationError(
-            'Message type must be a string',
-            { field: '_type', received: typeof msg._type },
-            VALIDATION_ERRORS.TYPE_MISMATCH
-        );
-    }
-
-    if (typeof msg._timestamp !== 'number') {
-        throw new ValidationError(
-            'Timestamp must be a number',
-            { field: '_timestamp', received: typeof msg._timestamp },
-            VALIDATION_ERRORS.TYPE_MISMATCH
-        );
-    }
-
-    if (typeof msg._origin !== 'string') {
-        throw new ValidationError(
-            'Origin must be a string',
-            { field: '_origin', received: typeof msg._origin },
-            VALIDATION_ERRORS.TYPE_MISMATCH
-        );
-    }
-
-    if (typeof msg._expectsResponse !== 'boolean') {
-        throw new ValidationError(
-            'expectsResponse must be a boolean',
-            { field: '_expectsResponse', received: typeof msg._expectsResponse },
-            VALIDATION_ERRORS.TYPE_MISMATCH
-        );
-    }
+/**
+ * Validate a message protocol structure
+ *
+ * @param message - Message to validate
+ * @throws ValidationError if the message structure is invalid
+ */
+export function validateMessageProtocol(message: unknown): asserts message is MessageProtocol {
+    assertProtocolFields(message, MESSAGE_FIELD_TYPES, 'Message');
 }
 
 /**
@@ -432,52 +423,7 @@ export function validateMessageProtocol(message: unknown): asserts message is Me
  * @throws ValidationError if the response structure is invalid
  */
 export function validateResponseProtocol(response: unknown): asserts response is ResponseProtocol {
-    if (!isParleyMessage(response)) {
-        throw new ValidationError(
-            'Response is not a valid Parley message',
-            { received: typeof response },
-            VALIDATION_ERRORS.INVALID_PROTOCOL
-        );
-    }
-
-    const resp = response as unknown as Record<string, unknown>;
-
-    // Check required fields
-    const requiredFields = ['_v', '_id', '_requestId', '_timestamp', '_origin', 'success'];
-    for (const field of requiredFields) {
-        if (!(field in resp)) {
-            throw new ValidationError(
-                `Missing required field: ${field}`,
-                { field },
-                VALIDATION_ERRORS.REQUIRED_FIELD_MISSING
-            );
-        }
-    }
-
-    // Validate field types
-    if (typeof resp._v !== 'string') {
-        throw new ValidationError(
-            'Protocol version must be a string',
-            { field: '_v', received: typeof resp._v },
-            VALIDATION_ERRORS.TYPE_MISMATCH
-        );
-    }
-
-    if (typeof resp._requestId !== 'string') {
-        throw new ValidationError(
-            'Request ID must be a string',
-            { field: '_requestId', received: typeof resp._requestId },
-            VALIDATION_ERRORS.TYPE_MISMATCH
-        );
-    }
-
-    if (typeof resp.success !== 'boolean') {
-        throw new ValidationError(
-            'Success must be a boolean',
-            { field: 'success', received: typeof resp.success },
-            VALIDATION_ERRORS.TYPE_MISMATCH
-        );
-    }
+    assertProtocolFields(response, RESPONSE_FIELD_TYPES, 'Response');
 }
 
 /**

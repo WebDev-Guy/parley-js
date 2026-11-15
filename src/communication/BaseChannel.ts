@@ -16,10 +16,16 @@ import type { ChannelState, ChannelOptions } from '../types/ChannelTypes';
 
 /**
  * Message event handler type
+ *
+ * @param message - The received Parley message
+ * @param source - The window that sent it (verified to be this channel's target)
+ * @param origin - The sender's origin as reported by the browser (`event.origin`),
+ *                 never the self-reported `_origin` field of the message
  */
 export type MessageEventHandler = (
     message: MessageProtocol | ResponseProtocol,
-    source: Window
+    source: Window,
+    origin: string
 ) => void;
 
 /**
@@ -244,9 +250,13 @@ export abstract class BaseChannel {
             return;
         }
 
-        // Validate source
-        if (!event.source) {
-            this._logger.warn('Message with no source blocked');
+        // Validate source: only accept messages from this channel's own target
+        // window. Without this, every channel would process messages from any
+        // window that shares an allowed origin.
+        if (!this._isExpectedSource(event.source)) {
+            this._logger.warn('Message from unexpected source blocked', {
+                origin: event.origin,
+            });
             return;
         }
 
@@ -265,7 +275,7 @@ export abstract class BaseChannel {
 
         // Pass to message handler if set
         if (this._messageHandler) {
-            this._messageHandler(data, event.source as Window);
+            this._messageHandler(data, event.source as Window, event.origin);
         }
     }
 
@@ -280,6 +290,12 @@ export abstract class BaseChannel {
             return false;
         }
 
+        // The opaque 'null' origin is shared by sandboxed iframes, data: URLs
+        // and file:// documents, so it can never identify a trusted peer.
+        if (!origin || origin === 'null') {
+            return false;
+        }
+
         return this._options.allowedOrigins.some((allowed) => {
             try {
                 const normalizedAllowed = new URL(allowed).origin.toLowerCase();
@@ -289,6 +305,21 @@ export abstract class BaseChannel {
                 return allowed.toLowerCase() === origin.toLowerCase();
             }
         });
+    }
+
+    /**
+     * Check that a message came from this channel's target window
+     *
+     * @param source - `event.source` of the incoming message
+     * @returns True only if the source is the channel's current target window
+     */
+    protected _isExpectedSource(source: MessageEventSource | null): boolean {
+        if (!source) {
+            return false;
+        }
+
+        const expected = this._getTargetWindow();
+        return expected !== null && source === expected;
     }
 
     /**

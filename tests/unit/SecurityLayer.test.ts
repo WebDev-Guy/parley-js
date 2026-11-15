@@ -11,6 +11,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DefaultSecurityLayer, SecurityLayer } from '../../src/security/SecurityLayer';
+import { SerializationError } from '../../src/errors/ErrorTypes';
 import { createTestMessage } from '../utils/mock-factory';
 import { TEST_ORIGINS } from '../fixtures/test-messages';
 
@@ -57,15 +58,17 @@ describe('DefaultSecurityLayer', () => {
         });
 
         it('should return false for null/undefined allowed origins', () => {
-            expect(security.validateOrigin('https://example.com', null as unknown as string[])).toBe(
-                false
-            );
+            expect(
+                security.validateOrigin('https://example.com', null as unknown as string[])
+            ).toBe(false);
         });
 
         it('should handle origins with ports', () => {
             const originsWithPorts = ['https://example.com:8443', 'https://localhost:3000'];
 
-            expect(security.validateOrigin('https://example.com:8443', originsWithPorts)).toBe(true);
+            expect(security.validateOrigin('https://example.com:8443', originsWithPorts)).toBe(
+                true
+            );
             expect(security.validateOrigin('https://localhost:3000', originsWithPorts)).toBe(true);
             expect(security.validateOrigin('https://example.com', originsWithPorts)).toBe(false);
         });
@@ -165,14 +168,19 @@ describe('DefaultSecurityLayer', () => {
             expect(sanitized).toEqual({ visible: 'public' });
         });
 
-        it('should handle circular references gracefully', () => {
+        it('should throw a SerializationError for circular references', () => {
             const circular: Record<string, unknown> = { a: 1 };
             circular.self = circular;
 
-            // Should return safe empty object or handle gracefully
-            const sanitized = security.sanitizePayload(circular);
-            expect(sanitized).toBeDefined();
-            expect(typeof sanitized).toBe('object');
+            // Must not silently replace the payload with {}
+            expect(() => security.sanitizePayload(circular)).toThrow(SerializationError);
+            try {
+                security.sanitizePayload(circular);
+            } catch (error) {
+                expect((error as SerializationError).code).toBe(
+                    'ERR_SERIALIZATION_CIRCULAR_REFERENCE'
+                );
+            }
         });
 
         it('should handle deeply nested objects', () => {
@@ -347,9 +355,9 @@ describe('DefaultSecurityLayer', () => {
             const custom = new CustomSecurityLayer();
 
             // Custom implementation allows subdomains
-            expect(
-                custom.validateOrigin('https://sub.example.com', ['https://example.com'])
-            ).toBe(true);
+            expect(custom.validateOrigin('https://sub.example.com', ['https://example.com'])).toBe(
+                true
+            );
         });
     });
 });

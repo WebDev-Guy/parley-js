@@ -148,7 +148,7 @@
 
             parley = Parley.create({
                 targetType: 'iframe',
-                allowedOrigins: [parentOrigin, window.location.origin, 'null'],
+                allowedOrigins: [parentOrigin, window.location.origin], // Serve over http(s); the opaque 'null' origin (file://) is rejected
                 logLevel: 'debug',
                 timeout: 5000,
                 heartbeat: {

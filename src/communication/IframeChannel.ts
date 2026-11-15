@@ -235,6 +235,11 @@ export class IframeChannel extends BaseChannel {
             return;
         }
 
+        // Only our own target window may handshake or talk to this channel
+        if (!this._isExpectedSource(event.source)) {
+            return;
+        }
+
         const data: unknown = event.data;
         if (!this._isParleyMessage(data)) {
             return;

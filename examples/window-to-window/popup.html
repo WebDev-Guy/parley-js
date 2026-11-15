@@ -343,7 +343,7 @@
 
             parley = Parley.create({
                 targetType: 'window',
-                allowedOrigins: [openerOrigin, 'null'], // 'null' for file:// protocol
+                allowedOrigins: [openerOrigin], // Serve over http(s); the opaque 'null' origin (file://) is rejected
                 logLevel: 'debug',
                 timeout: 10000,
                 heartbeat: {

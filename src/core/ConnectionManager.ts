@@ -60,7 +60,8 @@ export interface ConnectionManagerDependencies {
     onIncomingMessage: (
         message: MessageProtocol | ResponseProtocol,
         source: Window,
-        sourceTargetId: string
+        sourceTargetId: string,
+        origin: string
     ) => void;
 
     /** Callback to send a system message and await its response */
@@ -126,7 +127,8 @@ export class ConnectionManager {
     private _onIncomingMessage: (
         message: MessageProtocol | ResponseProtocol,
         source: Window,
-        sourceTargetId: string
+        sourceTargetId: string,
+        origin: string
     ) => void;
 
     /**
@@ -209,8 +211,8 @@ export class ConnectionManager {
                 : new WindowChannel(channelOptions, this._logger);
 
         // Set up message handler
-        channel.setMessageHandler((message, source) => {
-            this._onIncomingMessage(message, source, id);
+        channel.setMessageHandler((message, source, origin) => {
+            this._onIncomingMessage(message, source, id, origin);
         });
 
         // Store channel

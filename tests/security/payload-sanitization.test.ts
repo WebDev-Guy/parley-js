@@ -44,24 +44,21 @@ describe('Payload Sanitization Security', () => {
     });
 
     describe('Circular reference handling', () => {
-        it('should handle circular references without stack overflow', () => {
+        it('should reject circular references without stack overflow', () => {
             const circular: any = { a: 1 };
             circular.self = circular;
 
-            const sanitized = securityLayer.sanitizePayload(circular);
-            expect(sanitized).toBeDefined();
-            // JSON.stringify fails on circular, returns {} or []
-            // Just ensure no crash
+            // Fails loudly (no stack overflow, no silent {} substitution)
+            expect(() => securityLayer.sanitizePayload(circular)).toThrow(/cannot be serialized/i);
         });
 
-        it('should prevent infinite loops from circular objects', () => {
+        it('should reject mutually-referencing objects without infinite loops', () => {
             const obj1: any = { name: 'obj1' };
             const obj2: any = { name: 'obj2' };
             obj1.ref = obj2;
             obj2.ref = obj1;
 
-            const sanitized = securityLayer.sanitizePayload(obj1);
-            expect(sanitized).toBeDefined();
+            expect(() => securityLayer.sanitizePayload(obj1)).toThrow(/cannot be serialized/i);
         });
     });
 

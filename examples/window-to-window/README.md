@@ -74,7 +74,7 @@ npx serve .
 ## Security Considerations
 
 - Always configure `allowedOrigins` with specific trusted origins
-- Never use `'*'` wildcard in production for `allowedOrigins`
-- The example uses `'null'` to support local file:// protocol testing
-- When served via HTTP (recommended), the same-origin is used automatically
+- `'*'` and `'null'` are rejected in `allowedOrigins`: serve the example over
+  http(s) (e.g. `npx serve`), not from file://
+- When served via HTTP, the same-origin is used automatically
 - In production, specify the exact popup origin
