@@ -32,7 +32,7 @@ import {
     SECURITY_ERRORS,
     type ErrorCode,
 } from '../errors/ErrorCodes';
-import type { SecurityLayer } from '../security/SecurityLayer';
+import { sanitizeAndMeasure, type SecurityLayer } from '../security/SecurityLayer';
 import type { ResolvedConfig } from '../types/ConfigTypes';
 import type { SendOptions, PendingRequest } from '../types/MessageTypes';
 import type { TargetInfo } from '../types/ChannelTypes';
@@ -180,20 +180,22 @@ export class SendPipeline {
         // Security: Sanitize payload FIRST before validation
         // This ensures that any prototype pollution or injection attempts are removed
         // before we validate against the schema. The sanitized payload is what gets sent.
-        const sanitizedPayload = this._security.sanitizePayload(payload);
+        // (Sanitizing and measuring share one serialization pass.)
+        const { payload: sanitizedPayload, size } = sanitizeAndMeasure(this._security, payload);
 
         // DoS prevention: Validate payload size before further processing
-        this._validatePayloadSize(sanitizedPayload);
+        this._assertPayloadSize(size);
 
         // Validate sanitized payload against schema
         this._registry.validatePayload(messageType, sanitizedPayload);
 
-        // Create message
+        // Create message (payload is already a fresh sanitized copy)
         const message = createMessage({
             type: messageType,
             payload: sanitizedPayload,
             expectsResponse,
             target: targetId,
+            clonePayload: false,
         });
 
         // Get target(s) to send to
@@ -218,8 +220,9 @@ export class SendPipeline {
             timestamp: message._timestamp,
         });
 
-        // Emit system event
-        await this._emitter.emit(SYSTEM_EVENTS.MESSAGE_SENT, {
+        // Emit system event without waiting for listeners: a slow async
+        // listener must not delay delivery of the message itself
+        this._emitter.emitSync(SYSTEM_EVENTS.MESSAGE_SENT, {
             messageId: message._id,
             messageType,
             targetId,
@@ -256,10 +259,10 @@ export class SendPipeline {
         // Security: Sanitize payload FIRST before validation
         // This ensures that any prototype pollution or injection attempts are removed
         // before we validate against the schema. The sanitized payload is what gets sent.
-        const sanitizedPayload = this._security.sanitizePayload(payload);
+        const { payload: sanitizedPayload, size } = sanitizeAndMeasure(this._security, payload);
 
         // DoS prevention: Validate payload size before further processing
-        this._validatePayloadSize(sanitizedPayload);
+        this._assertPayloadSize(size);
 
         // Validate sanitized payload against schema
         this._registry.validatePayload(messageType, sanitizedPayload);
@@ -269,6 +272,7 @@ export class SendPipeline {
             type: messageType,
             payload: sanitizedPayload,
             expectsResponse: false,
+            clonePayload: false,
         });
 
         // Send to all connected targets
@@ -661,34 +665,21 @@ export class SendPipeline {
      * Validate that payload does not exceed maximum size
      * Prevents DoS attacks through extremely large payloads
      *
-     * @param payload - Payload to validate
+     * @param size - Serialized (JSON) length of the payload
      * @throws ValidationError if payload exceeds maximum size
      */
-    private _validatePayloadSize(payload: unknown): void {
-        try {
-            const serialized = JSON.stringify(payload);
-            // JSON.stringify returns undefined for undefined values, skip size check in that case
-            if (serialized !== undefined && serialized.length > this.MAX_PAYLOAD_SIZE) {
-                throw new ValidationError(
-                    `Payload size ${serialized.length} bytes exceeds maximum of ${this.MAX_PAYLOAD_SIZE} bytes (10MB). ` +
-                        `This prevents DoS attacks through memory exhaustion and browser freezes.`,
-                    {
-                        size: serialized.length,
-                        maxSize: this.MAX_PAYLOAD_SIZE,
-                        rule: 'payloadSize',
-                    },
-                    VALIDATION_ERRORS.SCHEMA_MISMATCH
-                );
-            }
-        } catch (error) {
-            // If it's already a ValidationError from size check, re-throw it
-            if (error instanceof ValidationError) {
-                throw error;
-            }
-
-            // For other errors (like undefined serialization), let them be caught
-            // by the schema validator which will provide appropriate error handling
-            // This allows the normal error propagation path to continue
+    private _assertPayloadSize(size: number): void {
+        if (size > this.MAX_PAYLOAD_SIZE) {
+            throw new ValidationError(
+                `Payload size ${size} bytes exceeds maximum of ${this.MAX_PAYLOAD_SIZE} bytes (10MB). ` +
+                    `This prevents DoS attacks through memory exhaustion and browser freezes.`,
+                {
+                    size,
+                    maxSize: this.MAX_PAYLOAD_SIZE,
+                    rule: 'payloadSize',
+                },
+                VALIDATION_ERRORS.SCHEMA_MISMATCH
+            );
         }
     }
 
