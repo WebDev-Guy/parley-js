@@ -31,10 +31,12 @@ New to ParleyJS? Start here:
   iframe patterns
 - **[Popup Communication](./guides/popup-communication.md)** - Window and popup
   patterns
-- **[Worker Communication](./guides/worker-communication.md)** - Web Worker
-  integration
 - **[Multi-Window Communication](./guides/multi-window-communication.md)** -
   Coordinating multiple windows
+- **[Micro-Frontends](./guides/micro-frontends.md)** - Composing an app from
+  iframes
+- **[Workers (not supported)](./guides/worker-communication.md)** - Why Web
+  Workers are not supported, and alternatives
 
 ### Patterns
 
@@ -79,13 +81,16 @@ New to ParleyJS? Start here:
 
 - **[Examples](./examples/index.md)** - Complete code examples
 - **[Code Examples](./EXAMPLES.md)** - Real-world implementations
-- **[Live Examples](../examples/)** - Working code in repository
+- **[Live Examples](https://github.com/WebDev-Guy/parley-js/tree/main/examples)** -
+  Working code in repository
 
 ### Additional Resources
 
 - **[Architecture](./ARCHITECTURE.md)** - Internal design and architecture
-- **[Contributing](../CONTRIBUTING.md)** - How to contribute
-- **[Changelog](../CHANGELOG.md)** - Version history
+- **[Contributing](https://github.com/WebDev-Guy/parley-js/blob/main/CONTRIBUTING.md)** -
+  How to contribute
+- **[Changelog](https://github.com/WebDev-Guy/parley-js/blob/main/CHANGELOG.md)** -
+  Version history
 
 ## Quick Links
 

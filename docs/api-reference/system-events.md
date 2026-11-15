@@ -1,4 +1,4 @@
-[Home](../../index.md) > [API Reference](./index.md) > System Events
+[Home](../index.md) > [API Reference](./index.md) > System Events
 
 # System Events
 
@@ -26,10 +26,12 @@ emitted for connection lifecycle, message flow, errors, and heartbeat
 monitoring.
 
 All system events use the `system:` prefix to avoid conflicts with user-defined
-message types. You listen to system events using `parley.onSystem()`.
+message types. You listen to system events using `parley.onSystem()`, which
+returns an unsubscribe function. `parley.on()` is only for application message
+types and cannot be used for system events.
 
 ```typescript
-import { SYSTEM_EVENTS } from 'parley-js';
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
     console.log('Connected to:', event.targetId);
@@ -39,18 +41,27 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
 System events are useful for logging, analytics, debugging, and monitoring
 application health.
 
+`SYSTEM_EVENTS` is a named export. `Parley.SYSTEM_EVENTS` only exists on the
+browser IIFE global (`window.Parley`).
+
+The examples on this page access fields on `event` directly for brevity. The
+handler parameter is typed `unknown`; in TypeScript, cast it to the matching
+event data type (see [Typed Listeners](#typed-listeners)).
+
 ---
 
 ## Event Lifecycle
 
 System events are emitted at key points in the communication lifecycle:
 
-1. **Connection Phase**: `HANDSHAKE_START`, `HANDSHAKE_COMPLETE`, `CONNECTED`
+1. **Connection Phase**: `HANDSHAKE_START`, `HANDSHAKE_COMPLETE`,
+   `CONNECTION_STATE_CHANGED` (connecting to connected), `CONNECTED`
 2. **Communication Phase**: `MESSAGE_SENT`, `MESSAGE_RECEIVED`, `RESPONSE_SENT`,
    `RESPONSE_RECEIVED`
 3. **Monitoring Phase**: `HEARTBEAT_MISSED`, `CONNECTION_STATE_CHANGED`
 4. **Error Phase**: `ERROR`, `TIMEOUT`, `HANDSHAKE_FAILED`
-5. **Disconnection Phase**: `CONNECTION_LOST`, `DISCONNECTED`
+5. **Disconnection Phase**: `CONNECTION_LOST` (ungraceful loss only),
+   `CONNECTION_STATE_CHANGED`, `DISCONNECTED`
 
 Understanding this lifecycle helps you implement robust monitoring and error
 handling.
@@ -102,11 +113,13 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
 
 ### DISCONNECTED
 
-Emitted when a target disconnects gracefully.
+Emitted whenever a target is disconnected, for any reason (graceful or not).
 
 **Event Name**: `system:disconnected`
 
-**When Fired**: When `disconnect()` is called or target explicitly closes
+**When Fired**: After local cleanup of a target: when either side calls
+`disconnect()`, after `system:connection_lost`, and for every target when
+`destroy()` is called
 
 **Event Data**:
 
@@ -118,9 +131,12 @@ interface DisconnectedEventData {
 }
 
 type DisconnectReason =
-    | 'manual' // disconnect() was called
-    | 'target_closed' // Target window closed
-    | 'cleanup'; // Cleanup during shutdown
+    | 'manual_disconnect' // disconnect() was called on this side or by the peer
+    | 'connection_lost' // Target window was closed (detected by polling)
+    | 'heartbeat_timeout' // maxMissed consecutive heartbeats missed
+    | 'max_failures_reached' // maxFailures consecutive targeted requests timed out
+    | 'cleanup' // Target found dead by periodic cleanup
+    | 'destroyed'; // destroy() was called on this instance
 ```
 
 **Example**:
@@ -129,7 +145,7 @@ type DisconnectReason =
 parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
     console.log(`${event.targetId} disconnected: ${event.reason}`);
 
-    if (event.reason === 'target_closed') {
+    if (event.reason === 'connection_lost') {
         // Remove UI elements for closed target
         removeTargetUI(event.targetId);
     }
@@ -150,17 +166,28 @@ Emitted when a connection is lost ungracefully.
 
 **Event Name**: `system:connection_lost`
 
-**When Fired**: After heartbeat timeout or max failures reached
+**When Fired**: When `heartbeat.maxMissed` consecutive heartbeats are missed,
+when `heartbeat.maxFailures` consecutive targeted requests time out, when a
+connected window is detected as closed (polled about once per second), or when
+periodic cleanup finds a dead target. Always followed by `system:disconnected`
+with the same reason.
 
 **Event Data**:
 
 ```typescript
 interface ConnectionLostEventData {
     targetId: string; // Target identifier
-    reason: 'heartbeat_timeout' | 'max_failures_reached';
+    reason:
+        | 'heartbeat_timeout'
+        | 'max_failures_reached'
+        | 'connection_lost'
+        | 'cleanup';
     timestamp: number; // When connection was determined lost
 }
 ```
+
+There is no automatic reconnection. To reconnect, call `connect()` again from
+your own code (both sides must call it again).
 
 **Example**:
 
@@ -171,15 +198,16 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
     // Show reconnection UI
     showReconnectPrompt(event.targetId);
 
-    // Attempt to reconnect
+    // Your own reconnection logic (not part of Parley), e.g. calling
+    // parley.connect(iframe, event.targetId) again
     attemptReconnect(event.targetId);
 });
 ```
 
 **Use Cases**:
 
-- Detect network failures
-- Trigger reconnection logic
+- Detect unresponsive or closed targets
+- Trigger your own reconnection logic
 - Show offline indicators
 
 ---
@@ -190,8 +218,10 @@ Emitted when connection state transitions.
 
 **Event Name**: `system:connection_state_changed`
 
-**When Fired**: On any state transition (connecting, connected, disconnected,
-etc.)
+**When Fired**: When a handshake completes (`connecting` to `connected`, reason
+`'handshake_complete'`), when `disconnect()` starts (to `disconnecting`, reason
+`'manual_disconnect'`), and when a target is disconnected (to `disconnected`,
+reason is the `DisconnectReason`)
 
 **Event Data**:
 
@@ -205,10 +235,10 @@ interface ConnectionStateChangedEventData {
 }
 
 enum ConnectionState {
-    DISCONNECTED = 'disconnected',
     CONNECTING = 'connecting',
     CONNECTED = 'connected',
-    RECONNECTING = 'reconnecting',
+    DISCONNECTING = 'disconnecting',
+    DISCONNECTED = 'disconnected',
 }
 ```
 
@@ -238,11 +268,13 @@ Events tracking message flow between windows.
 
 ### MESSAGE_SENT
 
-Emitted when a message is sent to a target.
+Emitted when a message is sent with `send()`.
 
 **Event Name**: `system:message_sent`
 
-**When Fired**: Immediately after `send()` or `broadcast()` dispatches message
+**When Fired**: Once per `send()` call, just before the message is posted.
+`broadcast()` does not emit this event. Listeners are not awaited, so they never
+delay delivery.
 
 **Event Data**:
 
@@ -250,7 +282,7 @@ Emitted when a message is sent to a target.
 interface MessageSentEventData {
     messageId: string; // Unique message ID
     messageType: string; // Message type name
-    targetId?: string; // Target ID (undefined for broadcast)
+    targetId?: string; // Target ID (undefined when sent to all targets)
     expectsResponse: boolean; // Whether response expected
     timestamp: number; // Send timestamp
 }
@@ -283,7 +315,9 @@ Emitted when a message is received from a target.
 
 **Event Name**: `system:message_received`
 
-**When Fired**: After message passes origin validation, before handler called
+**When Fired**: After the message passes the security checks, before handlers
+are called. Not emitted for internal (heartbeat, disconnect) messages. Listeners
+are not awaited, so they never delay the handlers.
 
 **Event Data**:
 
@@ -291,7 +325,7 @@ Emitted when a message is received from a target.
 interface MessageReceivedEventData {
     messageId: string; // Unique message ID
     messageType: string; // Message type name
-    origin: string; // Sender origin
+    origin: string; // Browser-verified sender origin (event.origin)
     timestamp: number; // Receive timestamp
 }
 ```
@@ -323,7 +357,10 @@ Emitted when a response is sent to a request.
 
 **Event Name**: `system:response_sent`
 
-**When Fired**: When handler calls `respond()` function
+**When Fired**: When a response is posted: a handler called `respond()`
+(`success: true`), or Parley sent an error response (`success: false`, for
+example `ERR_HANDLER_ERROR`, `ERR_NO_HANDLER` or a schema failure). Also fires
+for internal heartbeat and disconnect responses.
 
 **Event Data**:
 
@@ -358,7 +395,8 @@ Emitted when a response is received for a request.
 
 **Event Name**: `system:response_received`
 
-**When Fired**: When response arrives for a pending request
+**When Fired**: When a response arrives for a pending request (success or
+error). Also fires for internal heartbeat and disconnect responses.
 
 **Event Data**:
 
@@ -403,12 +441,27 @@ Events related to errors and failures.
 
 ### ERROR
 
-Emitted when any error occurs in ParleyJS operations.
+Emitted for errors that happen while processing inbound messages. Errors of your
+own calls (`send()`, `connect()`, ...) are reported by rejecting those calls,
+not through this event.
 
 **Event Name**: `system:error`
 
-**When Fired**: On validation errors, security errors, serialization errors,
-etc.
+**When Fired**:
+
+- A local message handler throws or rejects: code `ERR_HANDLER_ERROR`, with the
+  full error message, plus `targetId` and `messageId`
+- An inbound message is rejected by the security checks (no `messageId`):
+    - `ERR_SECURITY_ORIGIN_MISMATCH` - a custom `SecurityLayer.validateOrigin()`
+      rejected it (messages from origins outside `allowedOrigins` are dropped
+      silently by the channel before this point)
+    - `ERR_VALIDATION_INVALID_PROTOCOL` - malformed message, or
+      `SecurityLayer.validateMessage()` rejected it
+    - `ERR_SECURITY_VERSION_MISMATCH` - incompatible protocol major version
+
+Timeouts are reported by `system:timeout`, not `system:error`. An inbound
+payload that fails schema validation does not emit `system:error`; it calls the
+type's `onError` option and returns an error response to the sender.
 
 **Event Data**:
 
@@ -460,7 +513,11 @@ Emitted when a request times out without receiving a response.
 
 **Event Name**: `system:timeout`
 
-**When Fired**: After timeout duration expires without response
+**When Fired**: When a `send()` request finally times out, after all retries
+(the `send()` promise rejects with `TimeoutError` at the same time). Internal
+requests time out through the same path, so an unanswered heartbeat ping also
+emits `system:timeout` (with `messageType: '__parley_heartbeat_ping'`), as does
+an unacknowledged disconnect notification.
 
 **Event Data**:
 
@@ -505,7 +562,8 @@ For timeout error handling patterns, see
 
 ## Handshake Events
 
-Events related to connection handshake process.
+Events related to the connection handshake. All three share the
+`HandshakeEventData` payload and are emitted by `connect()` (since 1.1.0).
 
 ### HANDSHAKE_START
 
@@ -513,7 +571,7 @@ Emitted when handshake begins with a target.
 
 **Event Name**: `system:handshake_start`
 
-**When Fired**: When `connect()` initiates handshake
+**When Fired**: When `connect()` starts the handshake
 
 **Event Data**:
 
@@ -542,7 +600,7 @@ Emitted when handshake completes successfully.
 
 **Event Name**: `system:handshake_complete`
 
-**When Fired**: After successful handshake exchange
+**When Fired**: After a successful handshake exchange, before `system:connected`
 
 **Event Data**:
 
@@ -571,7 +629,10 @@ Emitted when handshake fails.
 
 **Event Name**: `system:handshake_failed`
 
-**When Fired**: When handshake times out or encounters error
+**When Fired**: When the handshake times out (`error.code` is
+`ERR_CONNECTION_HANDSHAKE_FAILED`) or fails for another reason (for example
+`ERR_CONNECTION_FAILED` for an invalid target). `connect()` rejects with the
+same error.
 
 **Event Data**:
 
@@ -610,7 +671,10 @@ Emitted when a heartbeat is missed.
 
 **Event Name**: `system:heartbeat_missed`
 
-**When Fired**: When heartbeat response not received within interval
+**When Fired**: When a heartbeat ping is not answered within `heartbeat.timeout`
+(the pong is the response to the ping). After `heartbeat.maxMissed` consecutive
+misses the target is disconnected (`system:connection_lost`, reason
+`'heartbeat_timeout'`). Any answered ping resets the count.
 
 **Event Data**:
 
@@ -631,8 +695,8 @@ parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
             `(${event.consecutiveMissed} consecutive)`
     );
 
-    if (event.consecutiveMissed >= 3) {
-        // Connection likely lost
+    if (event.consecutiveMissed >= 2) {
+        // With the default maxMissed of 3, one more miss disconnects
         showConnectionWarning(event.targetId);
     }
 });
@@ -641,7 +705,7 @@ parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
 **Use Cases**:
 
 - Detect connection degradation early
-- Trigger proactive reconnection
+- Warn users before the connection is dropped
 - Monitor connection health
 
 For heartbeat configuration, see
@@ -656,7 +720,7 @@ Use `parley.onSystem()` to register system event listeners.
 ### Basic Listener
 
 ```typescript
-import { SYSTEM_EVENTS } from 'parley-js';
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
     console.log('Connection established:', event.targetId);
@@ -665,16 +729,23 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
 
 ### Typed Listeners
 
-TypeScript provides type-safe event data:
+The handler receives `data: unknown`. Cast it to the exported event data type:
 
 ```typescript
-import type { ConnectedEventData } from 'parley-js';
+import { SYSTEM_EVENTS, type ConnectedEventData } from 'ignite-parleyjs';
 
-parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event: ConnectedEventData) => {
-    // event is typed as ConnectedEventData
+parley.onSystem(SYSTEM_EVENTS.CONNECTED, (data) => {
+    const event = data as ConnectedEventData;
     const { targetId, origin, targetType } = event;
 });
 ```
+
+Exported event data types: `ConnectedEventData`, `DisconnectedEventData`,
+`ConnectionLostEventData`, `ConnectionStateChangedEventData`,
+`HeartbeatMissedEventData`, `ErrorEventData`, `TimeoutEventData`,
+`MessageSentEventData`, `MessageReceivedEventData`, `ResponseSentEventData`,
+`ResponseReceivedEventData` and `HandshakeEventData`. See
+[Types](./types.md#system-event-data).
 
 ### Multiple Listeners
 
@@ -697,8 +768,17 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
 
 ### Removing Listeners
 
-System event listeners cannot currently be removed individually. To stop
-listening, create a new Parley instance or disconnect targets.
+`onSystem()` returns an unsubscribe function. Call it to remove that listener.
+`destroy()` removes all listeners.
+
+```typescript
+const unsubscribe = parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
+    console.error(event);
+});
+
+// Later
+unsubscribe();
+```
 
 ---
 
@@ -741,17 +821,16 @@ parley.onSystem(SYSTEM_EVENTS.RESPONSE_RECEIVED, (event) => {
 ### Error Rate Monitoring
 
 ```typescript
-let errorCount = 0;
-let totalRequests = 0;
+let failedResponses = 0;
+let totalResponses = 0;
 
-parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, () => {
-    totalRequests++;
-});
-
-parley.onSystem(SYSTEM_EVENTS.ERROR, () => {
-    errorCount++;
-    const errorRate = (errorCount / totalRequests) * 100;
-    console.log(`Error rate: ${errorRate.toFixed(2)}%`);
+parley.onSystem(SYSTEM_EVENTS.RESPONSE_RECEIVED, (event) => {
+    totalResponses++;
+    if (!event.success) {
+        failedResponses++;
+    }
+    const errorRate = (failedResponses / totalResponses) * 100;
+    console.log(`Error response rate: ${errorRate.toFixed(2)}%`);
 });
 ```
 
@@ -790,7 +869,7 @@ parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
 });
 
 // Good: Business logic in message handlers
-parley.on('ready', async (payload, respond) => {
+parley.on('user:load', async (payload, respond) => {
     const userData = await loadUserData();
     respond({ userData });
 });
@@ -798,7 +877,8 @@ parley.on('ready', async (payload, respond) => {
 
 ### Avoid Heavy Processing in Listeners
 
-Keep system event handlers lightweight:
+Keep system event handlers lightweight. Most system events are emitted
+synchronously, so a slow synchronous listener runs inline:
 
 ```typescript
 // Bad: Heavy processing blocks event loop
@@ -817,10 +897,10 @@ parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
 Batch analytics events instead of sending each individually:
 
 ```typescript
-const eventQueue: AnalyticsEvent[] = [];
+const eventQueue: unknown[] = [];
 
 parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
-    eventQueue.push({ type: 'message_sent', data: event });
+    eventQueue.push({ type: 'message_sent', event });
 });
 
 // Flush every 10 seconds
@@ -855,7 +935,9 @@ if (process.env.NODE_ENV === 'development') {
 
 - [Methods](./methods.md) - All ParleyJS methods
 - [API Reference](./index.md) - Complete API overview
-- [Error Codes](../troubleshooting/common-errors.md) - Error code reference
+- [Types](./types.md) - Event data types
+- [Error Codes](./error-codes.md) - Error code reference
+- [Common Errors](../troubleshooting/common-errors.md) - Error solutions
 
 ### Related Guides
 

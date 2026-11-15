@@ -218,7 +218,7 @@
             } = useParley({
                 targetType: 'iframe',
                 allowedOrigins: [window.location.origin],
-                debug: true
+                logLevel: 'debug'
             });
 
             useEffect(() => {
@@ -233,15 +233,13 @@
                     return { acknowledged: true };
                 });
 
-                // Connect when iframe loads
+                // Connect right away. No onload listener is needed (and one
+                // attached after the iframe loaded would never fire): the
+                // child keeps re-sending its handshake until we answer.
                 if (iframeRef.current) {
-                    iframeRef.current.onload = async () => {
-                        try {
-                            await connect(iframeRef.current, 'child');
-                        } catch (error) {
-                            console.error('Connection failed:', error);
-                        }
-                    };
+                    connect(iframeRef.current, 'child').catch((error) => {
+                        console.error('Connection failed:', error);
+                    });
                 }
             }, [registerHandler, connect]);
 
@@ -278,6 +276,9 @@
                     </div>
 
                     <MessageList messages={messages} />
+
+                    <h3>Child Iframe</h3>
+                    <iframe ref={iframeRef} src="react-child.html" />
                 </div>
             );
         }
@@ -300,26 +301,13 @@
             );
         }
 
-        // Child Component (for demonstration)
-        function ChildComponent() {
-            return (
-                <div className="panel">
-                    <h2>Child Component</h2>
-                    <iframe ref={iframeRef} src="react-child.html" />
-                </div>
-            );
-        }
-
-        // Main App Component
+        // Main App Component (the iframe is rendered inside ParentComponent
+        // so it can hold the ref used by connect())
         function App() {
             return (
                 <div className="app">
                     <h1>React Integration Example - Parley-js</h1>
                     <ParentComponent />
-                    <div className="panel">
-                        <h2>Child Iframe</h2>
-                        <iframe src="react-child.html" />
-                    </div>
                 </div>
             );
         }

@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Guides](./index.md) > Popup Window Communication
+[Home](../index.md) > [Guides](./index.md) > Popup Window Communication
 
 # Popup Window Communication Guide
 
@@ -38,6 +38,9 @@ Before starting this guide:
 - Understand [Core Concepts](../getting-started/concepts.md)
 - Basic knowledge of window.open() and popup windows
 - Local web server (ParleyJS requires HTTP/HTTPS, not file://)
+- A way to resolve `import ... from 'ignite-parleyjs'` in the browser: a
+  bundler/dev server such as Vite, or an import map as shown in
+  [Your First ParleyJS Example](../getting-started/first-example.md)
 
 If you need help with setup, see
 [Installation](../getting-started/installation.md).
@@ -50,27 +53,28 @@ and establishes communication.
 ### Minimal Main Window Setup
 
 ```javascript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
-// Create Parley instance
+// Create Parley instance for popups/new windows
 const parley = Parley.create({
+    targetType: 'window',
     allowedOrigins: [window.location.origin],
 });
 
-// Open popup window
-const popup = window.open(
-    '/popup.html',
-    'myPopup',
-    'width=600,height=400,left=100,top=100'
-);
+// Open the popup from a click handler so it is not blocked
+document.getElementById('open-btn').addEventListener('click', async () => {
+    const popup = window.open(
+        '/popup.html',
+        'myPopup',
+        'width=600,height=400,left=100,top=100'
+    );
 
-if (!popup) {
-    console.error('Popup blocked');
-    return;
-}
+    if (!popup) {
+        console.error('Popup blocked');
+        return;
+    }
 
-// Wait for popup to load, then connect
-popup.addEventListener('load', async () => {
+    // Connect right away; no need to wait for the popup to load
     await parley.connect(popup, 'popup');
     console.log('Connected to popup');
 });
@@ -79,10 +83,11 @@ popup.addEventListener('load', async () => {
 ### Minimal Popup Window Setup
 
 ```javascript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 // Create Parley instance
 const parley = Parley.create({
+    targetType: 'window',
     allowedOrigins: [window.location.origin],
 });
 
@@ -118,9 +123,10 @@ Create `main.html` that opens the OAuth popup:
         <div id="user-info"></div>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
             const parley = Parley.create({
+                targetType: 'window',
                 allowedOrigins: [window.location.origin],
             });
 
@@ -149,14 +155,7 @@ Create `main.html` that opens the OAuth popup:
                         return;
                     }
 
-                    // Wait for popup to load
-                    await new Promise((resolve) => {
-                        oauthPopup.addEventListener('load', resolve, {
-                            once: true,
-                        });
-                    });
-
-                    // Connect to popup
+                    // Connect to popup (no need to wait for it to load)
                     try {
                         await parley.connect(oauthPopup, 'oauth-popup');
                         document.getElementById('status').textContent =
@@ -198,18 +197,18 @@ Create `main.html` that opens the OAuth popup:
                 respond({ received: true });
             });
 
-            // Monitor if user closes popup manually
-            setInterval(() => {
-                if (oauthPopup && oauthPopup.closed) {
-                    const statusEl = document.getElementById('status');
-                    if (
-                        statusEl.textContent === 'Waiting for authentication...'
-                    ) {
-                        statusEl.textContent = 'Login cancelled';
-                    }
-                    oauthPopup = null;
+            // Detect the user closing the popup manually. ParleyJS notices a
+            // closed window within about a second and emits
+            // system:disconnected with reason 'connection_lost'.
+            parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+                if (event.targetId !== 'oauth-popup') return;
+
+                const statusEl = document.getElementById('status');
+                if (statusEl.textContent === 'Waiting for authentication...') {
+                    statusEl.textContent = 'Login cancelled';
                 }
-            }, 1000);
+                oauthPopup = null;
+            });
         </script>
     </body>
 </html>
@@ -233,9 +232,10 @@ Create `oauth.html` for the OAuth flow:
         <button id="simulate-failure">Simulate Failed Login</button>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley } from 'ignite-parleyjs';
 
             const parley = Parley.create({
+                targetType: 'window',
                 allowedOrigins: [window.location.origin],
             });
 
@@ -348,41 +348,44 @@ Create `oauth.html` for the OAuth flow:
 Implement robust error handling for popup flows:
 
 ```javascript
-// Main window: Handle popup blocking
-const popup = window.open('/popup.html', 'popup', 'width=500,height=600');
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
-if (!popup) {
-    // Popup was blocked
-    showNotification('Please allow popups for this site');
-    // Provide fallback: show inline modal instead
-    showInlineAuthModal();
-    return;
-}
+// Main window: call this from a click handler
+async function openPopup() {
+    const popup = window.open('/popup.html', 'popup', 'width=500,height=600');
 
-// Main window: Handle connection timeout
-try {
-    await Promise.race([
-        parley.connect(popup, 'popup'),
-        new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Connection timeout')), 10000)
-        ),
-    ]);
-} catch (error) {
-    console.error('Connection failed:', error.message);
-    popup.close();
+    if (!popup) {
+        // Popup was blocked
+        showNotification('Please allow popups for this site');
+        // Provide fallback: show inline modal instead
+        showInlineAuthModal();
+        return;
+    }
+
+    // connect() rejects if the handshake does not complete within the
+    // instance's `timeout` (default 5000 ms), e.g. ERR_CONNECTION_HANDSHAKE_FAILED
+    try {
+        await parley.connect(popup, 'popup');
+    } catch (error) {
+        console.error('Connection failed:', error.code, error.message);
+        popup.close();
+    }
 }
 
 // Popup: Handle disconnection
-parley.onSystem(Parley.SYSTEM_EVENTS.DISCONNECTED, (event) => {
-    console.log('Disconnected from main window');
-    // Main window may have closed or navigated
+parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+    console.log('Disconnected from main window:', event.reason);
+    // Main window may have closed, navigated, or called disconnect()
     window.close();
 });
 ```
 
 ### Step 4: Monitor Popup Lifecycle
 
-Track popup state and handle unexpected closure:
+Track popup state and handle unexpected closure. You do not need to poll
+`popup.closed` yourself: ParleyJS checks connected windows about once a second.
+When a popup is closed it emits `system:connection_lost` and then
+`system:disconnected`, both with reason `'connection_lost'`.
 
 ```javascript
 let flowCompleted = false;
@@ -397,17 +400,13 @@ parley.on('auth:failed', (payload) => {
     // Handle failure
 });
 
-// Check if user closed popup before completing flow
-const checkInterval = setInterval(() => {
-    if (popup.closed) {
-        clearInterval(checkInterval);
-
-        if (!flowCompleted) {
-            console.log('Popup closed before completion');
-            document.getElementById('status').textContent = 'Login cancelled';
-        }
+// Detect the user closing the popup before completing the flow
+parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+    if (event.targetId === 'oauth-popup' && !flowCompleted) {
+        console.log('Popup closed before completion:', event.reason);
+        document.getElementById('status').textContent = 'Login cancelled';
     }
-}, 500);
+});
 ```
 
 ## Complete Code Example
@@ -434,9 +433,10 @@ communication.
         <div id="status"></div>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley } from 'ignite-parleyjs';
 
             const parley = Parley.create({
+                targetType: 'window',
                 allowedOrigins: [window.location.origin],
             });
 
@@ -464,18 +464,12 @@ communication.
                         return;
                     }
 
-                    // Wait for popup to load
-                    await new Promise((resolve) => {
-                        paymentPopup.addEventListener('load', resolve, {
-                            once: true,
-                        });
-                    });
-
-                    // Connect to popup
+                    // Connect to popup (no need to wait for it to load)
                     try {
                         await parley.connect(paymentPopup, 'payment-popup');
 
-                        // Send payment details
+                        // Send payment details and wait for the popup to
+                        // confirm it is ready
                         await parley.send(
                             'payment:init',
                             {
@@ -483,10 +477,7 @@ communication.
                                 currency,
                                 orderID: 'ORDER-12345',
                             },
-                            {
-                                targetId: 'payment-popup',
-                                expectsResponse: false,
-                            }
+                            { targetId: 'payment-popup' }
                         );
 
                         document.getElementById('status').textContent =
@@ -505,8 +496,14 @@ communication.
 
                 document.getElementById('status').textContent =
                     'Payment successful!';
-                document.getElementById('cart').innerHTML =
-                    `<h2>Order Confirmed</h2><p>Transaction ID: ${payload.transactionID}</p>`;
+
+                // Render received data with textContent, never innerHTML
+                const cart = document.getElementById('cart');
+                const heading = document.createElement('h2');
+                heading.textContent = 'Order Confirmed';
+                const txn = document.createElement('p');
+                txn.textContent = `Transaction ID: ${payload.transactionID}`;
+                cart.replaceChildren(heading, txn);
 
                 if (paymentPopup && !paymentPopup.closed) {
                     paymentPopup.close();
@@ -561,28 +558,30 @@ communication.
         <button id="cancel-btn">Cancel</button>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley } from 'ignite-parleyjs';
 
             const parley = Parley.create({
+                targetType: 'window',
                 allowedOrigins: [window.location.origin],
             });
 
             let paymentInfo = {};
 
+            // Register handlers BEFORE connecting so no message is missed
+            parley.on('payment:init', (payload, respond) => {
+                paymentInfo = payload;
+
+                // Render received data with textContent, never innerHTML
+                document.getElementById('payment-details').textContent =
+                    `Amount: $${(payload.amount / 100).toFixed(2)} ${payload.currency}, ` +
+                    `Order: ${payload.orderID}`;
+
+                respond({ ready: true });
+            });
+
             // Connect to opener
             if (window.opener) {
                 await parley.connect(window.opener, 'main');
-
-                // Handle payment initialization
-                parley.on('payment:init', (payload, respond) => {
-                    paymentInfo = payload;
-
-                    document.getElementById('payment-details').innerHTML =
-                        `<p>Amount: $${(payload.amount / 100).toFixed(2)} ${payload.currency}</p>
-                     <p>Order: ${payload.orderID}</p>`;
-
-                    respond({ ready: true });
-                });
             }
 
             // Handle payment submission
@@ -662,10 +661,14 @@ communication.
 
 1. Main window opens popup using window.open() with dimensions and position.
 2. Both windows create Parley instances with matching allowed origins.
-3. Main window waits for popup load event.
-4. Main window calls connect() with popup window reference and target ID.
-5. Popup window calls connect() with window.opener reference.
-6. Handshake completes and both sides can exchange messages.
+3. Main window calls connect() with the popup window reference and a target ID
+   right after window.open(); it does not wait for a load event.
+4. Popup window calls connect() with the window.opener reference.
+5. Handshake completes and both sides can exchange messages.
+
+The popup keeps re-sending its handshake until the main window answers, so the
+two sides can call connect() in any order. If the handshake does not complete
+within `timeout`, connect() rejects.
 
 The popup window is referenced via the return value of window.open() in the main
 window. The main window is referenced via window.opener in the popup.
@@ -683,9 +686,11 @@ origin errors, see
 
 ### Popup Lifecycle Management
 
-Unlike iframes, popups can be closed by the user at any time. Monitor
-popup.closed property to detect unexpected closure. Always clean up resources
-when the popup closes.
+Unlike iframes, popups can be closed by the user at any time. ParleyJS detects a
+closed window automatically (within about a second) and emits
+`system:connection_lost` followed by `system:disconnected` with reason
+`'connection_lost'`; listen for these with `onSystem()` instead of polling
+`popup.closed`. Always clean up your own resources when the popup closes.
 
 The popup can close itself using window.close(). The main window can close the
 popup using popup.close(). For detecting closed popups and cleanup strategies,
@@ -743,51 +748,54 @@ await parley.connect(popup, 'popup'); // Error if popup is null!
 **Correct**:
 
 ```javascript
-const popup = window.open('/popup.html');
+button.addEventListener('click', async () => {
+    const popup = window.open('/popup.html');
 
-if (!popup) {
-    alert('Please allow popups for this site');
-    return;
-}
+    if (!popup) {
+        alert('Please allow popups for this site');
+        return;
+    }
 
-await parley.connect(popup, 'popup');
+    await parley.connect(popup, 'popup');
+});
 ```
 
 Always check if window.open() returned null (popup blocked).
 
-### Mistake 3: Not Monitoring Popup Closure
+### Mistake 3: Not Handling Popup Closure
 
-**Problem**: User closes popup but main window doesn't detect it.
+**Problem**: User closes popup but the main window never reacts to it.
 
 **Wrong**:
 
 ```javascript
 const popup = window.open('/popup.html');
-// No monitoring - don't know if user closed it
+await parley.connect(popup, 'popup');
+// Nothing listens for the popup going away
 ```
 
 **Correct**:
 
 ```javascript
-const popup = window.open('/popup.html');
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
+
 let flowCompleted = false;
 
 parley.on('flow:complete', () => {
     flowCompleted = true;
 });
 
-const interval = setInterval(() => {
-    if (popup.closed) {
-        clearInterval(interval);
-        if (!flowCompleted) {
-            console.log('User cancelled by closing popup');
-            handleCancellation();
-        }
+parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+    if (event.targetId === 'popup' && !flowCompleted) {
+        // reason is 'connection_lost' when the user closed the popup
+        console.log('User cancelled by closing popup');
+        handleCancellation();
     }
-}, 500);
+});
 ```
 
-Monitor popup.closed property to detect unexpected closure.
+ParleyJS detects closed popups for you; react to `system:disconnected` (or
+`system:connection_lost`) rather than polling `popup.closed`.
 
 ### Mistake 4: Missing window.opener Check
 
@@ -807,41 +815,39 @@ await parley.connect(window.opener, 'main'); // Error if no opener!
 // In popup
 if (!window.opener) {
     console.error('This page must be opened as a popup');
-    return;
+} else {
+    await parley.connect(window.opener, 'main');
 }
-
-await parley.connect(window.opener, 'main');
 ```
 
 Always check if window.opener exists before using it.
 
-### Mistake 5: Not Handling Connection Timeout
+### Mistake 5: Not Handling Connection Failure
 
-**Problem**: Popup fails to load but connection attempt waits indefinitely.
+**Problem**: The popup fails to load (or never calls connect()), and the
+rejected connect() promise is not handled.
 
 **Wrong**:
 
 ```javascript
-await parley.connect(popup, 'popup'); // May hang if popup fails to load
+await parley.connect(popup, 'popup'); // Unhandled rejection if it fails
 ```
 
 **Correct**:
 
 ```javascript
 try {
-    await Promise.race([
-        parley.connect(popup, 'popup'),
-        new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Connection timeout')), 10000)
-        ),
-    ]);
+    // Rejects after the instance's `timeout` (default 5000 ms) if the
+    // handshake does not complete (ERR_CONNECTION_HANDSHAKE_FAILED)
+    await parley.connect(popup, 'popup');
 } catch (error) {
-    console.error('Failed to connect:', error.message);
+    console.error('Failed to connect:', error.code, error.message);
     popup.close();
 }
 ```
 
-Add a timeout to connection attempts.
+connect() never hangs indefinitely; it rejects once `timeout` elapses. Increase
+`timeout` in `Parley.create()` if the popup page is slow to load.
 
 ## Advanced Patterns
 
@@ -850,7 +856,15 @@ Add a timeout to connection attempts.
 Handle OAuth provider redirect back to popup:
 
 ```javascript
-// Main window: Start OAuth flow
+// Main window: a dedicated instance whose timeout covers the time the user
+// spends on the provider's login page
+const oauthParley = Parley.create({
+    targetType: 'window',
+    allowedOrigins: [window.location.origin],
+    timeout: 300000,
+});
+
+// Start the OAuth flow from a click handler
 async function startOAuthFlow(provider) {
     const popup = window.open(
         `/oauth/authorize?provider=${provider}`,
@@ -860,28 +874,41 @@ async function startOAuthFlow(provider) {
 
     if (!popup) return Promise.reject(new Error('Popup blocked'));
 
-    return new Promise((resolve, reject) => {
-        parley.on('oauth:success', (payload) => {
+    const result = new Promise((resolve, reject) => {
+        const cleanup = () => {
+            offSuccess();
+            offError();
+            if (!popup.closed) popup.close();
+        };
+
+        // on() returns an unsubscribe function
+        const offSuccess = oauthParley.on('oauth:success', (payload) => {
+            cleanup();
             resolve(payload.token);
-            popup.close();
         });
 
-        parley.on('oauth:error', (payload) => {
+        const offError = oauthParley.on('oauth:error', (payload) => {
+            cleanup();
             reject(new Error(payload.error));
-            popup.close();
         });
-
-        // Timeout after 5 minutes
-        setTimeout(() => {
-            if (!popup.closed) {
-                popup.close();
-                reject(new Error('OAuth timeout'));
-            }
-        }, 300000);
     });
+
+    // The popup only calls connect() once the provider has redirected back to
+    // our callback page, so connect() waits up to `timeout` (5 minutes here)
+    // for its handshake and rejects if the user never finishes logging in.
+    try {
+        await oauthParley.connect(popup, 'oauth-popup');
+    } catch (error) {
+        if (!popup.closed) popup.close();
+        throw error;
+    }
+    return result;
 }
 
-// Popup: Handle OAuth callback
+// Popup callback page (after the provider redirects back to it).
+// It has its own instance: Parley.create({ targetType: 'window', ... })
+await parley.connect(window.opener, 'main');
+
 const urlParams = new URLSearchParams(window.location.search);
 const code = urlParams.get('code');
 const error = urlParams.get('error');
@@ -923,20 +950,27 @@ async function selectFile(options = {}) {
 
     if (!popup) return Promise.reject(new Error('Popup blocked'));
 
-    return new Promise((resolve, reject) => {
-        parley.on('file:selected', (payload) => {
-            resolve(payload.file);
+    const result = new Promise((resolve, reject) => {
+        const offSelected = parley.on('file:selected', (payload) => {
+            offSelected();
+            offCancelled();
             popup.close();
+            resolve(payload.file);
         });
 
-        parley.on('file:cancelled', () => {
-            reject(new Error('Selection cancelled'));
+        const offCancelled = parley.on('file:cancelled', () => {
+            offSelected();
+            offCancelled();
             popup.close();
+            reject(new Error('Selection cancelled'));
         });
     });
+
+    await parley.connect(popup, 'file-selector');
+    return result;
 }
 
-// Usage
+// Usage (from a click handler, so the popup is not blocked)
 try {
     const file = await selectFile({ type: 'image' });
     console.log('Selected file:', file);
@@ -1069,5 +1103,5 @@ Now that you understand popup communication:
 ---
 
 **Previous**: [iFrame Communication](./iframe-communication.md) **Next**:
-[Web Worker Communication](./worker-communication.md) **Back to**:
+[Multi-Window Communication](./multi-window-communication.md) **Back to**:
 [Documentation Home](./index.md)

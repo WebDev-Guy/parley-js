@@ -1,4 +1,4 @@
-[Home](../../index.md) > [API Reference](./index.md) > Methods
+[Home](../index.md) > [API Reference](./index.md) > Methods
 
 # ParleyJS API Methods
 
@@ -24,6 +24,8 @@ Complete reference for all ParleyJS public methods and APIs.
 - [onAnalyticsEvent()](#onanalyticsevent) - Register analytics handler
 - [getConnectedTargets()](#getconnectedtargets) - Get all connected target IDs
 - [isConnected()](#isconnected) - Check if a target is connected
+- [getConnectionState()](#getconnectionstate) - Get the connection state of a
+  target
 - [destroy()](#destroy) - Destroy instance and clean up resources
 
 ### Instance Properties
@@ -47,16 +49,20 @@ static create(config: ParleyConfig): Parley
 
 **Parameters:**
 
-| Name                  | Type                                               | Required | Description                                       |
-| --------------------- | -------------------------------------------------- | -------- | ------------------------------------------------- |
-| config                | `ParleyConfig`                                     | Yes      | Configuration options for the instance            |
-| config.targetType     | `'iframe' \| 'window'`                             | Yes      | Type of communication target                      |
-| config.allowedOrigins | `string[]`                                         | Yes      | List of allowed origins for security validation   |
-| config.timeout        | `number`                                           | No       | Default timeout in milliseconds (default: 5000)   |
-| config.retries        | `number`                                           | No       | Default number of retries (default: 0)            |
-| config.logLevel       | `'none' \| 'error' \| 'warn' \| 'info' \| 'debug'` | No       | Logging level (default: 'none')                   |
-| config.heartbeat      | `HeartbeatConfig`                                  | No       | Heartbeat configuration for connection monitoring |
-| config.instanceId     | `string`                                           | No       | Custom instance identifier                        |
+| Name                       | Type                                                | Required | Description                                                                                                                                                                   |
+| -------------------------- | --------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| config                     | `ParleyConfig`                                      | Yes      | Configuration options for the instance                                                                                                                                        |
+| config.targetType          | `'iframe' \| 'window'`                              | Yes      | Type of communication target. One instance handles one target type                                                                                                            |
+| config.allowedOrigins      | `string[]`                                          | No       | Exact origins allowed to communicate (default: `[window.location.origin]`). No wildcards: any entry containing `'*'`, `'null'`, empty strings and an empty array are rejected |
+| config.timeout             | `number`                                            | No       | Default handshake and request timeout in milliseconds (default: 5000)                                                                                                         |
+| config.retries             | `number`                                            | No       | Default number of retries after a timeout; each retry re-sends the same message after another `timeout`, with no backoff (default: 0)                                         |
+| config.logLevel            | `'none' \| 'error' \| 'warn' \| 'info' \| 'debug'`  | No       | Logging level (default: 'none')                                                                                                                                               |
+| config.heartbeat           | `HeartbeatConfig`                                   | No       | Heartbeat and failure detection (default: `{ enabled: true, interval: 5000, timeout: 2000, maxMissed: 3, maxFailures: 3 }`)                                                   |
+| config.instanceId          | `string`                                            | No       | Custom instance identifier (default: generated `'parley_xxxxxxxx'`)                                                                                                           |
+| config.analyticsEnabled    | `boolean`                                           | No       | Emit analytics events to `onAnalyticsEvent()` handlers (default: false)                                                                                                       |
+| config.securityLayer       | `SecurityLayer`                                     | No       | Custom security layer (default: `new DefaultSecurityLayer()`)                                                                                                                 |
+| config.exposeHandlerErrors | `boolean`                                           | No       | Send the real handler error message to the remote sender instead of `'Handler error'` (default: false)                                                                        |
+| config.rateLimit           | `{ enabled?: boolean; messagesPerSecond?: number }` | No       | Outgoing `send()` rate limit, fixed 1-second window per target (defaults: `enabled: false`, `messagesPerSecond: 100`)                                                         |
 
 **Returns:**
 
@@ -64,12 +70,19 @@ static create(config: ParleyConfig): Parley
 
 **Throws:**
 
-- None (configuration validation happens during usage)
+- `Error` (a plain `Error`, not a `ParleyError`) with a message starting with
+  `'Configuration error: '` when:
+    - `targetType` is missing or is not `'iframe'` or `'window'`
+    - `timeout` is not a positive number
+    - `retries` is negative
+    - `allowedOrigins` is not an array, is empty, or contains a non-string, an
+      empty string, `'null'` (any case), or any entry containing `'*'` (e.g.
+      `'*'`, `'*.example.com'`, `'https://*.example.com'`)
 
 **Example:**
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 // Basic configuration
 const parley = Parley.create({
@@ -89,16 +102,17 @@ const parley = Parley.create({
         interval: 5000,
         timeout: 2000,
         maxMissed: 3,
+        maxFailures: 3,
     },
 });
 ```
 
 **Common Mistakes:**
 
-**Mistake:** Not specifying `allowedOrigins`
+**Mistake:** Not specifying `allowedOrigins` for a cross-origin target
 
 ```typescript
-// Wrong - allowedOrigins defaults to current origin only
+// Wrong for cross-origin targets - allowedOrigins defaults to the current origin only
 const parley = Parley.create({
     targetType: 'iframe',
 });
@@ -134,7 +148,7 @@ static readonly VERSION: string
 **Example:**
 
 ```typescript
-console.log('ParleyJS version:', Parley.VERSION); // "1.0.0"
+console.log('ParleyJS version:', Parley.VERSION); // "1.1.0"
 ```
 
 ---
@@ -168,10 +182,11 @@ const SYSTEM_EVENTS: {
 **Example:**
 
 ```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 const parley = Parley.create({
-    /* config */
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.example.com'],
 });
 
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
@@ -183,10 +198,14 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
 });
 ```
 
+`Parley.SYSTEM_EVENTS` is only available on the browser IIFE global
+(`window.Parley`). With an ESM or CommonJS import, import `SYSTEM_EVENTS`
+separately as shown above.
+
 **See Also:**
 
 - [onSystem()](#onsystem)
-- [System Events Reference](./README.md#system-events)
+- [System Events Reference](./system-events.md)
 
 ---
 
@@ -194,8 +213,10 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
 
 ### register()
 
-Registers a message type with optional JSON Schema validation. Registration is
-optional but recommended for type safety and payload validation.
+Registers a message type with options: JSON Schema validation, a timeout and
+retry override, and an `onError` callback. Registration is optional (`on()`
+auto-registers unknown types) but is required for payload validation.
+`register()` does not take a handler; add handlers with [on()](#on).
 
 **Signature:**
 
@@ -205,13 +226,14 @@ register(messageType: string, options?: MessageRegistrationOptions): void
 
 **Parameters:**
 
-| Name            | Type                         | Required | Description                              |
-| --------------- | ---------------------------- | -------- | ---------------------------------------- |
-| messageType     | `string`                     | Yes      | Unique message type identifier           |
-| options         | `MessageRegistrationOptions` | No       | Registration options                     |
-| options.schema  | `JSONSchema`                 | No       | JSON Schema for payload validation       |
-| options.timeout | `number`                     | No       | Custom timeout for this message type     |
-| options.retries | `number`                     | No       | Custom retry count for this message type |
+| Name            | Type                                                      | Required | Description                                                                                                                                                                                                                                                      |
+| --------------- | --------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| messageType     | `string`                                                  | Yes      | Unique message type identifier. Names starting with `__parley_` or `system:` are reserved                                                                                                                                                                        |
+| options         | `MessageRegistrationOptions`                              | No       | Registration options                                                                                                                                                                                                                                             |
+| options.schema  | `JsonSchema`                                              | No       | Schema validated on send (locally) and on receive                                                                                                                                                                                                                |
+| options.timeout | `number`                                                  | No       | Custom timeout for this message type                                                                                                                                                                                                                             |
+| options.retries | `number`                                                  | No       | Custom retry count for this message type                                                                                                                                                                                                                         |
+| options.onError | `(error: ParleyError, metadata: MessageMetadata) => void` | No       | Called when an inbound message of this type fails schema validation (`ValidationError`) or one of its handlers throws (the thrown error, wrapped in a `ParleyError` with code `ERR_UNKNOWN` if it is not one). Errors thrown by `onError` are logged and ignored |
 
 **Returns:**
 
@@ -219,7 +241,20 @@ register(messageType: string, options?: MessageRegistrationOptions): void
 
 **Throws:**
 
-- `ValidationError` - If message type is already registered
+- `Error` (plain) - If the type was already registered explicitly with
+  `register()` (`'Message type "x" is already registered'`)
+- `Error` (plain) - If the type is empty or starts with `__parley_` or `system:`
+- `Error` - If the instance has been destroyed
+
+Calling `register()` for a type that so far only has handlers added with `on()`
+does not throw: the options are attached to the existing type and the handlers
+are kept.
+
+Only these schema keywords are enforced: `type` (a single type name),
+`required`, `properties`, `items`, `minimum`, `maximum`, `minLength`,
+`maxLength`, `pattern`, `enum` and `additionalProperties`. Other keywords such
+as `format`, `minItems`, `oneOf` or `$ref` are silently ignored. See
+[JsonSchema](./types.md#jsonschema).
 
 **Example:**
 
@@ -232,11 +267,19 @@ parley.register('user:update', {
         properties: {
             userId: { type: 'number' },
             name: { type: 'string' },
-            email: { type: 'string', format: 'email' },
+            // `format` is not supported; use `pattern` instead
+            email: { type: 'string', pattern: '^[^@\\s]+@[^@\\s]+$' },
         },
     },
     timeout: 10000, // 10 second timeout for user updates
     retries: 2, // Retry twice on failure
+    onError: (error, metadata) => {
+        // Inbound payload failed validation, or a handler threw
+        console.warn(
+            `user:update from ${metadata.senderId} failed:`,
+            error.code
+        );
+    },
 });
 
 // Register without schema
@@ -253,9 +296,16 @@ parley.register('file:upload', {
 **Mistake:** Registering the same type twice
 
 ```typescript
-// Wrong - throws ValidationError
+// Wrong - throws Error('Message type "greeting" is already registered')
 parley.register('greeting');
 parley.register('greeting'); // Error!
+```
+
+Registering after `on()` is fine:
+
+```typescript
+parley.on('greeting', (payload, respond) => respond({ ok: true }));
+parley.register('greeting', { schema: { type: 'object' } }); // Attaches options
 ```
 
 **Mistake:** Schema doesn't match sent payload
@@ -323,11 +373,14 @@ type MessageHandler<T> = (
 
 **Handler Parameters:**
 
-| Name     | Type                          | Description                                               |
-| -------- | ----------------------------- | --------------------------------------------------------- |
-| payload  | `T`                           | The message payload data                                  |
-| respond  | `(response: unknown) => void` | Function to send response back to sender                  |
-| metadata | `MessageMetadata`             | Message metadata (origin, targetId, messageId, timestamp) |
+| Name     | Type                          | Description                                                                                                                                                     |
+| -------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| payload  | `T`                           | The message payload data                                                                                                                                        |
+| respond  | `(response: unknown) => void` | Sends the response back to the sender. Call it at most once; the handler's return value is ignored                                                              |
+| metadata | `MessageMetadata`             | `{ messageId, senderId, origin, timestamp, expectsResponse }`. `senderId` is the local target ID of the sender; `origin` is the browser-verified `event.origin` |
+
+If the type has not been registered, `on()` registers it automatically. Several
+handlers may be added for one type; they run in order and each is awaited.
 
 **Returns:**
 
@@ -335,7 +388,15 @@ type MessageHandler<T> = (
 
 **Throws:**
 
-- None
+- `Error` - If the type is empty or starts with `__parley_` or `system:`
+- `Error` - If the instance has been destroyed
+
+If a handler throws (or its promise rejects), Parley emits `system:error` with
+code `ERR_HANDLER_ERROR`, calls the type's `onError` option, and, if the sender
+expects a response and none was sent yet, replies with an `ERR_HANDLER_ERROR`
+error response (message `'Handler error'` unless this side set
+`exposeHandlerErrors: true`). If no handler exists for an incoming type, the
+sender receives `ERR_NO_HANDLER`.
 
 **Example:**
 
@@ -403,10 +464,19 @@ parley.on('getData', (payload, respond) => {
 **Mistake:** Calling `respond()` multiple times
 
 ```typescript
-// Wrong - only first respond() is used
+// Wrong - the second respond() throws, which is reported as a handler error
 parley.on('getData', (payload, respond) => {
     respond({ status: 'processing' });
-    respond({ status: 'complete' }); // Ignored
+    respond({ status: 'complete' }); // Throws: response already sent
+});
+```
+
+**Mistake:** Returning the response instead of calling `respond()`
+
+```typescript
+// Wrong - the return value is ignored; the sender times out
+parley.on('getData', async () => {
+    return await loadData();
 });
 ```
 
@@ -454,29 +524,48 @@ async send<T, R = unknown>(
 
 **Parameters:**
 
-| Name                    | Type          | Required | Description                                          |
-| ----------------------- | ------------- | -------- | ---------------------------------------------------- |
-| messageType             | `string`      | Yes      | Message type to send                                 |
-| payload                 | `T`           | Yes      | Message payload data                                 |
-| options                 | `SendOptions` | No       | Send options                                         |
-| options.targetId        | `string`      | No       | Specific target ID (default: first connected target) |
-| options.expectsResponse | `boolean`     | No       | Whether to wait for response (default: true)         |
-| options.timeout         | `number`      | No       | Custom timeout in milliseconds                       |
-| options.retries         | `number`      | No       | Custom retry count                                   |
+| Name                    | Type          | Required | Description                                                                                                               |
+| ----------------------- | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| messageType             | `string`      | Yes      | Message type to send                                                                                                      |
+| payload                 | `T`           | Yes      | Message payload data (JSON-cloned by the security layer)                                                                  |
+| options                 | `SendOptions` | No       | Send options                                                                                                              |
+| options.targetId        | `string`      | No       | Specific target ID. Without it the message goes to all connected targets and the promise resolves with the first response |
+| options.expectsResponse | `boolean`     | No       | Whether to wait for a response (default: true)                                                                            |
+| options.timeout         | `number`      | No       | Custom timeout in milliseconds (default: the type's `timeout`, then the instance `timeout`)                               |
+| options.retries         | `number`      | No       | Custom retry count (default: the type's `retries`, then the instance `retries`)                                           |
 
 **Returns:**
 
 - `Promise<R | undefined>` - Response data if `expectsResponse` is true,
   undefined otherwise
 
-**Throws:**
+**Rejects with:**
 
-- `ValidationError` (ERR_VALIDATION_SCHEMA_MISMATCH) - Payload doesn't match
-  registered schema
-- `TargetNotFoundError` (ERR_TARGET_NOT_CONNECTED) - Target not found or not
-  connected
-- `TimeoutError` (ERR_TIMEOUT_NO_RESPONSE) - No response received within timeout
-- `ConnectionError` (ERR_CONNECTION_CLOSED) - Connection closed during send
+- `TargetNotFoundError` (`ERR_TARGET_NOT_CONNECTED`) - No such target, or no
+  connected target
+- `ValidationError` (`ERR_VALIDATION_SCHEMA_MISMATCH`) - Payload fails the
+  locally registered schema, or its serialized size exceeds 10 MB (fixed limit)
+- `SerializationError` (`ERR_SERIALIZATION_CIRCULAR_REFERENCE` or
+  `ERR_SERIALIZATION_SERIALIZE_FAILED`) - Payload contains a circular reference
+  or a `BigInt`
+- `TimeoutError` (`ERR_TIMEOUT_NO_RESPONSE`) - No response after the timeout and
+  all retries
+- `ParleyError` with the remote error code:
+    - `ERR_HANDLER_ERROR` - The remote handler threw. The message is
+      `'Handler error'` unless the receiver set `exposeHandlerErrors: true`
+    - `ERR_NO_HANDLER` - No handler for the type on the other side
+    - `ERR_VALIDATION_SCHEMA_MISMATCH` - The receiver's schema rejected the
+      payload
+- `ConnectionError` (`ERR_CONNECTION_CLOSED`) - The target disconnected
+  (`'Target disconnected'`) or the instance was destroyed
+  (`'Parley instance destroyed'`) while waiting
+- `ParleyError` (`ERR_SECURITY_RATE_LIMITED`) - `rateLimit` is enabled and the
+  limit was exceeded
+- `Error` - The instance has been destroyed
+
+With a `targetId`, consecutive timed-out requests count toward
+`heartbeat.maxFailures`; reaching it disconnects the target with reason
+`'max_failures_reached'`.
 
 **Example:**
 
@@ -517,7 +606,7 @@ const result = await parley.send<Request, Response>('user:get', {
     userId: 123,
 });
 
-console.log('User name:', result.user.name);
+console.log('User name:', result?.user.name);
 
 // With retry
 try {
@@ -544,7 +633,7 @@ const response = await parley.send('getData', {});
 **Correct:**
 
 ```typescript
-import { TimeoutError } from 'parley-js';
+import { TimeoutError } from 'ignite-parleyjs';
 
 try {
     const response = await parley.send('getData', {});
@@ -585,14 +674,14 @@ const response = await parley.send(
 console.log(response); // undefined
 ```
 
-**Correct:** Don't await fire-and-forget messages
+**Correct:** Ignore the result of fire-and-forget messages, but still handle
+rejections (validation, serialization and no-target errors)
 
 ```typescript
-// Don't need await if not expecting response
-parley.send('notify', {}, { expectsResponse: false });
-
-// OR: Use await for consistency but ignore result
 await parley.send('notify', {}, { expectsResponse: false });
+
+// Or without await, with a catch
+parley.send('notify', {}, { expectsResponse: false }).catch(console.error);
 ```
 
 **See Also:**
@@ -617,7 +706,10 @@ await parley.send('notify', {}, { expectsResponse: false });
 ### broadcast()
 
 Broadcasts a message to all connected targets. This is a fire-and-forget
-operation that doesn't wait for responses.
+operation: it returns `void` (do not `await` it), takes no options, never
+expects or receives responses, and does not report per-target failures. With no
+connected targets it does nothing. Rate limiting does not apply to
+`broadcast()`.
 
 **Signature:**
 
@@ -636,10 +728,13 @@ broadcast<T>(messageType: string, payload: T): void
 
 - `void`
 
-**Throws:**
+**Throws (synchronously):**
 
-- `ValidationError` (ERR_VALIDATION_SCHEMA_MISMATCH) - Payload doesn't match
-  schema
+- `ValidationError` (`ERR_VALIDATION_SCHEMA_MISMATCH`) - Payload doesn't match
+  the registered schema, or exceeds 10 MB serialized
+- `SerializationError` (`ERR_SERIALIZATION_CIRCULAR_REFERENCE` or
+  `ERR_SERIALIZATION_SERIALIZE_FAILED`) - Payload cannot be serialized
+- `Error` - The instance has been destroyed
 
 **Example:**
 
@@ -702,7 +797,17 @@ const responses = await Promise.all(
 ### connect()
 
 Establishes a connection to an iframe or window target. This must be called
-before sending messages.
+before sending messages, and **both sides must call it**:
+
+- `targetType: 'iframe'`: the parent calls `connect(iframeElement, id?)`, the
+  page inside the iframe calls `connect(window.parent, id?)`. Passing
+  `iframe.contentWindow` to an iframe instance fails with
+  `ERR_CONNECTION_FAILED`.
+- `targetType: 'window'`: the opener calls `connect(popupWindow, id?)`, the
+  popup calls `connect(window.opener, id?)`.
+
+The connecting side (iframe page or popup) re-sends the handshake until it is
+acknowledged, so no `load` listener or delay is needed.
 
 **Signature:**
 
@@ -712,10 +817,10 @@ async connect(target: HTMLIFrameElement | Window, targetId?: string): Promise<vo
 
 **Parameters:**
 
-| Name     | Type                          | Required | Description                                                       |
-| -------- | ----------------------------- | -------- | ----------------------------------------------------------------- |
-| target   | `HTMLIFrameElement \| Window` | Yes      | The iframe element or window object to connect to                 |
-| targetId | `string`                      | No       | Custom identifier for the target (auto-generated if not provided) |
+| Name     | Type                          | Required | Description                                                                   |
+| -------- | ----------------------------- | -------- | ----------------------------------------------------------------------------- |
+| target   | `HTMLIFrameElement \| Window` | Yes      | The iframe element or window object to connect to                             |
+| targetId | `string`                      | No       | Custom identifier (default: the iframe's `id` attribute, otherwise generated) |
 
 **Returns:**
 
@@ -723,10 +828,15 @@ async connect(target: HTMLIFrameElement | Window, targetId?: string): Promise<vo
 
 **Throws:**
 
-- `ConnectionError` (ERR_CONNECTION_HANDSHAKE_FAILED) - Handshake failed or
-  timed out
-- `TargetError` (ERR_TARGET_DUPLICATE_ID) - Target ID already registered
-- `ConnectionError` (ERR_CONNECTION_FAILED) - Connection failed
+- `ConnectionError` (`ERR_CONNECTION_HANDSHAKE_FAILED`) - Handshake not
+  completed within `timeout`
+- `ConnectionError` (`ERR_CONNECTION_FAILED`) - Invalid target for this
+  instance's `targetType`
+- `TargetNotFoundError` (`ERR_TARGET_DUPLICATE_ID`) - Target ID already in use
+- `Error` - The instance has been destroyed
+
+Emits `system:handshake_start`, then `system:handshake_complete` and
+`system:connected` (or `system:handshake_failed`).
 
 **Example:**
 
@@ -744,11 +854,8 @@ if (popup) {
 // Connect to parent (from within iframe)
 await parley.connect(window.parent, 'parent');
 
-// Wait for iframe to load before connecting
-iframe.addEventListener('load', async () => {
-    await parley.connect(iframe, 'child');
-    console.log('Connected to child');
-});
+// Connect to opener (from within a popup; targetType: 'window')
+await parley.connect(window.opener, 'opener');
 
 // With error handling
 try {
@@ -762,26 +869,30 @@ try {
 
 **Common Mistakes:**
 
-**Mistake:** Connecting before iframe loads
+**Mistake:** Waiting for the iframe `load` event before connecting
 
 ```typescript
-// Wrong - iframe not ready yet
-const iframe = document.createElement('iframe');
-iframe.src = 'child.html';
-document.body.appendChild(iframe);
-await parley.connect(iframe); // Fails - iframe not loaded
+// Wrong - if the iframe already finished loading, this listener never fires
+iframe.addEventListener('load', async () => {
+    await parley.connect(iframe);
+});
 ```
 
-**Correct:**
+**Correct:** Call `connect()` directly on both sides; the handshake is retried
+until the other side answers (or `timeout` expires)
 
 ```typescript
-const iframe = document.createElement('iframe');
-iframe.src = 'child.html';
-document.body.appendChild(iframe);
+await parley.connect(iframe, 'child');
+```
 
-iframe.addEventListener('load', async () => {
-    await parley.connect(iframe); // Works - iframe loaded
-});
+**Mistake:** Passing `iframe.contentWindow` to an iframe instance
+
+```typescript
+// Wrong - fails with ERR_CONNECTION_FAILED
+await parley.connect(iframe.contentWindow!, 'child');
+
+// Correct - pass the element
+await parley.connect(iframe, 'child');
 ```
 
 **Mistake:** Not handling connection errors
@@ -794,13 +905,16 @@ await parley.connect(iframe);
 **Correct:**
 
 ```typescript
-import { ConnectionError, TimeoutError } from 'parley-js';
+import { ConnectionError, ERROR_CODES } from 'ignite-parleyjs';
 
 try {
     await parley.connect(iframe);
 } catch (error) {
-    if (error instanceof TimeoutError) {
-        console.error('Connection timed out');
+    if (
+        error instanceof ConnectionError &&
+        error.code === ERROR_CODES.HANDSHAKE_FAILED
+    ) {
+        console.error('Handshake timed out');
     } else if (error instanceof ConnectionError) {
         console.error('Connection failed:', error.message);
     }
@@ -825,7 +939,12 @@ try {
 
 ### disconnect()
 
-Gracefully disconnects from a target with notification to the other side.
+Gracefully disconnects from a target with notification to the other side. The
+peer receives `system:disconnected` with reason `'manual_disconnect'`; this side
+also emits `system:disconnected` (reason `'manual_disconnect'`). Pending
+requests to the target reject with `ConnectionError` (`ERR_CONNECTION_CLOSED`,
+`'Target disconnected'`). The notification waits at most 1 second for the peer;
+cleanup happens either way.
 
 **Signature:**
 
@@ -845,11 +964,14 @@ async disconnect(targetId: string): Promise<void>
 
 **Throws:**
 
-- None (warnings logged if target not found)
+- `Error` - If the instance has been destroyed. An unknown `targetId` only logs
+  a warning.
 
 **Example:**
 
 ```typescript
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
+
 // Disconnect from specific target
 await parley.disconnect('child-iframe');
 
@@ -913,12 +1035,16 @@ onSystem(event: SystemEventName, handler: (data: unknown) => void): () => void
 
 **Throws:**
 
-- None
+- `Error` - If the instance has been destroyed
+
+System events are only available through `onSystem()`; `on()` is for application
+message types. See [System Events](./system-events.md) for every event and its
+payload.
 
 **Example:**
 
 ```typescript
-import { SYSTEM_EVENTS } from 'parley-js';
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 // Connection events
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
@@ -963,7 +1089,7 @@ unsubscribe();
 **See Also:**
 
 - [SYSTEM_EVENTS](#system_events)
-- [System Events Reference](./README.md#system-events)
+- [System Events Reference](./system-events.md)
 - [Heartbeat Monitoring Guide](../guides/multi-window-communication.md#heartbeat-monitoring)
 
 ---
@@ -971,7 +1097,8 @@ unsubscribe();
 ### onAnalyticsEvent()
 
 Registers a handler for analytics events. Useful for tracking message
-performance and usage metrics.
+performance and usage metrics. Handlers are only called when the instance was
+created with `analyticsEnabled: true`.
 
 **Signature:**
 
@@ -985,6 +1112,13 @@ onAnalyticsEvent(handler: AnalyticsEventHandler): () => void
 type AnalyticsEventHandler = (event: AnalyticsEvent) => void;
 ```
 
+`AnalyticsEvent` fields are top-level (there is no `event.data`):
+`{ type, messageType, messageId, targetId?, timestamp }`, plus `success` on
+`response_sent`/`response_received`, `duration` on `response_received`, and
+`errorCode` (and `errorMessage?` on `error`) on `error`/`timeout`. `type` is one
+of
+`'message_sent' | 'message_received' | 'response_sent' | 'response_received' | 'error' | 'timeout'`.
+
 **Parameters:**
 
 | Name    | Type                    | Required | Description             |
@@ -997,11 +1131,13 @@ type AnalyticsEventHandler = (event: AnalyticsEvent) => void;
 
 **Throws:**
 
-- None
+- `Error` - If the instance has been destroyed
 
 **Example:**
 
 ```typescript
+// Requires Parley.create({ ..., analyticsEnabled: true })
+
 // Track all message events
 parley.onAnalyticsEvent((event) => {
     switch (event.type) {
@@ -1013,10 +1149,11 @@ parley.onAnalyticsEvent((event) => {
             });
             break;
 
-        case 'message_received':
-            analytics.track('Message Received', {
+        case 'response_received':
+            analytics.track('Response Received', {
                 messageType: event.messageType,
                 duration: event.duration,
+                success: event.success,
             });
             break;
     }
@@ -1130,13 +1267,63 @@ console.log('Popup connected');
 
 - [getConnectedTargets()](#getconnectedtargets)
 - [connect()](#connect)
+- [getConnectionState()](#getconnectionstate)
+
+---
+
+### getConnectionState()
+
+Returns the current connection state of a target.
+
+**Signature:**
+
+```typescript
+getConnectionState(targetId: string): ConnectionState | undefined
+```
+
+**Parameters:**
+
+| Name     | Type     | Required | Description        |
+| -------- | -------- | -------- | ------------------ |
+| targetId | `string` | Yes      | Target ID to check |
+
+**Returns:**
+
+- `ConnectionState | undefined` - `'connecting'`, `'connected'`,
+  `'disconnecting'` or `'disconnected'`, or `undefined` if the target is not
+  known (targets are removed once they are disconnected)
+
+**Throws:**
+
+- None
+
+**Example:**
+
+```typescript
+import { ConnectionState } from 'ignite-parleyjs';
+
+if (parley.getConnectionState('child') === ConnectionState.CONNECTED) {
+    await parley.send('ping', {}, { targetId: 'child' });
+}
+```
+
+**See Also:**
+
+- [isConnected()](#isconnected)
+- [ConnectionState type](./types.md#connectionstate)
+- [system:connection_state_changed](./system-events.md)
 
 ---
 
 ### destroy()
 
-Destroys the Parley instance and cleans up all resources. Disconnects all
-targets, clears all listeners, and rejects pending requests.
+Destroys the Parley instance and cleans up all resources. Stops heartbeats,
+rejects pending requests with `ConnectionError` (`ERR_CONNECTION_CLOSED`,
+`'Parley instance destroyed'`), disconnects every target (emitting
+`system:disconnected` with reason `'destroyed'` for each), then clears all
+listeners and handlers. Peers are not notified; they detect the loss through
+their heartbeat. Calling `destroy()` again does nothing; most other methods
+throw `Error('Parley instance has been destroyed')` afterwards.
 
 **Signature:**
 
@@ -1161,7 +1348,8 @@ destroy(): void
 ```typescript
 // Clean up when component unmounts
 const parley = Parley.create({
-    /* config */
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.example.com'],
 });
 
 // Use parley...
@@ -1172,7 +1360,8 @@ parley.destroy();
 // React example
 useEffect(() => {
     const parley = Parley.create({
-        /* config */
+        targetType: 'iframe',
+        allowedOrigins: ['https://child.example.com'],
     });
 
     // Use parley...
@@ -1186,7 +1375,8 @@ useEffect(() => {
 export default {
     mounted() {
         this.parley = Parley.create({
-            /* config */
+            targetType: 'iframe',
+            allowedOrigins: ['https://child.example.com'],
         });
     },
     beforeUnmount() {
@@ -1200,7 +1390,8 @@ export class MyComponent implements OnDestroy {
 
     ngOnInit() {
         this.parley = Parley.create({
-            /* config */
+            targetType: 'iframe',
+            allowedOrigins: ['https://child.example.com'],
         });
     }
 
@@ -1221,16 +1412,18 @@ integration patterns, see
 ```typescript
 // Wrong - instance is destroyed
 parley.destroy();
-await parley.send('message', {}); // Throws error
+await parley.send('message', {}); // Throws Error('Parley instance has been destroyed')
 ```
 
-**Correct:** Create new instance if needed
+**Correct:** Create a new instance (and connect it) if needed
 
 ```typescript
 parley.destroy();
 const newParley = Parley.create({
-    /* config */
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.example.com'],
 });
+await newParley.connect(iframe, 'child');
 await newParley.send('message', {});
 ```
 
@@ -1310,6 +1503,8 @@ console.log(parley.targetType); // "iframe"
 **Related**:
 
 - [System Events](./system-events.md) - System event reference
+- [Types](./types.md) - Type reference
+- [Error Codes](./error-codes.md) - Error classes and codes
 - [Common Errors](../troubleshooting/common-errors.md) - Error reference
 - [Code Patterns](../patterns/index.md)
 - [Examples](../EXAMPLES.md)

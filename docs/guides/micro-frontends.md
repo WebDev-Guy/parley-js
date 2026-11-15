@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > [Guides](./index.md) >
+[Home](../index.md) > [Documentation](./index.md) > [Guides](./index.md) >
 Micro-Frontend Architecture
 
 # ParleyJS in Micro-Frontend Architectures
@@ -72,7 +72,10 @@ communication:
 
 ```typescript
 // Shell application
+import { Parley } from 'ignite-parleyjs';
+
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         'https://auth.example.com',
         'https://dashboard.example.com',
@@ -80,11 +83,23 @@ const parley = Parley.create({
     ],
 });
 
-// Connect to all micro-frontends
-await parley.connect(authModule.contentWindow, 'auth-module');
-await parley.connect(dashboardModule.contentWindow, 'dashboard-module');
-await parley.connect(reportsModule.contentWindow, 'reports-module');
+// Connect to all micro-frontends (pass the iframe elements)
+const authModule = document.querySelector<HTMLIFrameElement>('#auth-module')!;
+const dashboardModule =
+    document.querySelector<HTMLIFrameElement>('#dashboard-module')!;
+const reportsModule =
+    document.querySelector<HTMLIFrameElement>('#reports-module')!;
+
+await Promise.all([
+    parley.connect(authModule, 'auth-module'),
+    parley.connect(dashboardModule, 'dashboard-module'),
+    parley.connect(reportsModule, 'reports-module'),
+]);
 ```
+
+Each module page creates its own instance with `targetType: 'iframe'` and the
+shell's origin in `allowedOrigins`, then calls
+`parley.connect(window.parent, 'shell')`.
 
 For multi-window communication patterns, see
 [Multi-Window Communication Guide](./multi-window-communication.md).
@@ -104,6 +119,7 @@ communication.
 ```typescript
 // Shell (Hub)
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         'https://module-a.example.com',
         'https://module-b.example.com',
@@ -131,42 +147,44 @@ parley.on('request-to-module', async (payload, respond) => {
 For hub-and-spoke implementation details, see
 [Hub-and-Spoke Pattern](./multi-window-communication.md#hub-and-spoke-pattern).
 
-### Peer-to-Peer Pattern
+### Why Not Peer-to-Peer?
 
-Modules communicate directly with each other without routing through the shell.
+Module iframes cannot connect to each other directly: a ParleyJS iframe
+connection is always between a page and an iframe it embeds (the parent calls
+`connect(iframeElement)`, the iframe calls `connect(window.parent)`). Sibling
+iframes have no such relationship, so module-to-module traffic is routed through
+the shell as shown above.
+
+From a module's point of view, asking another module for data looks like this:
 
 ```typescript
-// Module A establishes direct connection to Module B
-const moduleB = document.querySelector('#module-b-iframe');
-await parley.connect(moduleB.contentWindow, 'module-b');
-
-// Direct communication
-const data = await parley.send(
-    'get-user-data',
-    { userId: 123 },
+// Module A asks Module B for data, via the shell
+const result = await parley.send(
+    'request-to-module',
     {
-        targetId: 'module-b',
-    }
+        targetModule: 'module-b',
+        request: { type: 'get-user-data', data: { userId: 123 } },
+    },
+    { targetId: 'shell' }
 );
+
+if (result.success) {
+    console.log('User data:', result.data);
+}
 ```
 
-**Benefits**: Lower latency, less shell complexity, better scalability.
-**Drawbacks**: More complex setup, harder to monitor, increased security
-surface.
+To keep the extra hop cheap, batch high-frequency updates (see
+[Performance Considerations](#performance-considerations)).
 
-### Hybrid Pattern
+### Shell-Coordinated Events
 
-Combines hub-and-spoke for coordination with peer-to-peer for high-frequency
-data exchange.
+The shell can also turn one module's event into a notification for every module:
 
 ```typescript
-// Shell handles authentication and global state
+// Shell relays authentication changes to all modules
 parley.on('auth-state-changed', (payload) => {
     parley.broadcast('global-auth-update', payload);
 });
-
-// Modules communicate directly for data operations
-// (established after shell coordinates initial connection)
 ```
 
 ---
@@ -185,11 +203,12 @@ export interface AuthStateMessage {
     type: 'auth-state-changed';
     payload: {
         isAuthenticated: boolean;
-        user: {
+        // Omitted when logged out
+        user?: {
             id: string;
             name: string;
             roles: string[];
-        } | null;
+        };
         token?: string;
     };
 }
@@ -213,7 +232,7 @@ parley.register('auth-state-changed', {
         properties: {
             isAuthenticated: { type: 'boolean' },
             user: {
-                type: ['object', 'null'],
+                type: 'object',
                 properties: {
                     id: { type: 'string' },
                     name: { type: 'string' },
@@ -222,10 +241,14 @@ parley.register('auth-state-changed', {
                 required: ['id', 'name', 'roles'],
             },
         },
-        required: ['isAuthenticated', 'user'],
+        required: ['isAuthenticated'],
     },
 });
 ```
+
+The `type` keyword accepts a single type name only; type arrays such as
+`['object', 'null']` are not supported. That is why `user` is optional and
+omitted when logged out, rather than sent as `null`.
 
 For message validation strategies, see
 [Message Validation Guide](../security/message-validation.md).
@@ -247,11 +270,9 @@ async function loadModule(url: string, targetId: string) {
     iframe.src = url;
     document.body.appendChild(iframe);
 
-    await new Promise((resolve) => {
-        iframe.addEventListener('load', resolve, { once: true });
-    });
-
-    await parley.connect(iframe.contentWindow, targetId);
+    // Connect to the iframe element right away; no load listener needed.
+    // The module page calls parley.connect(window.parent, 'shell').
+    await parley.connect(iframe, targetId);
 
     return iframe;
 }
@@ -354,7 +375,7 @@ Keep state synchronized across multiple micro-frontends.
 ### Shared State Pattern
 
 ```typescript
-// Shell broadcasts state updates
+// Shell: broadcasts state updates
 let sharedState = { cart: [], selectedItems: [] };
 
 parley.on('update-cart', (payload, respond) => {
@@ -366,7 +387,7 @@ parley.on('update-cart', (payload, respond) => {
     respond({ success: true });
 });
 
-// Modules listen for updates
+// Module (its own instance): listens for updates
 parley.on('cart-updated', (payload) => {
     localCartState = payload.cart;
     renderCart(localCartState);
@@ -407,13 +428,16 @@ Robust error handling is critical in distributed micro-frontend architectures.
 
 ```typescript
 // Shell detects module failures
+// (import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs')
 parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
     console.error(`Module ${event.targetId} lost connection`);
 
     // Show fallback UI
     showModuleError(event.targetId, 'Module unavailable');
 
-    // Attempt reconnection
+    // ParleyJS does not reconnect automatically. Your own attemptReconnect()
+    // would call parley.connect(iframeElement, event.targetId) again
+    // (after system:disconnected has fired for that target).
     attemptReconnect(event.targetId);
 });
 
@@ -526,6 +550,7 @@ Always validate origins for each micro-frontend:
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         'https://auth.example.com', // Auth module
         'https://dashboard.example.com', // Dashboard module
@@ -534,8 +559,9 @@ const parley = Parley.create({
 });
 ```
 
-Never use wildcard origins in production micro-frontends. Each module origin
-must be explicitly allowed.
+Wildcard origins are not supported (`Parley.create()` throws for `'*'` or
+`'null'`), and there are no subdomain patterns. Each module origin must be
+listed exactly.
 
 ### Content Security Policy
 

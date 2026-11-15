@@ -769,7 +769,7 @@
         <section class="hero">
             <div class="hero-badge">
                 <span class="dot"></span>
-                v1.0.0 Released
+                v1.1.0 Released
             </div>
             <h1>postMessage<br>Made Simple</h1>
             <p>Type-safe, robust framework for window, tab, and iframe communication. Zero dependencies, full TypeScript support, security-first design.</p>
@@ -800,11 +800,11 @@
             <div class="features-grid">
                 <div class="feature-card">
                     <h3>Security-First</h3>
-                    <p>Origin validation, message integrity checks, and configurable security policies.</p>
+                    <p>Origin validation, protocol validation, and configurable security policies.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Zero Dependencies</h3>
-                    <p>Lightweight ~54KB bundle. Pure, efficient JavaScript with no bloat.</p>
+                    <p>Lightweight ~55 KB minified (~16 KB gzipped) bundle. Pure, efficient JavaScript with no bloat.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Full TypeScript</h3>
@@ -816,7 +816,7 @@
                 </div>
                 <div class="feature-card">
                     <h3>Connection Lifecycle</h3>
-                    <p>Heartbeat monitoring, reconnection, and state management.</p>
+                    <p>Heartbeat monitoring, connection-loss detection, and state management.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Schema Validation</h3>
@@ -859,9 +859,9 @@
 <span class="comment"> * </span>
 <span class="comment"> * Demonstrates embedding an iframe and establishing secure two-way</span>
 <span class="comment"> * communication. Parley-js handles the complexity of postMessage:</span>
-<span class="comment"> * origin validation, response correlation, timeouts, and reconnection.</span>
+<span class="comment"> * origin validation, response correlation, timeouts, and connection-loss detection.</span>
 <span class="comment"> */</span>
-<span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
+<span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'ignite-parleyjs'</span>;
 
 <span class="comment">// Create instance with origin validation</span>
 <span class="keyword">const</span> parley = Parley.<span class="function">create</span>({
@@ -885,8 +885,8 @@ parley.<span class="function">on</span>(<span class="string">'notification'</spa
 });
 console.<span class="function">log</span>(response.greeting); <span class="comment">// "Hello, World!"</span>
 
-<span class="comment">// Broadcast to all connected targets</span>
-<span class="keyword">await</span> parley.<span class="function">broadcast</span>(<span class="string">'announcement'</span>, { message: <span class="string">'Update available!'</span> });</code></pre>
+<span class="comment">// Broadcast to all connected targets (fire-and-forget, no responses)</span>
+parley.<span class="function">broadcast</span>(<span class="string">'announcement'</span>, { message: <span class="string">'Update available!'</span> });</code></pre>
                     <pre id="child-code" style="display: none;"><code><span class="comment">/**</span>
 <span class="comment"> * Child Iframe Example</span>
 <span class="comment"> * </span>
@@ -894,7 +894,7 @@ console.<span class="function">log</span>(response.greeting); <span class="comme
 <span class="comment"> * runs its own Parley instance. The library provides a clean API for</span>
 <span class="comment"> * responding to requests, handling broadcasts, and sending notifications.</span>
 <span class="comment"> */</span>
-<span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
+<span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'ignite-parleyjs'</span>;
 
 <span class="comment">// Child iframe creates its own instance</span>
 <span class="keyword">const</span> parley = Parley.<span class="function">create</span>({
@@ -908,10 +908,9 @@ parley.<span class="function">on</span>(<span class="string">'hello'</span>, (pa
     <span class="function">respond</span>({ greeting: <span class="string">`Hello, ${payload.name}!`</span>, receivedAt: Date.<span class="function">now</span>() });
 });
 
-<span class="comment">// Handle broadcasts</span>
-parley.<span class="function">on</span>(<span class="string">'announcement'</span>, (payload, respond, metadata) =&gt; {
+<span class="comment">// Handle broadcasts (no response is sent for broadcasts)</span>
+parley.<span class="function">on</span>(<span class="string">'announcement'</span>, (payload) =&gt; {
     console.<span class="function">log</span>(<span class="string">`Announcement: ${payload.message}`</span>);
-    <span class="function">respond</span>({ received: <span class="keyword">true</span> });
 });
 
 <span class="comment">// Connect to parent window</span>
@@ -929,7 +928,7 @@ parley.<span class="function">on</span>(<span class="string">'announcement'</spa
 <span class="comment"> * or navigated away. Parley-js manages window.opener references,</span>
 <span class="comment"> * detects when popups close, and provides the same clean API as iframes.</span>
 <span class="comment"> */</span>
-<span class="keyword">import</span> { Parley } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
+<span class="keyword">import</span> { Parley } <span class="keyword">from</span> <span class="string">'ignite-parleyjs'</span>;
 
 <span class="comment">// ═══ MAIN WINDOW ═══</span>
 <span class="keyword">const</span> parley = Parley.<span class="function">create</span>({
@@ -937,10 +936,9 @@ parley.<span class="function">on</span>(<span class="string">'announcement'</spa
     <span class="variable">allowedOrigins</span>: [window.location.origin],
 });
 
-<span class="comment">// Handle messages from popup</span>
-parley.<span class="function">on</span>(<span class="string">'popup:notification'</span>, (payload, respond, metadata) =&gt; {
+<span class="comment">// Handle fire-and-forget notifications from popup</span>
+parley.<span class="function">on</span>(<span class="string">'popup:notification'</span>, (payload) =&gt; {
     console.<span class="function">log</span>(<span class="string">`Popup says: ${payload.message}`</span>);
-    <span class="function">respond</span>({ received: <span class="keyword">true</span> });
 });
 
 <span class="comment">// Open popup and connect</span>
@@ -951,15 +949,21 @@ parley.<span class="function">on</span>(<span class="string">'popup:notification
 <span class="keyword">const</span> time = <span class="keyword">await</span> parley.<span class="function">send</span>(<span class="string">'get-time'</span>, { format: <span class="string">'full'</span> }, { <span class="variable">targetId</span>: <span class="string">'popup'</span> });
 
 <span class="comment">// ═══ POPUP WINDOW ═══</span>
-parley.<span class="function">on</span>(<span class="string">'get-time'</span>, (payload, respond, metadata) =&gt; {
+<span class="comment">// The popup page creates its own instance</span>
+<span class="keyword">const</span> popupParley = Parley.<span class="function">create</span>({
+    <span class="variable">targetType</span>: <span class="string">'window'</span>,
+    <span class="variable">allowedOrigins</span>: [window.location.origin],
+});
+
+popupParley.<span class="function">on</span>(<span class="string">'get-time'</span>, (payload, respond, metadata) =&gt; {
     <span class="function">respond</span>({ time: <span class="keyword">new</span> Date().<span class="function">toLocaleString</span>(), timezone: <span class="string">'UTC'</span> });
 });
 
 <span class="comment">// Connect back to opener</span>
-<span class="keyword">await</span> parley.<span class="function">connect</span>(window.opener, <span class="string">'opener'</span>);
+<span class="keyword">await</span> popupParley.<span class="function">connect</span>(window.opener, <span class="string">'opener'</span>);
 
 <span class="comment">// Send notification to main window</span>
-<span class="keyword">await</span> parley.<span class="function">send</span>(<span class="string">'popup:notification'</span>, { message: <span class="string">'Ready!'</span> }, {
+<span class="keyword">await</span> popupParley.<span class="function">send</span>(<span class="string">'popup:notification'</span>, { message: <span class="string">'Ready!'</span> }, {
     <span class="variable">targetId</span>: <span class="string">'opener'</span>, <span class="variable">expectsResponse</span>: <span class="keyword">false</span>
 });</code></pre>
                     <pre id="heartbeat-code" style="display: none;"><code><span class="comment">/**</span>
@@ -967,9 +971,9 @@ parley.<span class="function">on</span>(<span class="string">'get-time'</span>, 
 <span class="comment"> * </span>
 <span class="comment"> * postMessage has no built-in way to detect if an iframe crashes,</span>
 <span class="comment"> * a popup closes, or a connection becomes unresponsive. Parley-js</span>
-<span class="comment"> * solves this with automatic heartbeat monitoring and reconnection.</span>
+<span class="comment"> * detects this with automatic heartbeat monitoring and popup-close detection.</span>
 <span class="comment"> */</span>
-<span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
+<span class="keyword">import</span> { Parley, SYSTEM_EVENTS } <span class="keyword">from</span> <span class="string">'ignite-parleyjs'</span>;
 
 <span class="comment">// Create instance with heartbeat enabled</span>
 <span class="keyword">const</span> parley = Parley.<span class="function">create</span>({
@@ -995,25 +999,27 @@ parley.<span class="function">onSystem</span>(SYSTEM_EVENTS.HEARTBEAT_MISSED, (e
 parley.<span class="function">onSystem</span>(SYSTEM_EVENTS.CONNECTION_LOST, (event) =&gt; {
     console.<span class="function">error</span>(<span class="string">`Lost connection: ${event.reason}`</span>);
     
-    <span class="keyword">if</span> (event.reason === <span class="string">'heartbeat_failure'</span>) {
-        <span class="comment">// Auto-reconnect after 3 seconds</span>
+    <span class="keyword">if</span> (event.reason === <span class="string">'heartbeat_timeout'</span>) {
+        <span class="comment">// No automatic reconnection: your app decides whether to</span>
+        <span class="comment">// call parley.connect() again (reconnect() is your own function)</span>
         <span class="function">setTimeout</span>(() =&gt; <span class="function">reconnect</span>(), <span class="number">3000</span>);
     }
 });
 
-<span class="comment">// Connection restored</span>
+<span class="comment">// Connected (including after your app reconnects)</span>
 parley.<span class="function">onSystem</span>(SYSTEM_EVENTS.CONNECTED, (event) =&gt; {
     console.<span class="function">log</span>(<span class="string">`Connected to ${event.targetId}`</span>);
     <span class="function">hideWarning</span>();
 });
 
 <span class="comment">// ═══ POPUP CLOSE DETECTION ═══</span>
-<span class="comment">// Detect when user closes a popup window</span>
+<span class="comment">// Detect when user closes a popup window (popups need a 'window' instance)</span>
+<span class="keyword">const</span> windowParley = Parley.<span class="function">create</span>({ <span class="variable">targetType</span>: <span class="string">'window'</span> });
 <span class="keyword">const</span> popup = window.<span class="function">open</span>(<span class="string">'popup.html'</span>, <span class="string">'_blank'</span>);
-<span class="keyword">await</span> parley.<span class="function">connect</span>(popup, <span class="string">'popup'</span>);
+<span class="keyword">await</span> windowParley.<span class="function">connect</span>(popup, <span class="string">'popup'</span>);
 
-parley.<span class="function">onSystem</span>(SYSTEM_EVENTS.CONNECTION_LOST, (event) =&gt; {
-    <span class="keyword">if</span> (event.targetId === <span class="string">'popup'</span>) {
+windowParley.<span class="function">onSystem</span>(SYSTEM_EVENTS.CONNECTION_LOST, (event) =&gt; {
+    <span class="keyword">if</span> (event.reason === <span class="string">'connection_lost'</span>) {
         console.<span class="function">log</span>(<span class="string">'Popup was closed by user'</span>);
     }
 });</code></pre>
@@ -1024,7 +1030,7 @@ parley.<span class="function">onSystem</span>(SYSTEM_EVENTS.CONNECTION_LOST, (ev
 <span class="comment"> * validated. Parley-js supports JSON Schema validation out of the box,</span>
 <span class="comment"> * catching malformed data before your handlers ever see it.</span>
 <span class="comment"> */</span>
-<span class="keyword">import</span> { Parley } <span class="keyword">from</span> <span class="string">'parley-js'</span>;
+<span class="keyword">import</span> { Parley } <span class="keyword">from</span> <span class="string">'ignite-parleyjs'</span>;
 
 <span class="keyword">const</span> parley = Parley.<span class="function">create</span>({ <span class="variable">targetType</span>: <span class="string">'iframe'</span> });
 
@@ -1053,7 +1059,7 @@ parley.<span class="function">register</span>(<span class="string">'user:create'
 <span class="keyword">await</span> parley.<span class="function">send</span>(<span class="string">'user:create'</span>, {
     <span class="variable">email</span>: <span class="string">'invalid-email'</span>,  <span class="comment">// ✗ fails pattern</span>
     <span class="variable">name</span>: <span class="string">''</span>                  <span class="comment">// ✗ fails minLength</span>
-}); <span class="comment">// Error: Validation failed</span></code></pre>
+}); <span class="comment">// ValidationError: Payload validation failed for "user:create": ...</span></code></pre>
                 </div>
             </div>
         </section>
@@ -1061,8 +1067,8 @@ parley.<span class="function">register</span>(<span class="string">'user:create'
         <section class="stats">
             <div class="stats-grid">
                 <div class="stat-item">
-                    <h3>~54KB</h3>
-                    <p>Minified Bundle</p>
+                    <h3>~16KB</h3>
+                    <p>Gzipped Bundle</p>
                 </div>
                 <div class="stat-item">
                     <h3>0</h3>
@@ -1073,7 +1079,7 @@ parley.<span class="function">register</span>(<span class="string">'user:create'
                     <p>TypeScript</p>
                 </div>
                 <div class="stat-item">
-                    <h3>85%+</h3>
+                    <h3>~80%</h3>
                     <p>Test Coverage</p>
                 </div>
             </div>
@@ -1109,8 +1115,8 @@ parley.<span class="function">register</span>(<span class="string">'user:create'
             <div class="footer-links">
                 <h4>Resources</h4>
                 <ul>
-                    <li><a href="/docs/architecture">Architecture</a></li>
-                    <li><a href="/docs/testing">Testing</a></li>
+                    <li><a href="/docs/ARCHITECTURE">Architecture</a></li>
+                    <li><a href="/docs/TESTING">Testing</a></li>
                     <li><a href="https://github.com/WebDev-Guy/parley-js/blob/main/CONTRIBUTING.md" target="_blank">Contributing</a></li>
                     <li><a href="https://github.com/WebDev-Guy/parley-js/issues" target="_blank">Issues</a></li>
                 </ul>

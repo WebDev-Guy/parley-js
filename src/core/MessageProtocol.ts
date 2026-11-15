@@ -34,10 +34,6 @@ export const INTERNAL_MESSAGE_TYPES = {
     HANDSHAKE_INIT: '__parley_handshake_init__',
     /** Handshake acknowledgment */
     HANDSHAKE_ACK: '__parley_handshake_ack__',
-    /** Ping for connection keep-alive */
-    PING: '__parley_ping__',
-    /** Pong response to ping */
-    PONG: '__parley_pong__',
 } as const;
 
 /**

@@ -46,8 +46,8 @@ function useParley(config) {
         // Initialize Parley
         parleyRef.current = Parley.create(config);
 
-        // Listen for events
-        parleyRef.current.on('connection:established', (data) => {
+        // Listen for system events (SYSTEM_EVENTS is imported from 'ignite-parleyjs')
+        parleyRef.current.onSystem(SYSTEM_EVENTS.CONNECTED, (data) => {
             setIsConnected(true);
         });
 
@@ -90,24 +90,23 @@ function ParentComponent() {
         registerHandler,
         connect
     } = useParley({
+        targetType: 'iframe',
         allowedOrigins: [window.location.origin],
-        debug: true
+        logLevel: 'debug'
     });
 
     useEffect(() => {
-        // Register handlers
+        // Register handlers. In the example, registerHandler wraps on() and
+        // passes the handler's result to respond()
         registerHandler('pong', (payload) => {
             console.log('Received pong:', payload);
             return { received: true };
         });
 
-        // Connect to iframe
+        // Connect to the iframe element (not iframe.contentWindow).
+        // No onload wait is needed: the child re-sends its handshake.
         const iframe = document.querySelector('iframe');
-        iframe.onload = () => {
-            connect('child', iframe.contentWindow, {
-                origin: window.location.origin
-            });
-        };
+        connect(iframe, 'child');
     }, [registerHandler, connect]);
 
     const handlePing = async () => {
@@ -133,19 +132,18 @@ function ChildComponent() {
 
     useEffect(() => {
         parleyRef.current = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin]
         });
 
-        // Register handler
-        parleyRef.current.register('updateCounter', async (payload) => {
+        // Register handler with on() and reply with respond()
+        parleyRef.current.on('updateCounter', (payload, respond) => {
             setCounter(prev => prev + payload.increment);
-            return { success: true };
+            respond({ success: true });
         });
 
         // Connect to parent
-        parleyRef.current.connect('parent', window.parent, {
-            origin: window.location.origin
-        });
+        parleyRef.current.connect(window.parent, 'parent');
 
         // Cleanup
         return () => parleyRef.current?.destroy();
@@ -176,7 +174,7 @@ useEffect(() => {
 React state automatically updates with Parley events:
 
 ```typescript
-parley.on('connection:established', () => {
+parley.onSystem(SYSTEM_EVENTS.CONNECTED, () => {
     setIsConnected(true); // Update React state
 });
 ```
@@ -269,14 +267,14 @@ function useParleyQuery(messageType, payload) {
 For TypeScript projects:
 
 ```typescript
-import { Parley, ParleyConfig, MessageHandler } from 'parley-js';
+import { Parley, ParleyConfig } from 'ignite-parleyjs';
 
 interface UseParleyReturn {
     isConnected: boolean;
     messages: Message[];
-    sendMessage: (type: string, payload: unknown, targetId: string) => Promise<void>;
-    registerHandler: (type: string, handler: MessageHandler) => void;
-    connect: (targetId: string, target: Window, options?: ConnectOptions) => Promise<void>;
+    sendMessage: (type: string, payload: unknown, targetId: string) => Promise<unknown>;
+    registerHandler: (type: string, handler: (payload: unknown) => unknown) => void;
+    connect: (target: HTMLIFrameElement | Window, targetId?: string) => Promise<void>;
     parley: Parley | null;
 }
 
@@ -328,7 +326,7 @@ function useParley(config: ParleyConfig): UseParleyReturn {
    ```typescript
    class ErrorBoundary extends React.Component {
        componentDidCatch(error) {
-           if (error.name === 'ParleyError') {
+           if (isParleyError(error)) { // import { isParleyError } from 'ignite-parleyjs'
                // Handle Parley errors
            }
        }
@@ -340,17 +338,19 @@ function useParley(config: ParleyConfig): UseParleyReturn {
 1. **Environment-specific Config**
    ```typescript
    const config = {
+       targetType: 'iframe',
        allowedOrigins: process.env.NODE_ENV === 'production'
            ? ['https://app.example.com']
            : ['http://localhost:3000'],
-       debug: process.env.NODE_ENV !== 'production'
+       logLevel: process.env.NODE_ENV !== 'production' ? 'debug' : 'none'
    };
    ```
 
 2. **Lazy Loading**
    ```typescript
-   const Parley = lazy(() => import('parley-js'));
-   
+   // Lazy-load the component that uses Parley
+   const ParleyComponent = lazy(() => import('./ParleyComponent'));
+
    <Suspense fallback={<div>Loading...</div>}>
        <ParleyComponent />
    </Suspense>
@@ -358,7 +358,8 @@ function useParley(config: ParleyConfig): UseParleyReturn {
 
 3. **Performance Monitoring**
    ```typescript
-   parley.onAnalytics((event) => {
+   // Requires analyticsEnabled: true in the Parley.create() config
+   parley.onAnalyticsEvent((event) => {
        // Track with analytics service
        analytics.track('parley_event', event);
    });

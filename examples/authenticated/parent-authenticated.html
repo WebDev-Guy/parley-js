@@ -122,7 +122,7 @@
     </div>
 
     <script type="module">
-        import { Parley, SYSTEM_EVENTS } from '../../dist/index.mjs';
+        import { Parley, SYSTEM_EVENTS } from '../../dist/index.js';
 
         let authToken = null;
         let sessionId = null;
@@ -149,13 +149,9 @@
             }
         }
 
-        // Wait for iframe to load, then connect immediately
-        if (iframe.contentDocument?.readyState === 'complete') {
-            // Iframe already loaded
-            connectToChild();
-        } else {
-            iframe.onload = connectToChild;
-        }
+        // Connect right away. No load listener is needed: the child keeps
+        // re-sending its handshake until the parent answers.
+        connectToChild();
 
         // Handle authentication response
         parley.on('auth:response', (payload, respond, metadata) => {
@@ -206,10 +202,14 @@
                 return;
             }
             try {
-                await parley.send('data:request', {
+                const result = await parley.send('data:request', {
                     token: authToken,
                     query: 'getUserProfile'
                 }, { targetId: 'child' });
+                if (result?.error === 'unauthorized') {
+                    log('Unauthorized: token rejected, please authenticate again', 'error');
+                    return;
+                }
                 log('Data requested...');
             } catch (error) {
                 log(`Data fetch failed: ${error.message}`, 'error');
@@ -222,7 +222,7 @@
                 return;
             }
             try {
-                await parley.send('form:submit', {
+                const result = await parley.send('form:submit', {
                     token: authToken,
                     formData: {
                         name: 'John Doe',
@@ -230,6 +230,10 @@
                         message: 'Hello from parent window!'
                     }
                 }, { targetId: 'child' });
+                if (result?.error === 'unauthorized') {
+                    log('Unauthorized: token rejected, please authenticate again', 'error');
+                    return;
+                }
                 log('Form submission sent...');
             } catch (error) {
                 log(`Form submission failed: ${error.message}`, 'error');
@@ -242,10 +246,14 @@
                 return;
             }
             try {
-                await parley.send('logout:request', {
+                const result = await parley.send('logout:request', {
                     token: authToken,
                     sessionId: sessionId
                 }, { targetId: 'child' });
+                if (result?.error === 'unauthorized') {
+                    log('Unauthorized: token rejected', 'error');
+                    return;
+                }
                 log('Logout request sent...');
             } catch (error) {
                 log(`Logout failed: ${error.message}`);

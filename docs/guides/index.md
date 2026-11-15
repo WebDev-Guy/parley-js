@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > Use Case Guides
+[Home](../index.md) > [Documentation](./index.md) > Use Case Guides
 
 # Use Case Guides
 
@@ -31,19 +31,19 @@ Choose the guide that matches your scenario, or start with
     - File selection dialogs
     - Settings windows
 
-- **[Web Worker Communication](./worker-communication.md)** - Main thread and
-  worker communication
-    - Background processing
-    - Data transfer
-    - Progress reporting
-    - Worker lifecycle
-
 - **[Multi-Window Communication](./multi-window-communication.md)** -
   Coordinating multiple windows
     - Hub-and-spoke pattern
-    - Peer-to-peer messaging
+    - Routing messages between windows through a hub
     - Broadcasting
     - Window coordination
+
+- **[Micro-Frontends](./micro-frontends.md)** - Composing an application from
+  independently deployed iframes
+
+- **[Web Workers (not supported)](./worker-communication.md)** - ParleyJS works
+  with iframes and windows only; this page explains why Workers are not
+  supported and which alternatives to use
 
 ### Integration Scenarios
 
@@ -60,8 +60,8 @@ Choose the guide that matches your scenario, or start with
 
 - Embed a third-party widget → [iFrame Communication](./iframe-communication.md)
 - Build OAuth login → [Popup Communication](./popup-communication.md)
-- Process data in background →
-  [Web Worker Communication](./worker-communication.md)
+- Process data in a Web Worker → not supported by ParleyJS; see
+  [Workers (not supported)](./worker-communication.md) for alternatives
 - Coordinate multiple windows →
   [Multi-Window Communication](./multi-window-communication.md)
 
@@ -115,7 +115,8 @@ If you're stuck:
 
 - [iFrame Communication](./iframe-communication.md)
 - [Popup Communication](./popup-communication.md)
-- [Worker Communication](./worker-communication.md)
 - [Multi-Window Communication](./multi-window-communication.md)
+- [Micro-Frontends](./micro-frontends.md)
+- [Workers (not supported)](./worker-communication.md)
 
-**Back to**: [Documentation Home](./index.md) | [Project Home](../../index.md)
+**Back to**: [Documentation Home](./index.md) | [Project Home](../index.md)

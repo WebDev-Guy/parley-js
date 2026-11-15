@@ -243,16 +243,11 @@
             }
         }
 
-        // Initialize on page load
-        window.addEventListener('load', () => {
-            log('Child iframe loaded', 'info');
-            updateUI();
-
-            // Delay to ensure parent has connected first
-            setTimeout(() => {
-                initParley();
-            }, 500);
-        });
+        // Initialize and connect right away. No load listener or delay is
+        // needed: connect() re-sends the handshake until the parent answers.
+        log('Child iframe loaded', 'info');
+        updateUI();
+        initParley();
     </script>
 </body>
 

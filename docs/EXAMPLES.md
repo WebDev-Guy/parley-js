@@ -29,9 +29,10 @@ For reusable patterns and best practices, see
 **Parent Window:**
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'],
 });
 
@@ -50,9 +51,10 @@ async function fetchUserData(userId: string) {
 **Child Window:**
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://parent.example.com'],
 });
 
@@ -90,7 +92,7 @@ await parley.send(
 
 ```typescript
 // Send to all connected targets
-await parley.broadcast('config-update', {
+parley.broadcast('config-update', {
     theme: 'dark',
     language: 'en',
 });
@@ -119,9 +121,10 @@ For complete iframe setup guide, see
         </div>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley } from 'ignite-parleyjs';
 
             const parley = Parley.create({
+                targetType: 'iframe',
                 allowedOrigins: ['https://widget.example.com'],
             });
 
@@ -153,9 +156,10 @@ For complete iframe setup guide, see
 **Widget (widget.example.com):**
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://parent.example.com'],
 });
 
@@ -193,9 +197,11 @@ function onItemSelect(item: Item) {
 **Main Window:**
 
 ```typescript
-import { Parley, ConnectionError } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
+// Popups need an instance with targetType: 'window'
 const parley = Parley.create({
+    targetType: 'window',
     allowedOrigins: ['https://auth.example.com'],
 });
 
@@ -216,38 +222,55 @@ async function loginWithOAuth(provider: string): Promise<AuthToken> {
         throw new Error('Popup blocked');
     }
 
-    // Connect to popup
-    await parley.connect(popup, 'oauth-popup');
+    // Register handlers before connecting, then wait for the token
+    const result = new Promise<AuthToken>((resolve, reject) => {
+        const cleanup = () => {
+            offSuccess();
+            offError();
+            offDisconnected();
+        };
 
-    // Wait for token
-    return new Promise((resolve, reject) => {
-        parley.on<{ token: AuthToken }>('oauth:success', (payload, respond) => {
-            resolve(payload.token);
-            parley.disconnect('oauth-popup');
-        });
-
-        parley.on<{ error: string }>('oauth:error', (payload, respond) => {
-            reject(new Error(payload.error));
-            parley.disconnect('oauth-popup');
-        });
-
-        // Handle popup close
-        const checkClosed = setInterval(() => {
-            if (popup.closed) {
-                clearInterval(checkClosed);
-                reject(new Error('Popup closed'));
+        const offSuccess = parley.on<{ token: AuthToken }>(
+            'oauth:success',
+            (payload) => {
+                cleanup();
+                resolve(payload.token);
             }
-        }, 500);
+        );
+
+        const offError = parley.on<{ error: string }>(
+            'oauth:error',
+            (payload) => {
+                cleanup();
+                reject(new Error(payload.error));
+            }
+        );
+
+        // ParleyJS detects a closed popup (reason 'connection_lost') and
+        // emits system:disconnected; no polling needed
+        const offDisconnected = parley.onSystem(
+            SYSTEM_EVENTS.DISCONNECTED,
+            (event: { targetId: string; reason: string }) => {
+                if (event.targetId === 'oauth-popup') {
+                    cleanup();
+                    reject(new Error(`Popup closed (${event.reason})`));
+                }
+            }
+        );
     });
+
+    await parley.connect(popup, 'oauth-popup');
+    return result;
 }
 ```
 
 **OAuth Popup (auth.example.com):**
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'window',
     allowedOrigins: ['https://app.example.com'],
 });
 
@@ -285,17 +308,45 @@ function onOAuthError(error: string) {
 
 ### Custom Hook
 
-```typescript
-// hooks/useParley.ts
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Parley, SYSTEM_EVENTS, type ParleyConfig } from 'parley-js';
+The hook creates the instance, registers handlers, and connects inside one
+`useEffect`, after React has attached the iframe element to the ref. (Returning
+`parleyRef.current` from a hook and connecting from the component does not work:
+the ref is still `null` during the first render, and changing a ref does not
+trigger a re-render.)
 
-export function useParley(config: ParleyConfig) {
+```typescript
+// hooks/useParleyIframe.ts
+import {
+    useEffect,
+    useRef,
+    useState,
+    useCallback,
+    type RefObject,
+} from 'react';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
+
+export function useParleyIframe(
+    iframeRef: RefObject<HTMLIFrameElement>,
+    options: {
+        origin: string;
+        targetId: string;
+        setup?: (parley: Parley) => void; // register on() handlers here
+    }
+) {
     const parleyRef = useRef<Parley | null>(null);
     const [isConnected, setIsConnected] = useState(false);
+    const { origin, targetId } = options;
+    const setupRef = useRef(options.setup);
+    setupRef.current = options.setup;
 
     useEffect(() => {
-        const parley = Parley.create(config);
+        const iframe = iframeRef.current;
+        if (!iframe) return;
+
+        const parley = Parley.create({
+            targetType: 'iframe',
+            allowedOrigins: [origin],
+        });
         parleyRef.current = parley;
 
         parley.onSystem(SYSTEM_EVENTS.CONNECTED, () => setIsConnected(true));
@@ -303,30 +354,29 @@ export function useParley(config: ParleyConfig) {
             setIsConnected(false)
         );
 
+        // Register handlers before connecting
+        setupRef.current?.(parley);
+
+        // No load wait needed: the iframe page re-sends its handshake
+        parley.connect(iframe, targetId).catch(console.error);
+
         return () => {
             parley.destroy();
+            parleyRef.current = null;
         };
-    }, []);
+    }, [iframeRef, origin, targetId]);
 
     const send = useCallback(
-        async <T, R>(
-            targetId: string,
-            type: string,
-            payload: T
-        ): Promise<R> => {
+        async <T, R>(type: string, payload: T): Promise<R | undefined> => {
             if (!parleyRef.current) {
                 throw new Error('Parley not initialized');
             }
-            return parleyRef.current.send<T, R>(targetId, type, payload);
+            return parleyRef.current.send<T, R>(type, payload, { targetId });
         },
-        []
+        [targetId]
     );
 
-    return {
-        parley: parleyRef.current,
-        isConnected,
-        send,
-    };
+    return { isConnected, send };
 }
 ```
 
@@ -334,8 +384,8 @@ export function useParley(config: ParleyConfig) {
 
 ```tsx
 // components/IframeWidget.tsx
-import { useEffect, useRef, useState } from 'react';
-import { useParley } from '../hooks/useParley';
+import { useRef } from 'react';
+import { useParleyIframe } from '../hooks/useParleyIframe';
 
 interface WidgetProps {
     src: string;
@@ -345,23 +395,16 @@ interface WidgetProps {
 
 export function IframeWidget({ src, origin, onData }: WidgetProps) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
-    const [isReady, setIsReady] = useState(false);
-    const { parley, isConnected } = useParley({
-        allowedOrigins: [origin],
+    const onDataRef = useRef(onData);
+    onDataRef.current = onData;
+
+    const { isConnected: isReady } = useParleyIframe(iframeRef, {
+        origin,
+        targetId: 'widget',
+        setup: (parley) => {
+            parley.on('widget:data', (payload) => onDataRef.current?.(payload));
+        },
     });
-
-    useEffect(() => {
-        if (!parley || !iframeRef.current) return;
-
-        parley
-            .connect(iframeRef.current, 'widget')
-            .then(() => setIsReady(true))
-            .catch(console.error);
-
-        if (onData) {
-            parley.on('widget:data', onData);
-        }
-    }, [parley, origin, onData]);
 
     return (
         <div className="widget-container">
@@ -385,7 +428,7 @@ export function IframeWidget({ src, origin, onData }: WidgetProps) {
 ```typescript
 // composables/useParley.ts
 import { ref, onMounted, onUnmounted } from 'vue';
-import { Parley, SYSTEM_EVENTS, type ParleyConfig } from 'parley-js';
+import { Parley, SYSTEM_EVENTS, type ParleyConfig } from 'ignite-parleyjs';
 
 export function useParley(config: ParleyConfig) {
     const parley = ref<Parley | null>(null);
@@ -411,7 +454,7 @@ export function useParley(config: ParleyConfig) {
         type: string,
         payload: T,
         targetId?: string
-    ): Promise<R> {
+    ): Promise<R | undefined> {
         if (!parley.value) {
             throw new Error('Parley not initialized');
         }
@@ -458,19 +501,23 @@ const iframeEl = ref<HTMLIFrameElement>();
 const isReady = ref(false);
 
 const { parley, isConnected } = useParley({
+    targetType: 'iframe',
     allowedOrigins: [props.origin],
 });
 
+// Runs after the composable's onMounted (registered first), so parley exists
 onMounted(async () => {
     if (!parley.value || !iframeEl.value) return;
 
+    // Register handlers before connecting
+    parley.value.on('widget:data', (payload) => {
+        emit('data', payload);
+    });
+
+    // No load wait needed: the iframe page re-sends its handshake
     await parley.value.connect(iframeEl.value, 'widget');
 
     isReady.value = true;
-
-    parley.value.on('widget:data', (payload, respond) => {
-        emit('data', payload);
-    });
 });
 </script>
 ```
@@ -484,6 +531,7 @@ onMounted(async () => {
 ```typescript
 // Parent: Share session with embedded widget
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://widget.example.com'],
 });
 
@@ -571,9 +619,10 @@ monitoring and graceful disconnect handling.
 **Parent Window:**
 
 ```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'],
     heartbeat: {
         enabled: true,
@@ -607,17 +656,21 @@ parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
     showWarning('Connection unstable');
 });
 
-// Connection lost - other side disconnected or heartbeat failed
+// Connection lost - heartbeat failed, repeated timeouts, or window closed
 parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
     console.error(`Lost connection to ${event.targetId}`);
-    console.log(`Reason: ${event.reason}`); // 'heartbeat_timeout', 'max_failures_reached'
+    // 'heartbeat_timeout' | 'max_failures_reached' | 'connection_lost' | 'cleanup'
+    console.log(`Reason: ${event.reason}`);
     updateUI('disconnected');
     showReconnectButton();
 });
 
-// Normal disconnect (local side initiated)
+// Every disconnect ends here (always follows system:connection_lost)
 parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
-    console.log(`Disconnected from ${event.targetId}`);
+    // reason: 'manual_disconnect' (local disconnect() or the peer's),
+    // 'connection_lost', 'heartbeat_timeout', 'max_failures_reached',
+    // 'cleanup', or 'destroyed' (destroy() was called)
+    console.log(`Disconnected from ${event.targetId}: ${event.reason}`);
 });
 
 // Connect to iframe
@@ -638,9 +691,10 @@ async function disconnectFromChild() {
 **Child Window:**
 
 ```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://parent.example.com'],
     heartbeat: {
         enabled: true,
@@ -666,13 +720,13 @@ await parley.connect(window.parent, 'parent');
 
 ### Reconnection Logic
 
+ParleyJS does not reconnect automatically. The class below is application code
+that reconnects to iframes after an unexpected loss. The page inside the iframe
+must also call `connect(window.parent, ...)` again (it does so naturally if the
+iframe reloaded).
+
 ```typescript
-import {
-    Parley,
-    SYSTEM_EVENTS,
-    ConnectionError,
-    type ParleyConfig,
-} from 'parley-js';
+import { Parley, SYSTEM_EVENTS, type ParleyConfig } from 'ignite-parleyjs';
 
 class ReconnectingParley {
     private parley: Parley;
@@ -681,14 +735,29 @@ class ReconnectingParley {
     private reconnectDelay = 1000;
 
     constructor(config: ParleyConfig) {
+        // config must include targetType: 'iframe' for reconnectToTarget below
         this.parley = Parley.create(config);
         this.setupLifecycleHandlers();
     }
 
     private setupLifecycleHandlers() {
-        this.parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, async (event) => {
-            console.log(`Connection lost: ${event.reason}`);
-            await this.attemptReconnect(event.targetId);
+        // system:disconnected follows system:connection_lost, so the target
+        // has been cleaned up and can be connected again
+        this.parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, async (event) => {
+            const { targetId, reason } = event as {
+                targetId: string;
+                reason: string;
+            };
+            // Only reconnect after unexpected losses, not after
+            // disconnect()/destroy()
+            if (
+                reason === 'heartbeat_timeout' ||
+                reason === 'max_failures_reached' ||
+                reason === 'connection_lost'
+            ) {
+                console.log(`Connection lost: ${reason}`);
+                await this.attemptReconnect(targetId);
+            }
         });
 
         this.parley.onSystem(SYSTEM_EVENTS.CONNECTED, () => {
@@ -744,7 +813,7 @@ class ReconnectingParley {
 ### Connection Health Dashboard
 
 ```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 // Track connection health metrics
 interface ConnectionHealth {
@@ -812,6 +881,7 @@ For environments where heartbeat is not needed:
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted.example.com'],
     heartbeat: {
         enabled: false, // Disable heartbeat monitoring
@@ -833,14 +903,18 @@ import {
     SecurityError,
     TargetNotFoundError,
     ConnectionError,
-} from 'parley-js';
+    SerializationError,
+    ParleyError,
+} from 'ignite-parleyjs';
 
 async function safeSend<T, R>(
     parley: Parley,
     targetId: string,
     type: string,
     payload: T
-): Promise<{ success: true; data: R } | { success: false; error: Error }> {
+): Promise<
+    { success: true; data: R | undefined } | { success: false; error: Error }
+> {
     try {
         const data = await parley.send<T, R>(type, payload, { targetId });
         return { success: true, data };
@@ -853,7 +927,7 @@ async function safeSend<T, R>(
 
         if (error instanceof ValidationError) {
             // Handle validation - show form errors
-            console.error('Validation failed:', error.details);
+            console.error('Validation failed:', error.validationErrors);
             return { success: false, error };
         }
 
@@ -871,8 +945,26 @@ async function safeSend<T, R>(
         }
 
         if (error instanceof ConnectionError) {
-            // Handle connection issues
+            // Handle connection issues (e.g. ERR_CONNECTION_CLOSED when the
+            // target disconnected while the request was pending)
             console.error('Connection error:', error.message);
+            return { success: false, error };
+        }
+
+        if (error instanceof SerializationError) {
+            // Payload had a circular reference or a BigInt
+            console.error('Payload not serializable:', error.code);
+            return { success: false, error };
+        }
+
+        if (
+            error instanceof ParleyError &&
+            (error.code === 'ERR_HANDLER_ERROR' ||
+                error.code === 'ERR_NO_HANDLER')
+        ) {
+            // The other side's handler threw ('Handler error' unless it set
+            // exposeHandlerErrors: true), or it has no handler for this type
+            console.error('Remote handler problem:', error.code, error.message);
             return { success: false, error };
         }
 
@@ -884,6 +976,11 @@ async function safeSend<T, R>(
 
 ### Retry with Exponential Backoff
 
+For simple cases use the built-in `retries` option
+(`send(type, payload, { targetId, retries: 2 })`): each retry re-sends the same
+message (same id) after another `timeout`, with no backoff. The helper below is
+optional application code for when you want growing delays:
+
 ```typescript
 async function sendWithRetry<T, R>(
     parley: Parley,
@@ -891,7 +988,7 @@ async function sendWithRetry<T, R>(
     type: string,
     payload: T,
     maxRetries = 3
-): Promise<R> {
+): Promise<R | undefined> {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -923,18 +1020,30 @@ async function sendWithRetry<T, R>(
 
 ## Analytics Integration
 
+Analytics events are only emitted when the instance is created with
+`analyticsEnabled: true`. Event fields are top-level: `type`, `messageType`,
+`messageId`, `targetId?`, `timestamp`, plus `success` (response events),
+`duration` (`response_received`), and `errorCode` / `errorMessage?` (`error` and
+`timeout` events).
+
 ### Google Analytics
 
 ```typescript
-parley.onAnalytics((event) => {
+import { Parley } from 'ignite-parleyjs';
+
+const parley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.example.com'],
+    analyticsEnabled: true,
+});
+
+parley.onAnalyticsEvent((event) => {
     gtag('event', event.type, {
         event_category: 'parley',
-        event_label: event.data.messageType,
-        value: event.data.duration,
-        custom_map: {
-            target_id: event.data.targetId,
-            message_id: event.data.messageId,
-        },
+        event_label: event.messageType,
+        value: 'duration' in event ? event.duration : undefined,
+        target_id: event.targetId,
+        message_id: event.messageId,
     });
 });
 ```
@@ -950,7 +1059,8 @@ class ParleyAnalytics {
         parley: Parley,
         config: { batchSize: number; flushMs: number }
     ) {
-        parley.onAnalytics((event) => {
+        // Requires analyticsEnabled: true on the instance
+        parley.onAnalyticsEvent((event) => {
             this.events.push(event);
 
             if (this.events.length >= config.batchSize) {
@@ -997,20 +1107,18 @@ const analytics = new ParleyAnalytics(parley, {
 
 ## More Examples
 
-For complete working examples, see the `/examples` directory:
+For complete working examples, see the `examples/` directory in the repository:
 
 - `examples/basic/` - Simple parent-child iframe communication
-- `examples/window-to-window/` - Communication between separate browser windows
-- `examples/react-widget/` - React integration
-- `examples/vue-widget/` - Vue integration
-- `examples/oauth-popup/` - OAuth flow
-- `examples/multi-target/` - Multiple targets
+- `examples/authenticated/` - Token-based authenticated communication between
+  parent and iframe
+- `examples/react-integration/` - React parent page with an iframe child
+- `examples/window-to-window/` - Communication between a page and a popup window
 
 Each example includes:
 
-- Complete source code
-- README with setup instructions
-- Working demo
+- HTML pages for both sides
+- README with setup instructions (serve the files over http(s), not `file://`)
 
 ---
 
@@ -1026,6 +1134,6 @@ Each example includes:
 
 - [Security Guide](./SECURITY.md) - Secure coding practices
 - [Testing Patterns](./TESTING_PATTERNS.md) - Testing these examples
-- [Live Examples](../examples/) - Working code examples
+- [Example Walkthroughs](./examples/index.md) - Step-by-step examples
 
 **Back to**: [Documentation Home](./index.md)

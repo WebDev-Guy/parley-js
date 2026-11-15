@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Troubleshooting](./index.md) > Common Errors
+[Home](../index.md) > [Troubleshooting](./index.md) > Common Errors
 
 # Common ParleyJS Errors and Solutions
 
@@ -17,6 +17,9 @@ guide uses an FAQ-style format to help you quickly diagnose and fix issues.
 8. [Serialization Errors](#serialization-errors)
 9. [Cross-Origin Errors](#cross-origin-errors)
 10. [Performance Issues](#performance-issues)
+11. [Configuration Errors](#configuration-errors)
+12. [Handler Errors](#handler-errors)
+13. [Rate Limit Errors](#rate-limit-errors)
 
 ---
 
@@ -27,14 +30,18 @@ guide uses an FAQ-style format to help you quickly diagnose and fix issues.
 **Symptoms**:
 
 ```
-Error: ERR_SECURITY_ORIGIN_MISMATCH - Message from unexpected origin
-SecurityError: Origin validation failed
 Messages silently dropped with no error
+connect() rejects with ERR_CONNECTION_HANDSHAKE_FAILED (handshake never arrives)
+With logLevel 'debug' or 'warn': "Message from disallowed origin blocked"
+system:error with ERR_SECURITY_ORIGIN_MISMATCH (only with a custom SecurityLayer)
 ```
 
 **Root Cause**: The origin of the incoming message does not match any origin in
-the `allowedOrigins` configuration. Origins must match exactly including
-protocol, hostname, and port.
+the `allowedOrigins` configuration. Origins must match exactly (after
+normalization to the URL origin, lowercase) including protocol, hostname, and
+port. Messages from origins that are not allowed are dropped silently by the
+channel; `system:error` with `ERR_SECURITY_ORIGIN_MISMATCH` is emitted only when
+a custom `SecurityLayer.validateOrigin()` rejects a message.
 
 **Solution**:
 
@@ -58,6 +65,7 @@ window.addEventListener('message', (event) => {
 
 // CORRECT - Protocols match
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'], // Match exactly
 });
 ```
@@ -76,17 +84,19 @@ allowedOrigins: ['https://app.example.com', 'https://dashboard.example.com'];
 **Step 4**: Verify port if specified (or omit for defaults).
 
 ```typescript
-// WRONG - Explicit default ports
-allowedOrigins: ['https://example.com:443'];
+// WRONG - Port missing for a non-default port
+allowedOrigins: ['http://localhost'];
+// Child is on: http://localhost:3000
 
-// CORRECT - Omit default ports (443 for https, 80 for http)
-allowedOrigins: ['https://example.com'];
+// CORRECT - Include non-default ports (default ports 443/80 can be omitted)
+allowedOrigins: ['http://localhost:3000'];
 ```
 
 **Step 5**: Update configuration with exact origin.
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         'https://exact-origin.com', // Use exact origin from console log
     ],
@@ -96,13 +106,17 @@ const parley = Parley.create({
 **Prevention**:
 
 - Use environment variables for origins in different environments
-- Never use wildcard `'*'` in production (security risk)
+- Wildcards are not supported: `Parley.create()` rejects `'null'` and any entry
+  containing `'*'` (including patterns like `'*.example.com'`)
+- Serve pages over http(s); `file://` pages have the `'null'` origin and are not
+  supported
 - Log origins during development to verify exact values
 - Remember that `localhost` and `127.0.0.1` are different origins
 
 ```typescript
 // Use environment-based configuration
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         process.env.NODE_ENV === 'development'
             ? 'http://localhost:3000'
@@ -116,7 +130,8 @@ const parley = Parley.create({
 - [Origin Validation Guide](../security/origin-validation.md) - Complete origin
   validation documentation
 - [Security Best Practices](../security/index.md) - Security configuration
-- [Parley.create()](../api-reference/methods.md#create) - Configuration options
+- [Parley.create()](../api-reference/methods.md#parleycreate) - Configuration
+  options
 
 ---
 
@@ -127,15 +142,18 @@ const parley = Parley.create({
 **Symptoms**:
 
 ```
-send() completes without error
 Handler function never invoked
-No console errors or warnings
-Silent failure with no feedback
+send() rejects with ERR_NO_HANDLER (receiver has no handler for that type)
+send() with expectsResponse: false, or broadcast(), completes with no feedback
+send() times out (message dropped by origin or source checks)
 ```
 
-**Root Cause**: Message handlers are registered after messages are sent, message
-type strings don't match exactly, or origin validation is silently rejecting
-messages.
+**Root Cause**: Message handlers are registered on the receiving side after
+messages arrive, message type strings don't match exactly, or origin validation
+is silently rejecting messages. When a request (the default
+`expectsResponse: true`) reaches a window with no handler for its type, the
+sender's `send()` rejects with `ERR_NO_HANDLER`. Fire-and-forget messages and
+`broadcast()` give no such feedback.
 
 **Solution**:
 
@@ -143,7 +161,7 @@ messages.
 
 ```typescript
 // WRONG - Race condition
-await parley.connect(iframe.contentWindow, 'child');
+await parley.connect(iframe, 'child');
 await parley.send('hello', { text: 'Hi' }, { targetId: 'child' });
 parley.on('hello', (payload) => {
     console.log(payload); // Never called - registered too late!
@@ -153,7 +171,7 @@ parley.on('hello', (payload) => {
 parley.on('hello', (payload) => {
     console.log(payload); // Called correctly
 });
-await parley.connect(iframe.contentWindow, 'child');
+await parley.connect(iframe, 'child');
 await parley.send('hello', { text: 'Hi' }, { targetId: 'child' });
 ```
 
@@ -173,10 +191,11 @@ parley.on('user-login', (data) => {}); // Called correctly
 **Step 3**: Check for origin validation issues.
 
 ```typescript
-// Enable debug mode to see rejected messages
+// Enable debug logging to see blocked and received messages
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'],
-    debug: true, // Logs all messages and rejections
+    logLevel: 'debug', // Logs messages, rejections and errors
 });
 
 // Listen for system events
@@ -189,7 +208,7 @@ parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
 
 ```typescript
 // Parent must connect
-await parley.connect(iframe.contentWindow, 'child');
+await parley.connect(iframe, 'child');
 
 // Child must also connect (in iframe)
 await parley.connect(window.parent, 'parent');
@@ -212,7 +231,7 @@ console.log('Connected targets:', parley.getConnectedTargets());
 
 - Always register handlers during initialization, before connecting
 - Use constants for message types to avoid typos
-- Enable debug mode during development
+- Use `logLevel: 'debug'` during development
 - Monitor system events for errors
 - Use TypeScript for type safety on message types
 
@@ -251,14 +270,18 @@ await parley.send(MESSAGE_TYPES.USER_LOGIN, data, { targetId: 'child' });
 
 ```
 TimeoutError: ERR_TIMEOUT_NO_RESPONSE - No response received within timeout period
-Request never resolves or rejects
 Long wait before error is thrown
 Handler appears to run but timeout still occurs
 ```
 
-**Root Cause**: Handler never calls `respond()`, handler throws an error before
-responding, timeout value is too short for the operation, or handler is not
-registered at all.
+**Root Cause**: The handler never calls `respond()` (a handler's return value is
+ignored), the timeout value is too short for the operation, or the message never
+reached the other side (wrong origin, target not connected on that side).
+
+These are NOT timeouts: a handler that throws makes `send()` reject with
+`ERR_HANDLER_ERROR` (message `'Handler error'` unless the receiver set
+`exposeHandlerErrors: true`), and a missing handler makes it reject with
+`ERR_NO_HANDLER`.
 
 **Solution**:
 
@@ -279,16 +302,17 @@ parley.on('get-data', async (payload, respond) => {
 });
 ```
 
-**Step 2**: Catch errors in handler and respond with error.
+**Step 2**: Decide how handler errors should reach the sender.
 
 ```typescript
-// WRONG - Handler throws error, no response sent
+// If the handler throws, ParleyJS responds with an error automatically:
+// the sender's send() rejects with ERR_HANDLER_ERROR ('Handler error').
 parley.on('get-data', async (payload, respond) => {
     const data = await fetchData(payload.id); // Throws error
-    respond({ data }); // Never reached!
+    respond({ data }); // Not reached; sender gets ERR_HANDLER_ERROR
 });
 
-// CORRECT - Catch errors and respond
+// To give the sender a structured result instead, catch and respond
 parley.on('get-data', async (payload, respond) => {
     try {
         const data = await fetchData(payload.id);
@@ -323,18 +347,22 @@ await parley.send(
 );
 ```
 
-**Step 4**: Verify handler is registered.
+**Step 4**: Verify the message reaches the other side.
 
 ```typescript
-// Debug: Check registered handlers
-console.log('Registered handlers:', parley.getRegisteredHandlers());
+// Sender: is the target connected?
+console.log('Connected targets:', parley.getConnectedTargets());
+console.log('Child connected:', parley.isConnected('child'));
 
-// Make sure handler exists
-parley.on('get-data', async (payload, respond) => {
-    // Handler implementation
-    respond({ data: 'response' });
+// Receiver: log every inbound message
+childParley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
+    console.log('Received', event.messageType, 'from', event.origin);
 });
 ```
+
+There is no API to list registered handlers. If the message arrives but no
+handler exists for its type, `send()` rejects with `ERR_NO_HANDLER` rather than
+timing out.
 
 **Step 5**: Handle fire-and-forget vs request-response correctly.
 
@@ -363,9 +391,12 @@ await parley.send(
 
 **Prevention**:
 
-- Always call `respond()` in handlers, even for errors
-- Wrap handler logic in try-catch and respond with error state
-- Set appropriate timeouts based on operation complexity
+- Always call `respond()` in handlers that answer requests
+- Wrap handler logic in try-catch if the sender should get a structured error
+  instead of `ERR_HANDLER_ERROR`
+- Set appropriate timeouts based on operation complexity, and use `retries` for
+  flaky targets (each retry re-sends the same message after another `timeout`,
+  with no backoff)
 - Use `expectsResponse: false` for notifications
 - Monitor system timeout events during development
 
@@ -393,7 +424,8 @@ parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
     console.warn('Timeout occurred:', {
         messageType: event.messageType,
         messageId: event.messageId,
-        timeout: event.timeout,
+        timeoutMs: event.timeoutMs,
+        retriesAttempted: event.retriesAttempted,
     });
 });
 ```
@@ -411,16 +443,21 @@ parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
 
 ## Type Validation Errors
 
-### ERR_VALIDATION_TYPE_MISMATCH
+### ERR_VALIDATION_SCHEMA_MISMATCH
 
 **Symptoms**:
 
 ```
-ValidationError: ERR_VALIDATION_TYPE_MISMATCH - Field type does not match schema
-ValidationError: ERR_VALIDATION_REQUIRED_FIELD_MISSING - Required field missing
 ValidationError: ERR_VALIDATION_SCHEMA_MISMATCH - Schema validation failed
+send() rejects with ERR_VALIDATION_SCHEMA_MISMATCH from the remote side
 Runtime errors about undefined properties
 ```
+
+All schema failures (wrong type, missing required field, and so on) use the
+single code `ERR_VALIDATION_SCHEMA_MISMATCH`. The details are in
+`error.validationErrors` (an array of
+`{ path, message, expected?, received?, rule? }`). The same code is used when a
+serialized payload exceeds the fixed 10 MB limit.
 
 **Root Cause**: Payload does not match the registered schema, required fields
 are missing, field types don't match schema definition, or no schema is
@@ -523,8 +560,8 @@ interface CreateUserResponse {
     error?: string;
 }
 
-// Register with schema
-parley.register<CreateUserPayload>('create-user', {
+// Register with schema (register() is not generic)
+parley.register('create-user', {
     schema: {
         type: 'object',
         required: ['name', 'email'],
@@ -540,10 +577,9 @@ parley.on<CreateUserPayload>('create-user', (payload, respond) => {
     // payload is typed as CreateUserPayload
     const user = createUser(payload.name, payload.email);
 
-    respond<CreateUserResponse>({
-        success: true,
-        user,
-    });
+    // respond() is not generic; annotate the value instead
+    const response: CreateUserResponse = { success: true, user };
+    respond(response);
 });
 
 // Type-safe send
@@ -591,12 +627,14 @@ parley.register('create-post', {
 - Handle validation errors gracefully
 
 ```typescript
-// Validation helper
-function validateBeforeSend(messageType, payload, schema) {
-    // Use JSON Schema validator library
-    const valid = validateSchema(payload, schema);
+import { validateSchema } from 'ignite-parleyjs';
 
-    if (!valid) {
+// Validation helper. validateSchema() returns { valid, errors }, not a boolean.
+function validateBeforeSend(messageType, payload, schema) {
+    const result = validateSchema(payload, schema);
+
+    if (!result.valid) {
+        console.error(result.errors); // [{ path, message, ... }]
         throw new Error(`Invalid payload for ${messageType}`);
     }
 }
@@ -613,7 +651,7 @@ await parley.send('create-user', payload, { targetId: 'child' });
 - [Message Validation](../security/message-validation.md) - Payload validation
 - [register() Method](../api-reference/methods.md#register) - Schema
   registration
-- [TypeScript Support](../guides/typescript.md) - Type-safe usage
+- [TypeScript Support](../api-reference/types.md) - Type-safe usage
 - [Testing Validation](../patterns/error-handling.md#validation-errors) -
   Testing validation
 
@@ -621,19 +659,35 @@ await parley.send('create-user', payload, { targetId: 'child' });
 
 ## Channel Closed Errors
 
-### ERR_CONNECTION_CLOSED / ERR_TARGET_CLOSED
+### ERR_CONNECTION_CLOSED / Connection Lost
 
 **Symptoms**:
 
 ```
-ConnectionError: ERR_CONNECTION_CLOSED - Channel was closed unexpectedly
-TargetError: ERR_TARGET_CLOSED - Target window is closed
+ConnectionError: ERR_CONNECTION_CLOSED - Target disconnected
+ConnectionError: ERR_CONNECTION_CLOSED - Parley instance destroyed
+TargetNotFoundError: ERR_TARGET_NOT_CONNECTED on later send() calls
+system:connection_lost followed by system:disconnected
 Messages fail after connection was working
-Cannot reconnect after disconnect
 ```
 
-**Root Cause**: Target window was closed (popup/iframe removed), connection was
-explicitly destroyed, or window reference became invalid.
+**Root Cause**: Target window was closed (popup closed or iframe removed), the
+peer called `disconnect()`, heartbeats stopped being answered, or the instance
+was destroyed.
+
+What ParleyJS does:
+
+- A closed popup is detected automatically (polling about once per second):
+  `system:connection_lost` fires with reason `'connection_lost'`, followed by
+  `system:disconnected`. Pending `send()` calls to that target reject with a
+  `ConnectionError` (`ERR_CONNECTION_CLOSED`, 'Target disconnected').
+- Missed heartbeats produce reason `'heartbeat_timeout'`; repeated request
+  timeouts to one target produce `'max_failures_reached'`.
+- A peer's `disconnect()` arrives as `system:disconnected` with reason
+  `'manual_disconnect'`.
+- After the target is disconnected, `send()` with its `targetId` rejects with
+  `ERR_TARGET_NOT_CONNECTED`.
+- There is no automatic reconnection.
 
 **Solution**:
 
@@ -648,25 +702,34 @@ if (popup && !popup.closed) {
 }
 ```
 
-**Step 2**: Listen for window close events.
+**Step 2**: React to a closed popup.
+
+ParleyJS detects closed popups for you, so you do not need your own
+`popup.closed` polling to clean up the connection:
 
 ```typescript
-// Monitor popup close
-const popup = window.open('/auth.html', 'auth', 'width=500,height=600');
+const popupParley = Parley.create({
+    targetType: 'window',
+    allowedOrigins: ['https://auth.example.com'],
+});
+
+const popup = window.open(
+    'https://auth.example.com/login',
+    'auth',
+    'width=500,height=600'
+);
 
 if (popup) {
-    await parley.connect(popup, 'auth-popup');
-
-    // Check periodically if popup is closed
-    const checkClosed = setInterval(() => {
-        if (popup.closed) {
-            clearInterval(checkClosed);
+    popupParley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
+        if (
+            event.targetId === 'auth-popup' &&
+            event.reason === 'connection_lost'
+        ) {
             console.log('Popup was closed');
-
-            // Clean up connection
-            parley.disconnect('auth-popup');
         }
-    }, 1000);
+    });
+
+    await popupParley.connect(popup, 'auth-popup');
 }
 ```
 
@@ -677,21 +740,27 @@ if (popup) {
 parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
     console.log('Disconnected from:', event.targetId, 'Reason:', event.reason);
 
-    // Attempt reconnection if appropriate
-    if (event.reason === 'CONNECTION_LOST') {
+    // Attempt reconnection if the connection dropped (not on purpose)
+    if (
+        event.reason === 'heartbeat_timeout' ||
+        event.reason === 'max_failures_reached'
+    ) {
         attemptReconnect(event.targetId);
     }
 });
 
 parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
-    console.log('Connection lost to:', event.targetId);
+    // reason: 'heartbeat_timeout' | 'max_failures_reached' |
+    //         'connection_lost' | 'cleanup'
+    console.log('Connection lost to:', event.targetId, event.reason);
 
     // Update UI to show disconnected state
     updateConnectionStatus('disconnected');
 });
 ```
 
-**Step 4**: Implement reconnection logic.
+**Step 4**: Implement reconnection logic (application code; the other side must
+also call `connect()` again).
 
 ```typescript
 async function attemptReconnect(targetId, maxAttempts = 3) {
@@ -699,14 +768,15 @@ async function attemptReconnect(targetId, maxAttempts = 3) {
         try {
             console.log(`Reconnection attempt ${attempt}/${maxAttempts}`);
 
-            // Get fresh window reference
-            const targetWindow = getTargetWindow(targetId);
+            // Get a fresh target: the iframe element for an 'iframe'
+            // instance, the popup window for a 'window' instance
+            const target = getTarget(targetId);
 
-            if (!targetWindow || targetWindow.closed) {
-                throw new Error('Window is closed');
+            if (!target || target.closed) {
+                throw new Error('Target is gone');
             }
 
-            await parley.connect(targetWindow, targetId);
+            await parley.connect(target, targetId);
             console.log('Reconnected successfully');
             return;
         } catch (error) {
@@ -729,15 +799,11 @@ async function attemptReconnect(targetId, maxAttempts = 3) {
 ```typescript
 // Graceful cleanup on page unload
 window.addEventListener('beforeunload', () => {
-    // Notify other windows
-    parley.broadcast(
-        'window-closing',
-        {
-            windowId: 'main',
-            timestamp: Date.now(),
-        },
-        { expectsResponse: false }
-    );
+    // Notify other windows (broadcast() is fire-and-forget and returns void)
+    parley.broadcast('window-closing', {
+        windowId: 'main',
+        timestamp: Date.now(),
+    });
 
     // Clean up resources
     parley.destroy();
@@ -746,19 +812,28 @@ window.addEventListener('beforeunload', () => {
 
 **Prevention**:
 
-- Always check `popup.closed` before sending messages to popups
+- Check `parley.isConnected(targetId)` before sending to targets that may go
+  away
 - Monitor connection status with system events
-- Implement automatic reconnection for critical connections
+- Implement reconnection in your own code for critical connections
 - Clean up resources when windows close
 - Handle iframe removal gracefully
 
 ```typescript
-// Robust popup pattern
+// Robust popup pattern (parley is a targetType: 'window' instance)
 class PopupManager {
     constructor(parley) {
         this.parley = parley;
         this.popup = null;
-        this.checkInterval = null;
+        this.targetId = null;
+
+        // ParleyJS reports the popup closing; no polling needed
+        this.parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+            if (event.targetId === this.targetId) {
+                this.popup = null;
+                this.targetId = null;
+            }
+        });
     }
 
     async open(url, targetId) {
@@ -768,27 +843,17 @@ class PopupManager {
             throw new Error('Popup blocked');
         }
 
+        this.targetId = targetId;
         await this.parley.connect(this.popup, targetId);
-
-        // Monitor popup status
-        this.checkInterval = setInterval(() => {
-            if (this.popup.closed) {
-                this.cleanup();
-            }
-        }, 1000);
     }
 
-    cleanup() {
-        if (this.checkInterval) {
-            clearInterval(this.checkInterval);
-            this.checkInterval = null;
+    async close() {
+        if (this.targetId && this.parley.isConnected(this.targetId)) {
+            await this.parley.disconnect(this.targetId);
         }
-
         if (this.popup && !this.popup.closed) {
             this.popup.close();
         }
-
-        this.popup = null;
     }
 }
 ```
@@ -831,6 +896,7 @@ registered in loops.
 // WRONG - Memory leak
 function setupConnection() {
     const parley = Parley.create({
+        targetType: 'iframe',
         allowedOrigins: ['https://child.com'],
     });
 
@@ -841,6 +907,7 @@ function setupConnection() {
 // CORRECT - Cleanup function
 function setupConnection() {
     const parley = Parley.create({
+        targetType: 'iframe',
         allowedOrigins: ['https://child.com'],
     });
 
@@ -864,6 +931,7 @@ cleanup();
 function ChatComponent() {
     useEffect(() => {
         const parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin]
         });
 
@@ -882,6 +950,7 @@ function ChatComponent() {
 export default {
     mounted() {
         this.parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin]
         });
 
@@ -914,7 +983,10 @@ unsubscribe();
 ```typescript
 // WRONG - Creates instance on every render
 function Component() {
-    const parley = Parley.create({ allowedOrigins: ['https://child.com'] });
+    const parley = Parley.create({
+        targetType: 'iframe',
+        allowedOrigins: ['https://child.com'],
+    });
     // New instance every render - memory leak!
 }
 
@@ -925,6 +997,7 @@ function Component() {
     useEffect(() => {
         if (!parleyRef.current) {
             parleyRef.current = Parley.create({
+                targetType: 'iframe',
                 allowedOrigins: ['https://child.com'],
             });
         }
@@ -976,6 +1049,7 @@ class ParleyManager {
         }
 
         this.parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin],
         });
 
@@ -1010,8 +1084,7 @@ window.addEventListener('beforeunload', () => {
 
 - [destroy() Method](../api-reference/methods.md#destroy) - Cleanup and resource
   management
-- [React Integration](../guides/framework-integration.md#react) -
-  Framework-specific cleanup
+- [React Integration](../EXAMPLES.md#react) - Framework-specific cleanup
 - [Performance Best Practices](../ARCHITECTURE.md#performance-considerations) -
   Memory optimization
 
@@ -1030,30 +1103,25 @@ iframe.contentWindow is null
 popup.closed returns true but code still tries to send
 ```
 
-**Root Cause**: Iframe removed from DOM but code still holds reference, popup
-closed but not detected, window navigated away, or contentWindow accessed before
-iframe loaded.
+**Root Cause**: Iframe removed from DOM but code still holds reference, window
+navigated away, the wrong kind of target was passed to `connect()`, or the
+iframe is not in the document yet.
 
 **Solution**:
 
-**Step 1**: Wait for iframe to load before accessing contentWindow.
+**Step 1**: Pass the right target to `connect()`.
 
 ```typescript
-// WRONG - contentWindow might be null
-const iframe = document.getElementById('my-iframe');
-await parley.connect(iframe.contentWindow, 'child'); // May fail!
+// WRONG - an iframe instance expects the iframe ELEMENT;
+// passing contentWindow fails with ERR_CONNECTION_FAILED
+await parley.connect(iframe.contentWindow, 'child');
 
-// CORRECT - Wait for load event
+// CORRECT - pass the element (it must be attached to the document).
+// No 'load' listener is needed: the child re-sends the handshake until the
+// parent acknowledges it. A 'load' listener added after the iframe already
+// loaded never fires and would prevent connecting.
 const iframe = document.getElementById('my-iframe');
-
-if (iframe.contentDocument?.readyState === 'complete') {
-    await parley.connect(iframe.contentWindow, 'child');
-} else {
-    await new Promise((resolve) => {
-        iframe.addEventListener('load', resolve, { once: true });
-    });
-    await parley.connect(iframe.contentWindow, 'child');
-}
+await parley.connect(iframe, 'child');
 ```
 
 **Step 2**: Check window validity before sending.
@@ -1083,7 +1151,7 @@ if (isWindowValid(popup)) {
 ```typescript
 // Monitor iframe removal
 const iframe = document.getElementById('my-iframe');
-await parley.connect(iframe.contentWindow, 'child');
+await parley.connect(iframe, 'child');
 
 // Use MutationObserver to detect removal
 const observer = new MutationObserver((mutations) => {
@@ -1104,18 +1172,16 @@ observer.observe(iframe.parentNode, { childList: true });
 **Step 4**: Re-establish connection after navigation.
 
 ```typescript
-// Child iframe navigates
-parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, async (event) => {
-    if (event.targetId === 'child') {
+// Child iframe navigates or reloads. Its page calls
+// connect(window.parent, ...) again on load; the parent reconnects too.
+parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, async (event) => {
+    if (event.targetId === 'child' && event.reason !== 'destroyed') {
         console.log('Child connection lost, attempting reconnect...');
 
-        // Wait a bit for navigation to complete
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
         const iframe = document.getElementById('child-iframe');
-        if (iframe && iframe.contentWindow) {
+        if (iframe) {
             try {
-                await parley.connect(iframe.contentWindow, 'child');
+                await parley.connect(iframe, 'child');
                 console.log('Reconnected to child');
             } catch (error) {
                 console.error('Failed to reconnect:', error);
@@ -1146,16 +1212,19 @@ class WindowManager {
         const entry = this.windows.get(targetId);
         if (!entry) return null;
 
-        // Refresh iframe reference if needed
+        // Iframe instances connect to the iframe ELEMENT, so look it up again
         if (entry.isIframe && entry.elementId) {
             const iframe = document.getElementById(entry.elementId);
-            if (iframe) {
-                entry.window = iframe.contentWindow;
+            if (!iframe) {
+                this.windows.delete(targetId);
+                return null;
             }
+            entry.window = iframe;
+            return iframe;
         }
 
-        // Validate window is still valid
-        if (!isWindowValid(entry.window)) {
+        // Validate popup window is still open
+        if (!entry.window || entry.window.closed) {
             this.windows.delete(targetId);
             return null;
         }
@@ -1167,8 +1236,10 @@ class WindowManager {
 
 **Prevention**:
 
-- Always wait for iframe load before accessing contentWindow
-- Check popup.closed before sending messages
+- Pass the iframe element (not `contentWindow`) to an iframe instance's
+  `connect()`; no load wait is needed
+- Listen for `system:connection_lost` / `system:disconnected` instead of polling
+  `popup.closed`
 - Monitor iframe removal with MutationObserver
 - Re-establish connections after navigation
 - Use window manager pattern for complex multi-window apps
@@ -1191,15 +1262,32 @@ class WindowManager {
 **Symptoms**:
 
 ```
-TypeError: Converting circular structure to JSON
-DataCloneError: Failed to execute 'postMessage'
-Messages with functions fail silently
-DOM nodes cannot be sent
+SerializationError: ERR_SERIALIZATION_CIRCULAR_REFERENCE (send() rejects)
+SerializationError: ERR_SERIALIZATION_SERIALIZE_FAILED (e.g. BigInt values)
+Functions or undefined values missing on the receiving side
+Dates arrive as strings; Map, Set, File, Blob, ArrayBuffer arrive as {}
 ```
 
-**Root Cause**: Payload contains circular references, payload includes
-functions, DOM nodes or other non-serializable objects in payload, or complex
-objects with prototype chains.
+**Root Cause**: Every payload is sanitized with a JSON round-trip before it is
+sent. Circular references and `BigInt` values cannot be serialized, so `send()`
+rejects with a `SerializationError` (since 1.1.0; earlier versions silently sent
+`{}`). Values JSON cannot represent are not errors: functions, `undefined` and
+symbols are silently dropped, `Date` becomes a string, and `Map`, `Set`, `File`,
+`Blob`, `ArrayBuffer` and typed arrays become empty objects. Class instances
+lose their prototype and methods.
+
+```typescript
+import { SerializationError } from 'ignite-parleyjs';
+
+try {
+    await parley.send('update', payload, { targetId: 'child' });
+} catch (error) {
+    if (error instanceof SerializationError) {
+        console.error(error.code, error.message);
+        // ERR_SERIALIZATION_CIRCULAR_REFERENCE or ERR_SERIALIZATION_SERIALIZE_FAILED
+    }
+}
+```
 
 **Solution**:
 
@@ -1211,7 +1299,7 @@ const user = { name: 'John' };
 user.self = user; // Circular!
 
 await parley.send('update-user', { user }, { targetId: 'child' });
-// Error: Converting circular structure to JSON
+// Rejects: SerializationError (ERR_SERIALIZATION_CIRCULAR_REFERENCE)
 
 // CORRECT - Remove circular references
 const user = { name: 'John' };
@@ -1225,11 +1313,11 @@ await parley.send('update-user', { user: safeUser }, { targetId: 'child' });
 **Step 2**: Don't send functions or methods.
 
 ```typescript
-// WRONG - Functions are not serializable
+// WRONG - Functions are silently dropped (no error is thrown)
 await parley.send(
     'callback',
     {
-        onComplete: () => console.log('Done'), // Error!
+        onComplete: () => console.log('Done'), // Arrives as missing
     },
     { targetId: 'child' }
 );
@@ -1269,12 +1357,12 @@ parley.on('start-operation', async (payload, respond) => {
 **Step 3**: Extract data from DOM nodes.
 
 ```typescript
-// WRONG - Cannot send DOM nodes
+// WRONG - DOM nodes do not survive the JSON clone
 const element = document.getElementById('user-input');
 await parley.send(
     'submit',
     {
-        element: element, // Error: DataCloneError
+        element: element, // Arrives as an empty or meaningless object
     },
     { targetId: 'child' }
 );
@@ -1388,8 +1476,8 @@ await parley.send('update', payload, { targetId: 'child' });
 **Related**:
 
 - [Message Payloads](../api-reference/methods.md#send) - Payload requirements
-- [Structured Clone Algorithm](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm) -
-  What can be cloned
+- [JSON.stringify()](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify) -
+  What survives the JSON round-trip ParleyJS applies to payloads
 - [Testing Patterns](../patterns/error-handling.md#serialization-errors) -
   Testing serialization
 
@@ -1594,7 +1682,8 @@ high-frequency updates.
 
 **Solution**:
 
-**Step 1**: Keep payloads small (< 1MB recommended).
+**Step 1**: Keep payloads small (< 1MB recommended; payloads over 10 MB
+serialized are rejected).
 
 ```typescript
 // WRONG - Sending huge payload
@@ -1776,11 +1865,11 @@ class PerformanceMonitor {
 // Use in development
 const monitor = new PerformanceMonitor();
 
-const originalSend = parley.send;
-parley.send = function (type, ...args) {
-    monitor.logMessage(type);
-    return originalSend.call(this, type, ...args);
-};
+// system:message_sent fires for every outgoing message; listeners are not
+// awaited, so they never delay delivery
+parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
+    monitor.logMessage(event.messageType);
+});
 
 // Check stats periodically
 setInterval(() => {
@@ -1794,8 +1883,134 @@ setInterval(() => {
   and debouncing
 - [Best Practices](../ARCHITECTURE.md#performance-considerations) - Performance
   optimization
-- [Batching Example](../patterns/request-response.md#batch-request-response) -
+- [Batching Example](../patterns/request-response.md#variation-3-batch-request-response) -
   Message batching
+
+---
+
+## Configuration Errors
+
+### "Configuration error: ..." thrown by Parley.create()
+
+**Symptoms**:
+
+```
+Error: Configuration error: ...
+Parley.create() throws before any connection is attempted
+```
+
+**Root Cause**: `Parley.create()` validates its configuration and throws a plain
+`Error` whose message starts with `Configuration error:` when:
+
+- `targetType` is missing or not `'iframe'` / `'window'`
+- `timeout` is not a positive number
+- `retries` is negative
+- `allowedOrigins` is not an array, is empty, or contains a non-string, an empty
+  string, `'null'` (any case), or any entry containing `'*'` (such as `'*'` or
+  `'*.example.com'`)
+
+**Solution**:
+
+```typescript
+// WRONG
+Parley.create({ allowedOrigins: ['*'] }); // no targetType, wildcard origin
+
+// CORRECT
+const parley = Parley.create({
+    targetType: 'iframe', // or 'window' for popups
+    allowedOrigins: ['https://child.example.com'],
+    timeout: 5000,
+    retries: 0,
+});
+```
+
+If you load your pages from `file://`, serve them over http(s) instead (for
+example with a local dev server). `file://` pages have the `'null'` origin,
+which cannot be allowed.
+
+---
+
+## Handler Errors
+
+### ERR_HANDLER_ERROR / ERR_NO_HANDLER
+
+**Symptoms**:
+
+```
+ParleyError: ERR_HANDLER_ERROR - Handler error
+ParleyError: ERR_NO_HANDLER
+```
+
+**Root Cause**: `ERR_HANDLER_ERROR` means the receiver's handler threw (or
+returned a rejected Promise). The sender only sees the generic message
+`'Handler error'` unless the RECEIVER was created with
+`exposeHandlerErrors: true`. `ERR_NO_HANDLER` means the receiver has no handler
+for that message type.
+
+**Solution**:
+
+```typescript
+// Receiver: see the real error locally
+childParley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
+    if (event.code === 'ERR_HANDLER_ERROR') {
+        console.error('Handler failed:', event.message, event.messageId);
+    }
+});
+
+// Or per message type
+childParley.register('get-data', {
+    onError: (error, metadata) => {
+        console.error('get-data failed:', error.message, metadata.senderId);
+    },
+});
+
+// Between trusted windows only: forward real messages to the sender
+const childParley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: ['https://parent.example.com'],
+    exposeHandlerErrors: true,
+});
+```
+
+For `ERR_NO_HANDLER`, check that the receiver calls `on()` with exactly the same
+type string before the message arrives.
+
+---
+
+## Rate Limit Errors
+
+### ERR_SECURITY_RATE_LIMITED
+
+**Symptoms**:
+
+```
+ParleyError: ERR_SECURITY_RATE_LIMITED
+send() rejects during bursts of messages
+```
+
+**Root Cause**: Rate limiting is opt-in. With
+`rateLimit: { enabled: true, messagesPerSecond: N }`, outgoing `send()` calls
+beyond `N` per one-second window (per `targetId`, or global for untargeted
+sends) are rejected. `broadcast()` and inbound messages are not rate limited.
+
+**Solution**:
+
+- Batch or debounce high-frequency messages (see
+  [Performance Issues](#performance-issues))
+- Raise `messagesPerSecond` if the limit is too strict for your use case
+- Catch the error and retry after a short delay if the message must go through
+
+```typescript
+try {
+    await parley.send('update', data, { targetId: 'child' });
+} catch (error) {
+    if (error.code === 'ERR_SECURITY_RATE_LIMITED') {
+        queueForLater(data);
+    } else {
+        throw error;
+    }
+}
+```
 
 ---
 
@@ -1803,12 +2018,13 @@ setInterval(() => {
 
 If you're still experiencing problems after trying these solutions:
 
-1. **Enable debug mode** to see detailed logs:
+1. **Enable debug logging** to see detailed logs:
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.com'],
-    debug: true,
+    logLevel: 'debug',
 });
 ```
 
@@ -1861,4 +2077,4 @@ const parley = Parley.create({
 
 **Previous**: [Troubleshooting Home](./index.md) **Next**:
 [Complete Troubleshooting Guide](../TROUBLESHOOTING.md) **Back to**:
-[Documentation Home](./index.md)
+[Documentation Home](../index.md)

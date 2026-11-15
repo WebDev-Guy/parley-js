@@ -310,7 +310,6 @@
         let parley = null;
         let popupWindow = null;
         let isConnected = false;
-        let windowCheckInterval = null;
 
         // DOM Elements
         const statusEl = document.getElementById('status');
@@ -417,7 +416,7 @@
                 const roundTrip = Date.now() - payload.originalTimestamp;
                 log(`Pong received! Round-trip: ${roundTrip}ms`, 'success');
                 showResponse({ pong: true, roundTripMs: roundTrip });
-                respond({ received: true });
+                // popup:pong is fire-and-forget, so no respond() call
             });
 
             // Use SYSTEM_EVENTS constant for type safety
@@ -430,8 +429,17 @@
                 updateUI();
             });
 
+            // Parley detects a closed popup on its own: it emits
+            // system:connection_lost and then system:disconnected with
+            // reason 'connection_lost', so no manual popup.closed polling is needed
             parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
                 log(`Disconnected from target: ${event.targetId} (${event.reason})`, 'error');
+                if (event.targetId === 'popup') {
+                    if (event.reason === 'connection_lost') {
+                        log('Popup window was closed', 'warn');
+                    }
+                    popupWindow = null;
+                }
                 isConnected = false;
                 updateUI();
             });
@@ -489,11 +497,8 @@
             updateUI();
             log('Popup window opened, waiting for connection...', 'info');
 
-            // Start checking if popup is closed
-            startWindowCheck();
-
-            // Wait for popup to load, then connect
-            // The popup will initiate the connection back to us
+            // Connect right away: the popup calls connect(window.opener) and
+            // re-sends its handshake until we answer, so no load wait is needed
             try {
                 await parley.connect(popupWindow, 'popup');
                 log('Connected to popup window!', 'success');
@@ -503,27 +508,8 @@
             }
         }
 
-        // Start checking if popup window is closed
-        function startWindowCheck() {
-            if (windowCheckInterval) {
-                clearInterval(windowCheckInterval);
-            }
-
-            windowCheckInterval = setInterval(() => {
-                if (popupWindow && popupWindow.closed) {
-                    log('Popup window was closed', 'warn');
-                    handlePopupClosed();
-                }
-            }, 500);
-        }
-
-        // Handle popup being closed
+        // Clean up after closing the popup from this window
         function handlePopupClosed() {
-            if (windowCheckInterval) {
-                clearInterval(windowCheckInterval);
-                windowCheckInterval = null;
-            }
-
             if (parley && isConnected) {
                 parley.disconnect('popup').catch(() => { });
             }
@@ -607,11 +593,11 @@
             }
         }
 
-        // Broadcast to all connected windows
-        async function broadcast() {
+        // Broadcast to all connected windows (returns void; no responses)
+        function broadcast() {
             try {
                 log('Broadcasting announcement...', 'info');
-                await parley.broadcast('announcement', {
+                parley.broadcast('announcement', {
                     message: 'Broadcast from Main Window!',
                     timestamp: Date.now(),
                 });

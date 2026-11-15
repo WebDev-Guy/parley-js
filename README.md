@@ -7,7 +7,7 @@
 <a href="https://www.typescriptlang.org/" target="_blank">![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)</a>
 <a href="https://opensource.org/licenses/MIT" target="_blank">![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)</a>
 <a href="https://prettier.io/" target="_blank">![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)</a>
-<a href="https://bundlephobia.com/package/parley-js" target="_blank">![Bundle Size](https://img.shields.io/badge/Bundle-~54KB-green)</a>
+<a href="https://bundlephobia.com/package/ignite-parleyjs" target="_blank">![Bundle Size](https://img.shields.io/badge/Bundle-~55KB%20min%20%2F%20~16KB%20gzip-green)</a>
 <a href="https://www.npmjs.com/package/ignite-parleyjs" target="_blank">![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-success)</a>
 
 **Type-safe, robust framework for window, tab, and iframe communication**
@@ -25,8 +25,8 @@
 
 - **Thoroughly Tested** - 800+ unit, integration, and security tests with
   coverage thresholds enforced in CI
-- **Security-First Design** - Origin validation, payload sanitization, DoS
-  prevention
+- **Security-First Design** - Origin validation, source-bound connections,
+  payload size limits, opt-in rate limiting
 - **Type-Safe** - Full TypeScript with JSDoc comments
 - **Zero Dependencies** - Lightweight, portable, and minimal footprint
 - **Heartbeat Monitoring** - Automatic connection health checks
@@ -51,7 +51,8 @@ runs in any modern browser (see Browser Support below).
 <script src="https://unpkg.com/ignite-parleyjs/dist/index.global.js"></script>
 <script>
     const parley = Parley.create({
-        /* options */
+        targetType: 'iframe', // or 'window'
+        /* other options */
     });
 </script>
 ```
@@ -61,10 +62,11 @@ runs in any modern browser (see Browser Support below).
 ### Parent Window
 
 ```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 // Create instance
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'],
     timeout: 5000,
 });
@@ -86,16 +88,17 @@ const response = await parley.send<{ data: number[] }, { result: number }>(
     { targetId: 'child' }
 );
 
-console.log('Sum:', response.result);
+console.log('Sum:', response?.result);
 ```
 
 ### Child Window (Iframe)
 
 ```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 // Create instance
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://parent.example.com'],
 });
 
@@ -147,17 +150,35 @@ parley.on('validated-message', (payload, respond) => {
 
 ### Connection Types
 
+Each Parley instance handles one `targetType`. Both sides call `connect()`; the
+iframe or popup side re-sends the handshake until the other side answers, so no
+`load` listeners or delays are needed. To talk to iframes and popups from the
+same page, create one instance per target type.
+
 ```typescript
-// Connect to iframe
+// targetType: 'iframe'
+// Parent page: pass the iframe element (not iframe.contentWindow)
+const iframeParley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.example.com'],
+});
 const iframe = document.getElementById('my-iframe') as HTMLIFrameElement;
-await parley.connect(iframe, 'iframe-id');
+await iframeParley.connect(iframe, 'iframe-id');
 
-// Connect to popup/new window
-const popup = window.open('https://example.com/popup', '_blank');
-await parley.connect(popup, 'popup-id');
-
-// Connect to parent (from iframe)
+// Inside the iframe (its own 'iframe' instance): connect to the parent
 await parley.connect(window.parent, 'parent-id');
+
+// targetType: 'window'
+// Opener page: connect to the popup
+const windowParley = Parley.create({
+    targetType: 'window',
+    allowedOrigins: ['https://example.com'],
+});
+const popup = window.open('https://example.com/popup', '_blank');
+await windowParley.connect(popup!, 'popup-id');
+
+// Inside the popup (its own 'window' instance): connect to the opener
+await parley.connect(window.opener, 'opener-id');
 ```
 
 ### Fire-and-Forget vs Request/Response
@@ -184,8 +205,8 @@ const response = await parley.send<RequestType, ResponseType>(
 ### Broadcasting
 
 ```typescript
-// Send to all connected targets
-await parley.broadcast('update', { timestamp: Date.now() });
+// Send to all connected targets (fire-and-forget: returns void, no responses)
+parley.broadcast('update', { timestamp: Date.now() });
 ```
 
 ---
@@ -201,7 +222,7 @@ New to ParleyJS? Start here:
 
 - **[Getting Started](https://www.parleyjs.com/docs/getting-started/)** -
   Installation, first example, and core concepts
-- **[Framework Reference](https://www.parleyjs.com/docs/framework-reference)** -
+- **[Framework Reference](https://www.parleyjs.com/docs/FRAMEWORK_REFERENCE)** -
   Quick reference guide with common patterns
 - **[Examples](https://www.parleyjs.com/docs/examples/)** - Real-world code
   examples to learn from
@@ -232,11 +253,11 @@ Choose the guide that matches your scenario:
 
 ### Advanced Topics
 
-- **[Architecture](https://www.parleyjs.com/docs/architecture)** - Internal
+- **[Architecture](https://www.parleyjs.com/docs/ARCHITECTURE)** - Internal
   design and architecture
-- **[Testing Guide](https://www.parleyjs.com/docs/testing)** - Comprehensive
+- **[Testing Guide](https://www.parleyjs.com/docs/TESTING)** - Comprehensive
   testing documentation
-- **[Testing Patterns](https://www.parleyjs.com/docs/testing-patterns)** -
+- **[Testing Patterns](https://www.parleyjs.com/docs/TESTING_PATTERNS)** -
   Testing strategies and patterns
 
 ### Help & Resources
@@ -251,7 +272,7 @@ Choose the guide that matches your scenario:
 ### System Events
 
 ```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 // Connection events
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) =>
@@ -261,7 +282,19 @@ parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) =>
     console.log('Disconnected:', event.targetId)
 );
 parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) =>
+    // reason: 'heartbeat_timeout' | 'max_failures_reached' | 'connection_lost' | 'cleanup'
     console.log('Connection lost:', event.targetId, event.reason)
+);
+
+// Handshake events (emitted since 1.1.0)
+parley.onSystem(SYSTEM_EVENTS.HANDSHAKE_START, (event) =>
+    console.log('Handshake started:', event.targetId)
+);
+parley.onSystem(SYSTEM_EVENTS.HANDSHAKE_COMPLETE, (event) =>
+    console.log('Handshake complete:', event.targetId)
+);
+parley.onSystem(SYSTEM_EVENTS.HANDSHAKE_FAILED, (event) =>
+    console.log('Handshake failed:', event.targetId, event.error?.code)
 );
 
 // Message events
@@ -277,36 +310,64 @@ parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) =>
     console.log('Timeout:', event.messageId)
 );
 parley.onSystem(SYSTEM_EVENTS.ERROR, (event) =>
-    console.log('Error:', event.message)
+    console.log('Error:', event.code, event.message)
 );
 ```
+
+There is no automatic reconnection. To reconnect, listen for
+`SYSTEM_EVENTS.CONNECTION_LOST` or `SYSTEM_EVENTS.DISCONNECTED` and call
+`connect()` again in your application code.
 
 ## Configuration
 
 ```typescript
+import { Parley, DefaultSecurityLayer } from 'ignite-parleyjs';
+
 const parley = Parley.create({
+    // Required: 'iframe' | 'window' (one target type per instance)
+    targetType: 'iframe',
+
     // Security
-    allowedOrigins: ['https://trusted.com'], // Required: list of allowed origins
-    requireOriginMatch: true, // Enforce origin validation (default: true)
+    // Exact origins, no wildcards, '*' or 'null' (default: [window.location.origin])
+    allowedOrigins: ['https://trusted.com'],
+    // Custom SecurityLayer subclass (default: new DefaultSecurityLayer())
+    securityLayer: new DefaultSecurityLayer(),
+    // Send remote handler error messages to the sender (default: false, 1.1.0)
+    exposeHandlerErrors: false,
+    // Opt-in limit for outgoing send() calls, per target (1.1.0)
+    rateLimit: { enabled: false, messagesPerSecond: 100 },
 
     // Timeouts & Retries
-    timeout: 5000, // Default timeout in ms (default: 5000)
-    retries: 2, // Number of retries (default: 0)
+    timeout: 5000, // Handshake and request timeout in ms (default: 5000)
+    retries: 2, // Re-sends after each timeout, no backoff (default: 0)
 
-    // Debugging
-    debug: true, // Enable debug logging (default: false)
-    logLevel: 'debug', // 'debug' | 'info' | 'warn' | 'error'
+    // Heartbeat (connection-loss detection, enabled by default)
+    heartbeat: {
+        enabled: true,
+        interval: 5000, // Ping interval in ms (default: 5000)
+        timeout: 2000, // Ping response timeout in ms (default: 2000)
+        maxMissed: 3, // Missed pings before connection loss (default: 3)
+        maxFailures: 3, // Consecutive timed-out targeted requests (default: 3, 1.1.0)
+    },
+
+    // Logging & Analytics
+    logLevel: 'debug', // 'debug' | 'info' | 'warn' | 'error' | 'none' (default: 'none')
+    analyticsEnabled: false, // Emit onAnalyticsEvent() events (default: false)
 
     // Advanced
-    instanceId: 'my-instance', // Custom instance ID
-    validateMessages: true, // Enable schema validation (default: true)
+    instanceId: 'my-instance', // Custom instance ID (default: generated)
 });
 ```
 
 ## Error Handling
 
 ```typescript
-import { TimeoutError, ValidationError, SecurityError } from 'parley-js';
+import {
+    TimeoutError,
+    ValidationError,
+    SerializationError,
+    isParleyError,
+} from 'ignite-parleyjs';
 
 try {
     await parley.send('message', payload, { targetId: 'child' });
@@ -314,9 +375,16 @@ try {
     if (error instanceof TimeoutError) {
         console.log('Request timed out');
     } else if (error instanceof ValidationError) {
-        console.log('Invalid message:', error.details);
-    } else if (error instanceof SecurityError) {
-        console.log('Security violation:', error.message);
+        console.log('Invalid message:', error.validationErrors);
+    } else if (error instanceof SerializationError) {
+        // e.g. a circular reference in the payload
+        console.log('Payload cannot be serialized:', error.message);
+    } else if (isParleyError(error) && error.code === 'ERR_HANDLER_ERROR') {
+        // The remote handler threw. The message is 'Handler error' unless
+        // the receiver set exposeHandlerErrors: true.
+        console.log('Remote handler failed:', error.message);
+    } else if (isParleyError(error) && error.code === 'ERR_NO_HANDLER') {
+        console.log('No handler for this message type on the other side');
     }
 }
 ```
@@ -324,23 +392,25 @@ try {
 ## Analytics & Debugging
 
 ```typescript
-// Register analytics handler
-parley.onAnalytics((event) => {
+// Analytics events are only emitted when analyticsEnabled is true
+const parley = Parley.create({ targetType: 'iframe', analyticsEnabled: true });
+
+parley.onAnalyticsEvent((event) => {
     // Send to your analytics service
     analytics.track(event.type, {
-        messageType: event.data.messageType,
-        duration: event.data.duration,
-        targetId: event.data.targetId,
+        messageType: event.messageType,
+        duration: event.duration, // response_received only
+        targetId: event.targetId,
     });
 });
 
-// Built-in event types:
-// - message:sent
-// - message:received
-// - message:timeout
-// - connection:established
-// - connection:lost
-// - error:occurred
+// Event types:
+// - message_sent
+// - message_received
+// - response_sent
+// - response_received
+// - error
+// - timeout
 ```
 
 ## Browser Support
@@ -364,6 +434,8 @@ npm test                 # Run all tests
 npm run test:coverage    # Run tests with coverage report
 npm run test:ui          # Open Vitest UI
 npm run test:watch       # Watch mode
+npm run test:e2e         # Build, then run Playwright end-to-end tests
+npm run bench            # Run performance benchmarks
 ```
 
 ### Test Structure
@@ -374,7 +446,7 @@ npm run test:watch       # Watch mode
 - **Security Tests** (`tests/security/`) - Validate security mechanisms and
   attack prevention
 
-See [Testing Guide](https://www.parleyjs.com/docs/testing) for comprehensive
+See [Testing Guide](https://www.parleyjs.com/docs/TESTING) for comprehensive
 testing documentation.
 
 ### Coverage Requirements
@@ -387,14 +459,20 @@ time is encouraged.
 
 Parley-js implements **security-first design** for cross-window communication:
 
-- **Origin Validation** - Strict origin whitelist enforcement with protocol
-  matching
-- **Payload Sanitization** - XSS/injection prevention, circular reference
-  handling
-- **DoS Prevention** - Size limits, rate limiting, deep nesting protection
-- **Message Validation** - Protocol structure validation, required field
-  enforcement
-- **Error Safety** - No sensitive information disclosure in error messages
+- **Origin Validation** - Exact-match origin allowlist (no wildcards);
+  `metadata.origin` is the browser-verified origin of each message
+- **Source-Bound Connections** - Each connection only accepts messages from its
+  own target window
+- **Payload Sanitization** - Payloads are JSON-cloned (functions and other
+  non-JSON values are dropped); circular payloads are rejected with a
+  `SerializationError`. This does not escape HTML, so render received strings
+  with `textContent`, not `innerHTML`
+- **Limits** - 10 MB serialized payload cap, schema depth limit of 50, opt-in
+  rate limiting for outgoing `send()` calls
+- **Message Validation** - Protocol structure and version checks, optional JSON
+  Schema validation per message type
+- **Error Safety** - Remote handler error details are hidden by default
+  (`exposeHandlerErrors: false`)
 
 See [Security Guide](https://www.parleyjs.com/docs/security/) for detailed
 security guidelines and best practices.
