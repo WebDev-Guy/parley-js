@@ -9,7 +9,21 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies]
+    ignore:
+      # Type against the Node versions we support (engines: >=20.19), not the
+      # newest Node: a newer @types/node allows APIs older runtimes lack.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
+      # Packages that must move in lockstep (peer-dependency pinned) are grouped
+      # across ALL update types, so a major bump arrives as one installable PR.
+      # A dependency joins the first group it matches, so these come first.
+      vitest:
+        patterns: ['vitest', '@vitest/*']
+      size-limit:
+        patterns: ['size-limit', '@size-limit/*']
+      typescript-eslint:
+        patterns: ['eslint', '@eslint/*', 'typescript-eslint', '@typescript-eslint/*']
       dev-tooling-minor-patch:
         update-types: [minor, patch]
 
@@ -21,6 +35,13 @@ updates:
       interval: weekly
       day: monday
     labels: [dependencies]
+    ignore:
+      # changesets/action v2 requires Changesets v3 and renamed its inputs
+      # (version/publish/title/commit). release.yml and @changesets/cli are on
+      # v1/v2; upgrade them together in a deliberate migration. Release
+      # workflows don't run on PRs, so CI would not catch the breakage.
+      - dependency-name: 'changesets/action'
+        update-types: ['version-update:semver-major']
     groups:
       actions:
         patterns: ['*']
