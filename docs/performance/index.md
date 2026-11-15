@@ -55,9 +55,7 @@ ParleyJS performance depends on:
 // Slow - large payload (payloads over 10 MB serialized are rejected)
 await parley.send('update', {
     data: hugeArray, // several MB
-    metadata: {
-        /* lots of data */
-    },
+    metadata: fullMetadata, // also large
 });
 
 // Fast - send reference
