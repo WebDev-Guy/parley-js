@@ -1098,7 +1098,9 @@ unsubscribe();
 
 Registers a handler for analytics events. Useful for tracking message
 performance and usage metrics. Handlers are only called when the instance was
-created with `analyticsEnabled: true`.
+created with `analyticsEnabled: true`. Events describe application messages
+only: Parley's internal handshake, heartbeat and disconnect traffic is excluded
+(since 1.1.0), so an idle connection produces no analytics events.
 
 **Signature:**
 

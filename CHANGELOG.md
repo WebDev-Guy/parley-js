@@ -30,6 +30,17 @@ Most apps upgrade without changes. Check these if they apply to you:
   `rateLimit.burstSize`, and the `'timeout'` / `'error'` values of
   `DisconnectReason`. TypeScript code that references them needs to drop those
   references.
+- **Analytics and message events cover app traffic only.** Heartbeat pings,
+  their responses and disconnect notifications no longer appear in analytics or
+  in `system:message_received` / `response_sent` / `response_received` /
+  `timeout` (they added about 2,200 analytics events per hour per idle
+  connection). Expect analytics volume and message counts to drop; connection
+  health is still reported by `system:heartbeat_missed` and
+  `system:connection_lost`.
+- **`ERROR_CODES.NOT_CONNECTED` / `CLOSED` are deprecated.** They only ever
+  matched the connection codes, never `ERR_TARGET_NOT_CONNECTED` (what `send()`
+  throws with no connected target). Use `ERROR_CODES.TARGET_NOT_CONNECTED`,
+  `CONNECTION_NOT_CONNECTED`, `TARGET_CLOSED` or `CONNECTION_CLOSED`.
 
 ### Security
 
@@ -56,6 +67,8 @@ details will be published in a security advisory.
 ### Added
 
 - `exposeHandlerErrors` option (default `false`)
+- `ERROR_CODES.TARGET_NOT_CONNECTED`, `CONNECTION_NOT_CONNECTED`,
+  `TARGET_CLOSED` and `CONNECTION_CLOSED`
 - `system:handshake_start`, `system:handshake_complete` and
   `system:handshake_failed` are now emitted (they were documented but never
   fired)
@@ -87,6 +100,12 @@ details will be published in a security advisory.
   throws a `ParleyError` with code `ERR_SECURITY_RATE_LIMITED`
 - `broadcast()` keeps going when one target fails
 - `register()` after `on()` attaches the options instead of throwing
+- `ERROR_CODES` silently dropped `ERR_TARGET_NOT_CONNECTED` and
+  `ERR_TARGET_CLOSED` (two code groups share key names); every code is now
+  reachable (#44)
+- Internal protocol traffic (heartbeat pings and responses, disconnect
+  notifications) no longer leaks into app-level system events and analytics
+  (#45)
 - The `ValidationError.validationErrors` type now matches the runtime objects
   (`ValidationErrorDetail[]` with `path`; it was typed with `field`)
 - `register()`'s `onError` option is called when an inbound message of that type

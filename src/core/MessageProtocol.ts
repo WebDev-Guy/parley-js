@@ -10,6 +10,7 @@
 import { generateUUID, getTimestamp, getCurrentOrigin, deepClone } from '../utils/Helpers';
 import { ValidationError } from '../errors/ErrorTypes';
 import { VALIDATION_ERRORS } from '../errors/ErrorCodes';
+import { SYSTEM_MESSAGE_TYPES } from '../types/MessageTypes';
 
 /**
  * Current protocol version
@@ -341,13 +342,31 @@ export function isResponseMessage(data: unknown): data is ResponseProtocol {
  * @returns True if message is an internal protocol message
  */
 export function isInternalMessage(message: MessageProtocol): boolean {
-    return INTERNAL_TYPE_SET.has(message._type);
+    return isInternalMessageType(message._type);
+}
+
+/**
+ * Check if a message type is Parley protocol traffic (handshake, heartbeat,
+ * disconnect notification) rather than an application message
+ *
+ * Protocol traffic must not show up in the app-level system events
+ * (message_received, response_sent, response_received, timeout) or in
+ * analytics; connection health has its own events.
+ *
+ * @param type - Message type
+ * @returns True for internal protocol message types
+ */
+export function isInternalMessageType(type: string): boolean {
+    return INTERNAL_TYPE_SET.has(type);
 }
 
 /**
  * Internal protocol message types, for O(1) lookup on every inbound message
  */
-const INTERNAL_TYPE_SET: ReadonlySet<string> = new Set(Object.values(INTERNAL_MESSAGE_TYPES));
+const INTERNAL_TYPE_SET: ReadonlySet<string> = new Set<string>([
+    ...Object.values(INTERNAL_MESSAGE_TYPES),
+    ...Object.values(SYSTEM_MESSAGE_TYPES),
+]);
 
 /**
  * Expected field types for request messages ('payload' must exist, any type)
