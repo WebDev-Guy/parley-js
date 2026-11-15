@@ -5,10 +5,9 @@ window and an iframe.
 
 ## Files
 
-- `parent.html` - The parent page that embeds the iframe
-- `child.html` - The child page loaded in the iframe
-- `parent.ts` - TypeScript code for the parent
-- `child.ts` - TypeScript code for the child
+- `parent.html` - The parent page that embeds the iframe (inline script using
+  the browser build `dist/index.global.js`)
+- `child.html` - The child page loaded in the iframe (same setup)
 
 ## Running Locally
 

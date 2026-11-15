@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Guides](./index.md) > Web Worker Communication
+[Home](../index.md) > [Guides](./index.md) > Web Worker Communication
 
 # Web Worker Communication Guide
 
@@ -374,31 +374,47 @@ You can combine ParleyJS and Web Workers for complex applications:
 
 ```javascript
 // Main window
+import { Parley } from 'ignite-parleyjs';
+
 const worker = new Worker('compute-worker.js');
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
 });
 
-// Get result from worker
+// Connect to the visualization iframe (pass the iframe element)
+const iframe = document.getElementById('visualization-iframe');
+await parley.connect(iframe, 'visualization-iframe');
+
+// Get result from worker (native Worker messaging, not ParleyJS)
 worker.postMessage({ type: 'analyze', data: bigDataset });
 
 worker.addEventListener('message', async (event) => {
     if (event.data.type === 'result') {
-        // Send worker result to iframe via ParleyJS
+        // Forward the worker result to the iframe via ParleyJS
         await parley.send(
             'analysis:complete',
-            {
-                result: event.data.result,
-            },
-            { targetId: 'visualization-iframe' }
+            { result: event.data.result },
+            { targetId: 'visualization-iframe', expectsResponse: false }
         );
     }
 });
+```
 
-// Iframe receives result from main window
+```javascript
+// Inside the visualization iframe
+import { Parley } from 'ignite-parleyjs';
+
+const parley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: [window.location.origin],
+});
+
 parley.on('analysis:complete', (payload) => {
     visualizeData(payload.result);
 });
+
+await parley.connect(window.parent, 'main');
 ```
 
 For combining workers with iframe communication, see

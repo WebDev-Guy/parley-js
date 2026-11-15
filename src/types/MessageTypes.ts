@@ -11,16 +11,10 @@ import type { DisconnectReason } from './ConnectionTypes';
  * System message types for internal communication
  */
 export const SYSTEM_MESSAGE_TYPES = {
-    /** Initial handshake message */
-    HANDSHAKE_INIT: '__parley_handshake_init',
-    /** Handshake acknowledgment */
-    HANDSHAKE_ACK: '__parley_handshake_ack',
     /** Disconnect notification */
     DISCONNECT: '__parley_disconnect',
     /** Heartbeat ping */
     HEARTBEAT_PING: '__parley_heartbeat_ping',
-    /** Heartbeat pong (response) */
-    HEARTBEAT_PONG: '__parley_heartbeat_pong',
 } as const;
 
 /**
@@ -122,7 +116,11 @@ export interface MessageRegistrationOptions {
 
     /**
      * Error handler for this message type
-     * Called when an error occurs during message handling
+     *
+     * Called when an inbound message of this type fails schema validation
+     * (a ValidationError) or one of its handlers throws (the thrown error,
+     * wrapped in a ParleyError if it is not one). Errors thrown by onError
+     * itself are logged and ignored.
      */
     onError?: (error: ParleyError, metadata: MessageMetadata) => void;
 }
@@ -240,7 +238,10 @@ export interface JsonSchema {
     /** Description (documentation only) */
     description?: string;
 
-    /** Default value */
+    /**
+     * Default value (annotation only, as in JSON Schema: it is not applied
+     * to payloads and not used for validation)
+     */
     default?: unknown;
 
     /** Allow additional properties (for objects) */

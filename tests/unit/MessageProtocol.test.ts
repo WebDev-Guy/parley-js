@@ -202,16 +202,6 @@ describe('MessageProtocol', () => {
             expect(typeof INTERNAL_MESSAGE_TYPES.HANDSHAKE_ACK).toBe('string');
         });
 
-        it('should define ping type', () => {
-            expect(INTERNAL_MESSAGE_TYPES.PING).toBeDefined();
-            expect(typeof INTERNAL_MESSAGE_TYPES.PING).toBe('string');
-        });
-
-        it('should define pong type', () => {
-            expect(INTERNAL_MESSAGE_TYPES.PONG).toBeDefined();
-            expect(typeof INTERNAL_MESSAGE_TYPES.PONG).toBe('string');
-        });
-
         it('should have unique type values', () => {
             const types = Object.values(INTERNAL_MESSAGE_TYPES);
             const uniqueTypes = new Set(types);

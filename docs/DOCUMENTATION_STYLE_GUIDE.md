@@ -44,10 +44,10 @@ Write as you would explain to a colleague. Use conversational, human-readable
 language.
 
 **Wrong**: "The origin property must be set to the anticipated origin value for
-the receiving window context prior to channel instantiation."
+the receiving window context prior to instance instantiation."
 
 **Correct**: "Set the origin property to match the exact origin of the target
-window before creating the channel."
+window before creating the Parley instance."
 
 ### Use Active Voice
 
@@ -57,8 +57,8 @@ performed on subject).
 **Wrong**: "Messages are validated by the framework before being processed."
 **Correct**: "The framework validates messages before processing them."
 
-**Wrong**: "The channel should be closed when communication is no longer
-required." **Correct**: "Close the channel when you no longer need to
+**Wrong**: "The connection should be closed when communication is no longer
+required." **Correct**: "Close the connection when you no longer need to
 communicate."
 
 ### Avoid Jargon or Explain It
@@ -68,8 +68,8 @@ Either avoid technical jargon, or explain it clearly when necessary.
 **Wrong**: "Leverage optimized deserialization algorithms to maximize throughput
 in high-frequency postMessage scenarios."
 
-**Correct**: "For high-frequency messaging, consider using MessageChannel for
-direct communication instead of repeated postMessage calls."
+**Correct**: "For high-frequency messaging, batch several updates into one
+message instead of sending many small messages."
 
 **Acceptable with explanation**: "Origin validation uses a strict equality check
 (the origin must match exactly including scheme, host, and port)."
@@ -203,16 +203,20 @@ Every new concept should have a code example.
 
 ```javascript
 // 50 lines of setup code before the example
-const channel = ParleyJS.createChannel({...});
+const parley = Parley.create({ targetType: 'iframe', allowedOrigins: [...] });
 // 40 more lines of unrelated code
-const response = await channel.request('get-data', {});
+const response = await parley.send('get-data', {}, { targetId: 'child' });
 ```
 
 **Correct** (focused):
 
 ```javascript
 // Send a request and wait for response
-const response = await channel.request('get-user', { id: 123 });
+const response = await parley.send(
+    'get-user',
+    { id: 123 },
+    { targetId: 'child' }
+);
 console.log(response.user.name);
 ```
 
@@ -245,7 +249,7 @@ Use lists to make content scannable, but not excessively.
 
 - Validate origin before processing any messages
 - Use request-response pattern for critical operations
-- Clean up listeners when closing the channel
+- Clean up listeners when closing the connection
 
 ### Tables
 
@@ -266,9 +270,10 @@ Use tables for structured comparisons and references.
 
 Write for professionals with varying experience levels.
 
-**Wrong** (too casual): "Just toss this channel away when you're done, lol"
-**Wrong** (too formal): "The channel must be disposed of via appropriate cleanup
-procedures" **Correct**: "Close the channel when you're done using it"
+**Wrong** (too casual): "Just toss this instance away when you're done, lol"
+**Wrong** (too formal): "The instance must be disposed of via appropriate
+cleanup procedures" **Correct**: "Call `destroy()` when you're done using the
+instance"
 
 ### Assume Intelligence, Not Experience
 
@@ -318,7 +323,7 @@ For procedural content, use clear steps.
 
 **Example**:
 
-1. Create a channel in the parent window
+1. Create a Parley instance in the parent window
 2. Register a message handler in the child window
 3. Send a message from the parent
 
@@ -332,9 +337,9 @@ Include a "Common Mistakes" section when applicable.
 - Why it's wrong
 - Correct approach
 
-**Example**: **Mistake**: Using origin: '\*' Why it's wrong: This accepts
-messages from any origin, including malicious sites Correct approach: Always
-specify the exact expected origin
+**Example**: **Mistake**: Using `allowedOrigins: ['*']` Why it's wrong: It would
+accept messages from any origin, so `Parley.create()` rejects it with a
+configuration error. Correct approach: Always specify the exact expected origin
 
 ## Technical Accuracy
 
@@ -350,8 +355,8 @@ specify the exact expected origin
 
 Specify which version information applies to.
 
-**Correct**: "In ParleyJS 2.0+, the request-response API is built-in"
-**Correct**: "This feature requires ParleyJS 1.5 or later"
+**Correct**: "In ParleyJS 1.1.0+, a handler error reaches the sender as
+`ERR_HANDLER_ERROR`" **Correct**: "This option requires ParleyJS 1.1.0 or later"
 
 ### Explain Why, Not Just How
 
@@ -366,7 +371,8 @@ to prevent accepting messages from malicious sources"
 
 Use the same term consistently throughout all documentation.
 
-**Right**: Use "channel" consistently (not "connection", "link", "pipe")
+**Right**: Use "connection" consistently for a connected target (not "channel",
+"link", "pipe"), and "Parley instance" for the object `Parley.create()` returns
 **Right**: Use "origin" consistently (not "source", "domain", "URL") **Right**:
 Use "message handler" consistently (not "listener", "callback", "receiver")
 
@@ -374,7 +380,7 @@ Create a glossary if needed for clarity.
 
 ### Code Formatting
 
-- Inline code for method names: `channel.send()`
+- Inline code for method names: `parley.send()`
 - Inline code for variable names: `targetWindow`
 - Code blocks for complete examples
 - Use appropriate language highlighting (javascript, typescript, bash)
@@ -535,7 +541,8 @@ If you answer "no" to any of these, revise before publishing.
 
 - [Documentation Navigation Strategy](./DOCUMENTATION_NAVIGATION_STRATEGY.md) -
   How navigation is structured
-- [Contributing Guide](../CONTRIBUTING.md) - How to contribute documentation
+- [Contributing Guide](https://github.com/WebDev-Guy/parley-js/blob/main/CONTRIBUTING.md) -
+  How to contribute documentation
 - [Examples](./EXAMPLES.md) - Documentation examples
 
 **Back to**: [Documentation Home](./index.md)

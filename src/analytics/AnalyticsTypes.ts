@@ -169,12 +169,3 @@ export interface AnalyticsOptions {
     /** Sample rate (0-1, 1 = 100%) */
     sampleRate?: number;
 }
-
-/**
- * Default analytics options
- */
-export const DEFAULT_ANALYTICS_OPTIONS: AnalyticsOptions = {
-    enabled: false,
-    includeTiming: true,
-    sampleRate: 1,
-};

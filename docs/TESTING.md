@@ -2,11 +2,14 @@
 
 # Testing Guide
 
-Parley-js maintains **85%+ test coverage** with comprehensive unit, integration,
-and security tests using
-<a href="https://vitest.dev/" target="_blank">Vitest</a>.
+Parley-js is tested with unit, integration, and security tests using
+<a href="https://vitest.dev/" target="_blank">Vitest</a> (in a happy-dom
+environment) and with end-to-end tests in a real browser using
+<a href="https://playwright.dev/" target="_blank">Playwright</a>. Measured line
+coverage is about 80%; CI enforces the thresholds in `vitest.config.ts` (see
+[Coverage Requirements](#coverage-requirements)).
 
-For testing patterns and strategies, see
+For testing patterns you can use in your own application, see
 [Testing Patterns](./TESTING_PATTERNS.md).
 
 ## Table of Contents
@@ -42,17 +45,30 @@ For coverage reports:
 npm run test:coverage
 ```
 
+For the browser end-to-end suite (builds the library first):
+
+```bash
+npx playwright install chromium   # first time only
+npm run test:e2e
+```
+
 ---
 
 ## Test Commands
 
-| Command                 | Description                       |
-| ----------------------- | --------------------------------- |
-| `npm test`              | Run tests in watch mode (default) |
-| `npm run test:run`      | Run all tests once and exit       |
-| `npm run test:watch`    | Run tests in watch mode           |
-| `npm run test:coverage` | Run tests with coverage report    |
-| `npm run test:ui`       | Open Vitest UI in browser         |
+| Command                 | Description                                          |
+| ----------------------- | ---------------------------------------------------- |
+| `npm test`              | Run Vitest (watch mode in a terminal)                |
+| `npm run test:run`      | Run all Vitest tests once and exit                   |
+| `npm run test:watch`    | Run tests in watch mode                              |
+| `npm run test:coverage` | Run tests once with a coverage report (enforced)     |
+| `npm run test:ui`       | Open the Vitest UI in a browser                      |
+| `npm run test:debug`    | Run Vitest with the Node inspector (`--inspect-brk`) |
+| `npm run bench`         | Run the hot-path micro-benchmarks (`vitest bench`)   |
+| `npm run test:e2e`      | Build, then run the Playwright E2E suite             |
+| `npm run test:e2e:ui`   | Build, then open the Playwright UI                   |
+| `npm run typecheck`     | Type-check the project with `tsc`                    |
+| `npm run size`          | Check the bundle size budget (requires a build)      |
 
 ### Running Specific Tests
 
@@ -68,10 +84,10 @@ Run a single test file:
 npx vitest run tests/unit/EventEmitter.test.ts
 ```
 
-Run tests with verbose output:
+Run one category:
 
 ```bash
-npx vitest run --reporter=verbose
+npm test tests/security/
 ```
 
 ---
@@ -82,24 +98,39 @@ npx vitest run --reporter=verbose
 
 ```
 tests/
-├── unit/                    # Unit tests (isolated component testing)
+├── unit/                    # Unit tests (one component at a time)
+│   ├── AnalyticsHooks.test.ts
 │   ├── BaseChannel.test.ts
+│   ├── ConnectionManager.test.ts
 │   ├── EventEmitter.test.ts
+│   ├── HandshakeController.test.ts
+│   ├── HeartbeatManager.test.ts
 │   ├── Helpers.test.ts
 │   ├── IframeChannel.test.ts
 │   ├── Logger.test.ts
 │   ├── MessageProtocol.test.ts
-│   └── WindowChannel.test.ts
-├── integration/             # Integration tests (end-to-end flows)
+│   ├── MessageRegistry.test.ts
+│   ├── OriginValidator.test.ts
+│   ├── Parley.test.ts
+│   ├── SchemaValidator.test.ts
+│   ├── SecurityLayer.test.ts
+│   ├── TargetManager.test.ts
+│   ├── WindowChannel.test.ts
+│   ├── hot-path.test.ts
+│   └── mangle-props.test.ts
+├── integration/             # Multi-component flows
 │   ├── broadcast.test.ts
+│   ├── correctness-fixes.test.ts
 │   ├── error-recovery.test.ts
 │   ├── full-lifecycle.test.ts
 │   ├── heartbeat-monitoring.test.ts
 │   ├── iframe-communication.test.ts
+│   ├── lifecycle-events.test.ts
 │   ├── schema-validation.test.ts
 │   └── window-communication.test.ts
-├── security/                # Security tests (attack prevention)
+├── security/                # Security behavior
 │   ├── error-info-disclosure.test.ts
+│   ├── inbound-hardening.test.ts
 │   ├── listener-limits.test.ts
 │   ├── message-validation.test.ts
 │   ├── origin-validation.test.ts
@@ -107,33 +138,43 @@ tests/
 │   ├── payload-size-limits.test.ts
 │   ├── postmessage-security.test.ts
 │   └── schema-validation-dos.test.ts
-├── fixtures/                # Test data and helpers
+├── bench/                   # Micro-benchmarks (npm run bench)
+│   └── hot-path.bench.ts
+├── e2e/                     # Playwright specs (real browser, two origins)
+│   ├── fixtures/            # HTML pages loaded by the specs
+│   ├── iframe-communication.spec.ts
+│   ├── window-communication.spec.ts
+│   └── server.mjs           # Static server used by playwright.config.ts
+├── fixtures/                # Test data
 │   └── test-messages.ts
 └── utils/                   # Test utilities
     ├── mock-factory.ts
     └── test-helpers.ts
 ```
 
+Vitest runs `tests/**/*.test.ts` and excludes `tests/e2e`; Playwright runs
+`tests/e2e/*.spec.ts`.
+
 ### Source-to-Test Mapping
 
-Each source file has a corresponding test file:
-
-| Source File                          | Test File                             |
-| ------------------------------------ | ------------------------------------- |
-| `src/core/Parley.ts`                 | `tests/unit/Parley.test.ts`           |
-| `src/events/EventEmitter.ts`         | `tests/unit/EventEmitter.test.ts`     |
-| `src/core/HeartbeatManager.ts`       | `tests/unit/HeartbeatManager.test.ts` |
-| `src/core/MessageRegistry.ts`        | `tests/unit/MessageRegistry.test.ts`  |
-| `src/core/TargetManager.ts`          | `tests/unit/TargetManager.test.ts`    |
-| `src/security/OriginValidator.ts`    | `tests/unit/OriginValidator.test.ts`  |
-| `src/security/SecurityLayer.ts`      | `tests/unit/SecurityLayer.test.ts`    |
-| `src/validation/SchemaValidator.ts`  | `tests/unit/SchemaValidator.test.ts`  |
-| `src/communication/BaseChannel.ts`   | `tests/unit/BaseChannel.test.ts`      |
-| `src/communication/IframeChannel.ts` | `tests/unit/IframeChannel.test.ts`    |
-| `src/communication/WindowChannel.ts` | `tests/unit/WindowChannel.test.ts`    |
-| `src/core/MessageProtocol.ts`        | `tests/unit/MessageProtocol.test.ts`  |
-| `src/utils/Logger.ts`                | `tests/unit/Logger.test.ts`           |
-| `src/utils/Helpers.ts`               | `tests/unit/Helpers.test.ts`          |
+| Source File                                | Test File                                |
+| ------------------------------------------ | ---------------------------------------- |
+| `src/core/Parley.ts`                       | `tests/unit/Parley.test.ts`              |
+| `src/core/ConnectionManager.ts`            | `tests/unit/ConnectionManager.test.ts`   |
+| `src/core/HeartbeatManager.ts`             | `tests/unit/HeartbeatManager.test.ts`    |
+| `src/core/MessageRegistry.ts`              | `tests/unit/MessageRegistry.test.ts`     |
+| `src/core/TargetManager.ts`                | `tests/unit/TargetManager.test.ts`       |
+| `src/core/MessageProtocol.ts`              | `tests/unit/MessageProtocol.test.ts`     |
+| `src/events/EventEmitter.ts`               | `tests/unit/EventEmitter.test.ts`        |
+| `src/security/OriginValidator.ts`          | `tests/unit/OriginValidator.test.ts`     |
+| `src/security/SecurityLayer.ts`            | `tests/unit/SecurityLayer.test.ts`       |
+| `src/validation/SchemaValidator.ts`        | `tests/unit/SchemaValidator.test.ts`     |
+| `src/communication/BaseChannel.ts`         | `tests/unit/BaseChannel.test.ts`         |
+| `src/communication/HandshakeController.ts` | `tests/unit/HandshakeController.test.ts` |
+| `src/communication/IframeChannel.ts`       | `tests/unit/IframeChannel.test.ts`       |
+| `src/communication/WindowChannel.ts`       | `tests/unit/WindowChannel.test.ts`, E2E  |
+| `src/utils/Logger.ts`                      | `tests/unit/Logger.test.ts`              |
+| `src/utils/Helpers.ts`                     | `tests/unit/Helpers.test.ts`             |
 
 ---
 
@@ -141,18 +182,20 @@ Each source file has a corresponding test file:
 
 ### Unit Tests
 
-Test individual components in isolation with mocked dependencies.
+Test individual components in isolation.
 
 **Purpose:**
 
 - Verify single function/class behavior
 - Test edge cases and error conditions
 - Ensure proper error handling
-- Validate TypeScript type safety
 
 **Example:**
 
 ```typescript
+import { describe, it, expect, vi } from 'vitest';
+import { EventEmitter } from '../../src/events/EventEmitter';
+
 describe('EventEmitter', () => {
     it('should register and trigger event listeners', () => {
         const emitter = new EventEmitter();
@@ -166,123 +209,153 @@ describe('EventEmitter', () => {
 });
 ```
 
-**Coverage Target:** 90%+
+### Integration and Security Tests (happy-dom)
 
-### Integration Tests
+These tests drive a real `Parley` instance through the browser messaging path
+without real iframes. The pattern used in the repository (see
+`tests/security/inbound-hardening.test.ts` and
+`tests/integration/correctness-fixes.test.ts`):
 
-Test complete workflows with multiple components working together.
-
-**Purpose:**
-
-- Verify end-to-end communication flows
-- Test real-world usage scenarios
-- Validate component interactions
-- Ensure system reliability
-
-**Example:**
+1. Create a `Parley` with `targetType: 'window'` and heartbeats disabled.
+2. Use a fake target window: an object with `closed`, `postMessage: vi.fn()` and
+   similar fields.
+3. Deliver inbound messages by dispatching a `MessageEvent` on `window` whose
+   `data` is a full protocol message, whose `origin` is allowed, and whose
+   `source` is the fake target window. `source` must be set with
+   `Object.defineProperty`, because each connection only accepts messages from
+   its own target window.
+4. Inspect what Parley posted via the fake window's `postMessage` mock.
 
 ```typescript
-describe('Iframe Communication', () => {
-    it('should establish connection between parent and child', async () => {
-        const parent = new Parley({
-            allowedOrigins: ['http://localhost:3000'],
-            role: 'parent',
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { Parley } from '../../src/core/Parley';
+
+const ORIGIN = 'https://example.com';
+
+function fakeWindow() {
+    return {
+        closed: false,
+        document: { readyState: 'complete' },
+        location: { origin: ORIGIN },
+        postMessage: vi.fn(),
+    };
+}
+
+function request(type: string, payload: unknown, expectsResponse = false) {
+    return {
+        _parley: '__parley__',
+        _v: '1.0.0',
+        _id: crypto.randomUUID(),
+        _type: type,
+        _timestamp: Date.now(),
+        _origin: ORIGIN,
+        _expectsResponse: expectsResponse,
+        payload,
+    };
+}
+
+function deliver(data: unknown, source: unknown, origin = ORIGIN) {
+    const event = new MessageEvent('message', { data, origin });
+    Object.defineProperty(event, 'source', { value: source });
+    window.dispatchEvent(event);
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('handler errors', () => {
+    let parley: Parley | undefined;
+    afterEach(() => parley?.destroy());
+
+    it('responds with ERR_HANDLER_ERROR when a handler throws', async () => {
+        parley = Parley.create({
+            targetType: 'window',
+            allowedOrigins: [ORIGIN],
+            heartbeat: { enabled: false },
+        });
+        const win = fakeWindow();
+
+        // Complete the handshake as the "other side"
+        const pending = parley.connect(win as unknown as Window, 'peer');
+        await tick();
+        deliver(request('__parley_handshake_init__', { ready: true }), win);
+        await pending;
+
+        parley.on('boom', () => {
+            throw new Error('secret detail');
         });
 
-        const child = new Parley({
-            allowedOrigins: ['http://localhost:3000'],
-            role: 'child',
-        });
+        deliver(request('boom', {}, true), win);
+        await tick();
+        await tick();
 
-        // Simulate iframe setup and communication
-        await parent.connect('child', mockIframe.contentWindow);
-        await child.connect('parent', window.parent);
-
-        const response = await parent.send('ping', {}, { targetId: 'child' });
-        expect(response).toBeDefined();
+        const sent = win.postMessage.mock.calls.map((c) => c[0]);
+        const reply = sent.reverse().find((m) => '_requestId' in m);
+        expect(reply.success).toBe(false);
+        expect(reply.error.code).toBe('ERR_HANDLER_ERROR');
+        expect(reply.error.message).toBe('Handler error');
     });
 });
 ```
 
-**Coverage Target:** 85%+
+The `__parley_handshake_init__` type and the protocol field names are internal
+details of the wire protocol; they are used here because these tests exercise
+the library itself.
 
-### Security Tests
+### End-to-End Tests (Playwright)
 
-Test security mechanisms and validate protection against attacks.
+`tests/e2e` runs in Chromium against two static servers started by
+`playwright.config.ts`: `http://127.0.0.1:4173` (parent origin) and
+`http://localhost:4174` (child origin). Different host strings are different
+origins, so the suite exercises real cross-origin `postMessage` without TLS. The
+fixture pages in `tests/e2e/fixtures` load the built IIFE bundle, which is why
+`npm run test:e2e` runs `npm run build` first.
 
-**Purpose:**
-
-- Verify origin validation enforcement
-- Test payload sanitization
-- Validate DoS prevention
-- Ensure error message safety
-
-**Example:**
-
-```typescript
-describe('Origin Validation', () => {
-    it('should reject messages from unauthorized origins', async () => {
-        const parley = new Parley({
-            allowedOrigins: ['https://trusted.com'],
-        });
-
-        const maliciousMessage = createMessage(
-            'test',
-            {},
-            {
-                origin: 'https://evil.com',
-            }
-        );
-
-        await expect(parley.handleMessage(maliciousMessage)).rejects.toThrow(
-            SecurityError
-        );
-    });
-});
-```
-
-**Coverage Target:** 95%+
+The specs cover, among other things: handshake and request/response with a
+cross-origin iframe, connecting after the iframe has already loaded, handshake
+failure when the child never initializes or does not trust the parent origin,
+reconnecting to a fresh iframe, and popup communication including popup-close
+detection. `WindowChannel` (which needs `window.open`) is covered here rather
+than by the coverage-measured Vitest suite.
 
 ---
 
 ## Coverage Requirements
 
-### Overall Coverage Targets
+Thresholds are defined in `vitest.config.ts` and enforced by
+`npm run test:coverage` (CI fails below them):
 
-| Component      | Target | Description                            |
-| -------------- | ------ | -------------------------------------- |
-| Overall        | 85%+   | Minimum across entire codebase         |
-| Core Modules   | 90%+   | Parley, MessageProtocol, TargetManager |
-| Security Layer | 95%+   | OriginValidator, SecurityLayer         |
-| Communication  | 90%+   | All Channel implementations            |
-| Utilities      | 85%+   | Helpers, Logger                        |
+| Metric     | Threshold |
+| ---------- | --------- |
+| Lines      | 66%       |
+| Functions  | 67%       |
+| Branches   | 62%       |
+| Statements | 66%       |
+
+The thresholds track current actuals and are ratcheted upward as coverage
+improves. Measured line coverage is about 80%.
 
 ### How Coverage is Measured
 
-Coverage reports include:
-
-- **Line Coverage** - Percentage of executed lines
-- **Branch Coverage** - Percentage of executed conditional branches
-- **Function Coverage** - Percentage of called functions
-- **Statement Coverage** - Percentage of executed statements
+Coverage uses the V8 provider and reports line, branch, function and statement
+coverage.
 
 ### Viewing Coverage Reports
 
 After running `npm run test:coverage`:
 
-```bash
-# View HTML report in browser
-open coverage/index.html
+- The terminal shows a per-file summary
+- `coverage/index.html` contains the HTML report
+- `coverage/lcov.info` is used by CI (Codecov)
+- `coverage/coverage-final.json` contains the JSON report
 
-# Terminal will show summary like:
-# ----------------------------|---------|----------|---------|---------|
-# File                        | % Stmts | % Branch | % Funcs | % Lines |
-# ----------------------------|---------|----------|---------|---------|
-# All files                   |   87.5  |    85.3  |   89.1  |   87.8  |
-#  src/core                   |   92.1  |    89.7  |   94.2  |   92.5  |
-#  src/security               |   96.3  |    95.1  |   97.8  |   96.7  |
-# ----------------------------|---------|----------|---------|---------|
-```
+### Excluded from Coverage
+
+- `node_modules/`, `dist/`, `tests/`
+- `**/*.d.ts` - Type declaration files
+- `**/*.config.ts` - Configuration files
+- `**/index.ts` - Re-export barrel files
+- `**/WindowChannel.ts` - Needs a real browser (`window.open`); covered by the
+  Playwright E2E suite
 
 ---
 
@@ -290,17 +363,13 @@ open coverage/index.html
 
 ### Test File Structure
 
-Follow this standard structure for test files:
+Follow this structure for test files:
 
 ```typescript
 /**
  * @file ComponentName.test.ts
  * @description Unit tests for ComponentName class
  * @module tests/unit
- *
- * Tests all public methods of the ComponentName class:
- * - methodA() - Brief description
- * - methodB() - Brief description
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -314,22 +383,8 @@ describe('ComponentName', () => {
     });
 
     afterEach(() => {
-        // Cleanup
+        vi.restoreAllMocks();
     });
-
-    // ========================================================================
-    // Constructor
-    // ========================================================================
-
-    describe('constructor', () => {
-        it('should create instance with default values', () => {
-            expect(instance).toBeDefined();
-        });
-    });
-
-    // ========================================================================
-    // methodA()
-    // ========================================================================
 
     describe('methodA()', () => {
         it('should do expected behavior', () => {
@@ -346,141 +401,80 @@ describe('ComponentName', () => {
 });
 ```
 
+Vitest globals (`describe`, `it`, `expect`, `vi`) are enabled in the config, but
+explicit imports are preferred for clarity.
+
 ### Test Naming Conventions
 
-Use descriptive test names that explain what behavior is being tested:
+Use descriptive test names that explain the behavior being tested:
 
 ```typescript
 // Good: Describes expected behavior
 it('should return empty array when no listeners registered', () => {});
-it('should throw error when origin is not in allowed list', () => {});
-it('should emit connected event after successful handshake', () => {});
+it('should drop messages whose origin is not allowed', () => {});
+it('should emit system:connected after a successful handshake', () => {});
 
 // Avoid: Too vague or implementation-focused
 it('works', () => {});
 it('test methodA', () => {});
-it('returns true', () => {});
 ```
 
 ### Testing Async Code
 
-Use async/await for asynchronous tests:
+Use async/await for asynchronous tests. For timeouts, use fake timers:
 
 ```typescript
-it('should resolve with response data', async () => {
-    const result = await instance.sendAsync({ type: 'test', data: 'hello' });
-    expect(result).toEqual({ success: true });
-});
-```
+import { Parley } from '../../src/core/Parley';
 
-For testing timeouts and delays, use fake timers:
-
-```typescript
-it('should timeout after configured duration', async () => {
+it('rejects connect() when the handshake never completes', async () => {
     vi.useFakeTimers();
 
-    const promise = instance.waitForResponse();
+    const parley = Parley.create({
+        targetType: 'window',
+        allowedOrigins: ['https://example.com'],
+        timeout: 1000,
+        heartbeat: { enabled: false },
+    });
+    const win = { closed: false, postMessage: vi.fn() };
 
-    vi.advanceTimersByTime(5000);
+    const pending = parley.connect(win as unknown as Window, 'peer');
+    const assertion = expect(pending).rejects.toMatchObject({
+        code: 'ERR_CONNECTION_HANDSHAKE_FAILED',
+    });
 
-    await expect(promise).rejects.toThrow('Timeout');
+    await vi.advanceTimersByTimeAsync(1500);
+    await assertion;
 
+    parley.destroy();
     vi.useRealTimers();
 });
 ```
 
 ### Testing Error Conditions
 
-Always test error paths and edge cases:
+Always test error paths. Configuration errors are thrown synchronously by
+`Parley.create()`:
 
 ```typescript
-describe('error handling', () => {
-    it('should throw ParleyError when target not found', () => {
-        expect(() => instance.send('unknown', { type: 'test' })).toThrow(
-            ParleyError
-        );
+it('rejects a wildcard origin', () => {
+    expect(() =>
+        Parley.create({ targetType: 'iframe', allowedOrigins: ['*'] })
+    ).toThrow(/Configuration error/);
+});
+
+it('rejects send() to an unknown target', async () => {
+    const parley = Parley.create({
+        targetType: 'iframe',
+        allowedOrigins: ['https://example.com'],
     });
 
-    it('should emit error event on validation failure', async () => {
-        const errorHandler = vi.fn();
-        instance.on('error', errorHandler);
+    await expect(
+        parley.send('ping', {}, { targetId: 'nope' })
+    ).rejects.toMatchObject({ code: 'ERR_TARGET_NOT_CONNECTED' });
 
-        await instance.processMessage(invalidMessage);
-
-        expect(errorHandler).toHaveBeenCalledWith(
-            expect.objectContaining({ code: 'VALIDATION_ERROR' })
-        );
-    });
+    parley.destroy();
 });
 ```
-
-### Best Practices
-
-1. **Descriptive Test Names**
-
-    ```typescript
-    // Good
-    it('should reject messages from unauthorized origins', () => {});
-
-    // Bad
-    it('test origin', () => {});
-    ```
-
-2. **Arrange-Act-Assert Pattern**
-
-    ```typescript
-    it('should emit events to registered listeners', () => {
-        // Arrange
-        const emitter = new EventEmitter();
-        const handler = vi.fn();
-        emitter.on('test', handler);
-
-        // Act
-        emitter.emit('test', { data: 'value' });
-
-        // Assert
-        expect(handler).toHaveBeenCalledWith({ data: 'value' });
-    });
-    ```
-
-3. **Test Edge Cases**
-
-    ```typescript
-    describe('generateUUID', () => {
-        it('should generate valid UUID format', () => {
-            const uuid = generateUUID();
-            expect(uuid).toMatch(
-                /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-            );
-        });
-
-        it('should generate unique UUIDs', () => {
-            const uuid1 = generateUUID();
-            const uuid2 = generateUUID();
-            expect(uuid1).not.toBe(uuid2);
-        });
-    });
-    ```
-
-4. **Use Mocks Appropriately**
-
-    ```typescript
-    // Mock external dependencies
-    vi.mock('external-library', () => ({
-        externalFunction: vi.fn(() => 'mocked'),
-    }));
-
-    // Spy on internal methods
-    const spy = vi.spyOn(instance, 'methodName');
-    ```
-
-5. **Clean Up After Tests**
-    ```typescript
-    afterEach(() => {
-        vi.clearAllMocks();
-        vi.clearAllTimers();
-    });
-    ```
 
 ---
 
@@ -488,128 +482,113 @@ describe('error handling', () => {
 
 ### Mock Factory (tests/utils/mock-factory.ts)
 
-The mock factory provides reusable mock objects:
-
 #### createMockWindow(id)
 
-Creates a mock window object for testing postMessage communication:
+Creates a mock window object with message listeners, `postMessage` (a
+`vi.fn()`), and helpers `_triggerMessage(data, origin?)`, `_getListeners()` and
+`_close()`:
 
 ```typescript
 import { createMockWindow } from '../utils/mock-factory';
 
 const mockWindow = createMockWindow('child');
 
-// Trigger a message event on the mock window
 mockWindow._triggerMessage({ type: 'test:message' }, 'https://example.com');
 
-// Check if window is closed
 expect(mockWindow.closed).toBe(false);
 mockWindow._close();
 expect(mockWindow.closed).toBe(true);
 ```
 
-#### createConnectedMockWindows(idA, idB)
+Note that `_triggerMessage` dispatches events with `source: null` to the mock
+window's own listeners. Parley listens on the global `window` and checks
+`event.source`, so to drive a real `Parley` instance use the `deliver()` pattern
+shown in
+[Integration and Security Tests](#integration-and-security-tests-happy-dom).
 
-Creates a pair of mock windows wired together for bidirectional communication:
+#### createConnectedMockWindows(idA?, idB?, originA?, originB?)
+
+Creates two mock windows whose `postMessage` triggers a message event on the
+other one (asynchronously), using the given origins:
 
 ```typescript
 import { createConnectedMockWindows } from '../utils/mock-factory';
 
 const [parent, child] = createConnectedMockWindows('parent', 'child');
 
-// Messages sent from parent are received by child
-parent.postMessage({ type: 'hello' }, '*');
+parent.postMessage({ type: 'hello' }, 'https://child.example.com');
 ```
 
-#### createMockIframe(id)
+#### createMockIframe(id?, origin?)
 
-Creates a mock iframe element with contentWindow:
+Creates a real `<iframe>` element whose `contentWindow` getter returns a mock
+window:
 
 ```typescript
 import { createMockIframe } from '../utils/mock-factory';
 
-const mockIframe = createMockIframe('widget');
+const mockIframe = createMockIframe('widget', 'https://widget.example.com');
 expect(mockIframe.contentWindow).toBeDefined();
 ```
 
-#### createDefaultConfig()
+#### createTestMessage(type, payload, options?)
 
-Creates a complete ParleyConfig object with sensible defaults:
+Builds a protocol message (`_parley`, `_v`, `_id`, `_type`, `_timestamp`,
+`_origin`, `_expectsResponse`, optional `_target`, `payload`):
 
 ```typescript
-import { createDefaultConfig } from '../utils/mock-factory';
+import { createTestMessage } from '../utils/mock-factory';
 
-const config = createDefaultConfig({
-    allowedOrigins: ['https://custom.example.com'],
-});
+const message = createTestMessage(
+    'user:update',
+    { userId: 123 },
+    {
+        expectsResponse: true,
+    }
+);
 ```
+
+#### createTestConfig(overrides?)
+
+Returns a `ParleyConfig` with test defaults (`targetType: 'window'`, a set of
+example origins, a 5000 ms timeout, heartbeats disabled), merged with
+`overrides`.
+
+#### createMockLogger()
+
+Returns a logger whose `debug`/`info`/`warn`/`error` are `vi.fn()` spies that
+also record calls in a `logs` array.
 
 ### Test Helpers (tests/utils/test-helpers.ts)
 
-#### waitForEvent(emitter, eventName, timeout?)
-
-Waits for a specific event to be emitted:
-
-```typescript
-import { waitForEvent } from '../utils/test-helpers';
-
-const data = await waitForEvent(instance, 'connected', 1000);
-expect(data.targetId).toBe('child');
-```
-
-#### waitForEvents(emitter, eventName, count, timeout?)
-
-Waits for multiple occurrences of an event:
+| Helper                                               | Purpose                                                                 |
+| ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| `waitForEvent(emitter, eventName, timeout?)`         | Resolve with the next event from a library `EventEmitter` (default 1 s) |
+| `waitForEvents(emitter, eventName, count, timeout?)` | Resolve with an array of `count` events                                 |
+| `createDeferred<T>()`                                | `{ promise, resolve, reject }` for controlling async flow               |
+| `delay(ms)`                                          | Promise-based delay                                                     |
+| `flushPromises()`                                    | Let pending promise callbacks run                                       |
+| `advanceTimersAndFlush(ms)`                          | Advance fake timers, then flush promises                                |
+| `createCallTracker()`                                | Record calls and arguments of a function                                |
+| `expectError(fn, { message?, code?, name? })`        | Assert a synchronous throw                                              |
+| `expectAsyncError(fn, { message?, code?, name? })`   | Assert an async rejection                                               |
+| `simulateNetworkDelay(response, delayMs)`            | Resolve with `response` after a delay                                   |
 
 ```typescript
-import { waitForEvents } from '../utils/test-helpers';
-
-const messages = await waitForEvents(instance, 'message', 3);
-expect(messages).toHaveLength(3);
-```
-
-#### createDeferred()
-
-Creates a deferred promise for controlling async flow in tests:
-
-```typescript
-import { createDeferred } from '../utils/test-helpers';
+import { createDeferred, expectAsyncError } from '../utils/test-helpers';
 
 const deferred = createDeferred<string>();
-
-// In test setup, resolve at the right time
 setTimeout(() => deferred.resolve('done'), 100);
+expect(await deferred.promise).toBe('done');
 
-const result = await deferred.promise;
-expect(result).toBe('done');
+await expectAsyncError(() => parley.send('ping', {}, { targetId: 'missing' }), {
+    code: 'ERR_TARGET_NOT_CONNECTED',
+});
 ```
 
-#### delay(ms)
-
-Simple promise-based delay:
-
-```typescript
-import { delay } from '../utils/test-helpers';
-
-await instance.startOperation();
-await delay(50);
-expect(instance.isComplete).toBe(true);
-```
-
-#### captureConsole(method)
-
-Captures console output during a test:
-
-```typescript
-import { captureConsole } from '../utils/test-helpers';
-
-const logs = captureConsole('warn');
-
-instance.deprecatedMethod();
-
-logs.restore();
-expect(logs.calls).toContainEqual(['This method is deprecated']);
-```
+`waitForEvent` and `waitForEvents` work with the library's `EventEmitter` (which
+has `once()`), not with `Parley` instances. For `Parley`, subscribe with
+`onSystem()` and resolve a deferred.
 
 ---
 
@@ -617,101 +596,57 @@ expect(logs.calls).toContainEqual(['This method is deprecated']);
 
 ### Test Messages (tests/fixtures/test-messages.ts)
 
-Provides standardized test messages with schemas and validation cases:
+`TEST_MESSAGE_TYPES` provides message definitions, each with a `type`, a
+`schema`, `validPayloads`, and `invalidPayloads` (`{ payload, expectedError }`):
 
 ```typescript
 import { TEST_MESSAGE_TYPES } from '../fixtures/test-messages';
+import { validateSchema } from '../../src/validation/SchemaValidator';
 
 describe('message validation', () => {
     const { schema, validPayloads, invalidPayloads } =
         TEST_MESSAGE_TYPES.USER_UPDATE;
 
     it.each(validPayloads)('should accept valid payload: %j', (payload) => {
-        expect(validator.validate(schema, payload).valid).toBe(true);
+        expect(validateSchema(payload, schema).valid).toBe(true);
     });
 
-    it.each(invalidPayloads)(
-        'should reject invalid payload: %j',
-        ({ payload, expectedError }) => {
-            const result = validator.validate(schema, payload);
-            expect(result.valid).toBe(false);
-            expect(result.error).toContain(expectedError);
-        }
-    );
+    it.each(invalidPayloads)('should reject invalid payload', ({ payload }) => {
+        expect(validateSchema(payload, schema).valid).toBe(false);
+    });
 });
 ```
 
 Available test message types:
 
-| Type              | Description                                     |
-| ----------------- | ----------------------------------------------- |
-| `SIMPLE`          | Basic message with single string field          |
-| `USER_UPDATE`     | User data with required and optional fields     |
-| `DOCUMENT_CHANGE` | Nested objects and arrays                       |
-| `COMPLEX`         | Multiple data types including nested structures |
-| `ANALYTICS_EVENT` | Analytics tracking message                      |
-| `ERROR_REPORT`    | Error reporting with stack traces               |
-| `FEATURE_FLAG`    | Feature toggle configuration                    |
+| Key               | Description                                 |
+| ----------------- | ------------------------------------------- |
+| `SIMPLE`          | Single required string field (`text`)       |
+| `USER_UPDATE`     | User data with required and optional fields |
+| `DOCUMENT_CHANGE` | Nested objects and arrays                   |
+| `NOTIFICATION`    | Notification with level and message         |
+| `API_REQUEST`     | API-style request payload                   |
 
----
+Other exports:
 
-## Coverage Requirements
-
-The project maintains the following coverage thresholds:
-
-| Metric     | Threshold |
-| ---------- | --------- |
-| Lines      | 55%       |
-| Functions  | 55%       |
-| Branches   | 50%       |
-| Statements | 55%       |
-
-### Running Coverage
-
-Generate a coverage report:
-
-```bash
-npm run test:coverage
-```
-
-Coverage reports are generated in multiple formats:
-
-- `coverage/` - HTML report (open `index.html` in browser)
-- Terminal output with summary
-- `lcov.info` - For CI integration
-
-### Excluded from Coverage
-
-The following files are excluded from coverage requirements:
-
-- `tests/` - Test files themselves
-- `**/*.d.ts` - Type declaration files
-- `**/*.config.ts` - Configuration files
-- `**/index.ts` - Re-export barrel files
-- `**/WindowChannel.ts` - Requires integration tests
+- `SAMPLE_PAYLOADS` - one valid payload per message type
+- `INVALID_PAYLOADS` - `null`, `undefined`, empty object, wrong types, missing
+  fields, and a circular reference
+- `TEST_ORIGINS` - `valid` and `invalid` origin lists for security tests
+- `createRegistrationOptions(schema?, timeout?)` - builds options for
+  `register()`
 
 ---
 
 ## Best Practices
 
-### 1. Test One Thing Per Test
-
-Each test should verify a single behavior:
+### 1. Test One Behavior Per Test
 
 ```typescript
-// Good: One assertion per behavior
+// Good: One behavior per test
 it('should increment count on successful operation', () => {
     instance.performOperation();
     expect(instance.count).toBe(1);
-});
-
-it('should emit success event on successful operation', async () => {
-    const handler = vi.fn();
-    instance.on('success', handler);
-
-    await instance.performOperation();
-
-    expect(handler).toHaveBeenCalled();
 });
 
 // Avoid: Multiple unrelated assertions
@@ -725,8 +660,6 @@ it('should work correctly', () => {
 
 ### 2. Use Descriptive Section Headers
 
-Organize tests with clear section comments:
-
 ```typescript
 // ========================================================================
 // methodName() - Brief description
@@ -739,60 +672,47 @@ describe('methodName()', () => {
 
 ### 3. Clean Up After Tests
 
-Always clean up resources in afterEach or afterAll:
+Always destroy Parley instances: they register a `message` listener on `window`,
+and pending timers can leak between tests.
 
 ```typescript
 afterEach(() => {
-    vi.clearAllMocks();
+    parley?.destroy();
+    vi.restoreAllMocks();
     vi.useRealTimers();
-    instance.destroy();
 });
 ```
 
 ### 4. Avoid Test Interdependence
 
-Each test should be independent and not rely on state from other tests:
-
 ```typescript
 // Good: Fresh instance for each test
 beforeEach(() => {
-    instance = new MyClass();
+    parley = Parley.create({
+        targetType: 'window',
+        allowedOrigins: ['https://example.com'],
+        heartbeat: { enabled: false },
+    });
 });
 
 // Avoid: Shared mutable state between tests
-let sharedInstance = new MyClass();
+const sharedParley = Parley.create({ targetType: 'window' });
 ```
 
-### 5. Use Factory Functions for Complex Setup
+### 5. Disable Heartbeats Unless You Test Them
 
-When setup is complex, use helper functions:
-
-```typescript
-function createConfiguredInstance(overrides = {}) {
-    return new MyClass({
-        timeout: 1000,
-        retries: 3,
-        ...overrides,
-    });
-}
-
-it('should use custom timeout', () => {
-    const instance = createConfiguredInstance({ timeout: 5000 });
-    expect(instance.timeout).toBe(5000);
-});
-```
+Heartbeats ping every target every 5 seconds by default. Unless the test is
+about heartbeats, pass `heartbeat: { enabled: false }` so pings do not interfere
+with assertions on `postMessage` calls.
 
 ### 6. Test Edge Cases
 
-Always consider and test boundary conditions:
-
 ```typescript
 describe('edge cases', () => {
-    it('should handle empty string', () => {});
-    it('should handle null input', () => {});
-    it('should handle maximum allowed value', () => {});
-    it('should handle special characters', () => {});
-    it('should handle concurrent calls', () => {});
+    it('should handle empty payloads', () => {});
+    it('should reject circular payloads with SerializationError', () => {});
+    it('should reject payloads over 10 MB', () => {});
+    it('should handle concurrent requests', () => {});
 });
 ```
 
@@ -802,43 +722,29 @@ describe('edge cases', () => {
 
 ### Using the Debugger
 
-Run tests with the Node.js debugger:
-
 ```bash
 npm run test:debug
 ```
 
-Then attach your debugger (VS Code or Chrome DevTools).
+This starts Vitest with `--inspect-brk`; attach VS Code or Chrome DevTools.
 
 ### Adding Breakpoints
-
-Use the `debugger` statement in your test:
 
 ```typescript
 it('should process data correctly', () => {
     const data = prepareTestData();
-    debugger; // Execution will pause here
+    debugger; // Execution pauses here when a debugger is attached
     const result = instance.process(data);
     expect(result).toBeDefined();
 });
 ```
 
-### Verbose Logging
+### Library Logging
 
-Enable verbose output for specific tests:
-
-```typescript
-it('should handle complex scenario', () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    // Your test code
-    console.log('Current state:', instance.getState());
-});
-```
+Create the instance under test with `logLevel: 'debug'` to see its internal logs
+(blocked origins, handshake steps, heartbeats) in the test output.
 
 ### Isolating Failing Tests
-
-Run only specific tests using `.only`:
 
 ```typescript
 describe.only('failing test group', () => {
@@ -848,11 +754,10 @@ describe.only('failing test group', () => {
 });
 ```
 
-Remember to remove `.only` before committing.
+Remember to remove `.only` before committing (CI uses `forbidOnly` for
+Playwright).
 
 ### Skipping Tests
-
-Skip tests temporarily with `.skip`:
 
 ```typescript
 it.skip('test that needs fixing', () => {
@@ -860,108 +765,70 @@ it.skip('test that needs fixing', () => {
 });
 ```
 
+### Debugging E2E Tests
+
+```bash
+npm run test:e2e:ui
+```
+
+Playwright keeps traces for failed tests (`trace: 'retain-on-failure'`), and CI
+uploads the HTML report as an artifact when the E2E job fails.
+
 ---
 
 ## Common Patterns
 
-### Testing Event Emissions
+### Testing System Events
 
 ```typescript
-it('should emit event with correct payload', async () => {
+import { SYSTEM_EVENTS } from '../../src/events/SystemEvents';
+
+it('emits system:disconnected with reason destroyed', async () => {
+    // ...connect parley to a fake window as shown above...
     const handler = vi.fn();
-    instance.on('myEvent', handler);
+    parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, handler);
 
-    await instance.triggerSomething();
+    parley.destroy();
 
-    expect(handler).toHaveBeenCalledWith({
-        type: 'expected',
-        data: expect.any(Object),
-    });
+    expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({ targetId: 'peer', reason: 'destroyed' })
+    );
 });
 ```
 
 ### Testing with Spies
 
 ```typescript
-it('should call internal method', () => {
-    const spy = vi.spyOn(instance, 'internalMethod');
+it('posts a message to the target window', async () => {
+    // ...connect parley to fake window `win`...
+    await parley.send(
+        'notify',
+        { a: 1 },
+        {
+            targetId: 'peer',
+            expectsResponse: false,
+        }
+    );
 
-    instance.publicMethod();
-
-    expect(spy).toHaveBeenCalledWith('expected arg');
-});
-```
-
-### Testing Callbacks
-
-```typescript
-it('should invoke callback on completion', () => {
-    const callback = vi.fn();
-
-    instance.doAsync(callback);
-
-    expect(callback).toHaveBeenCalledWith(null, { success: true });
+    expect(win.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ _type: 'notify', payload: { a: 1 } }),
+        expect.any(String)
+    );
 });
 ```
 
 ### Testing Abstract Classes
 
-Create a concrete test implementation:
-
-```typescript
-class TestChannel extends BaseChannel {
-    protected _postMessage(message: unknown): void {
-        this.lastSentMessage = message;
-    }
-
-    // Expose protected methods for testing
-    public testHandleMessage(event: MessageEvent): void {
-        this._handleMessageEvent(event);
-    }
-}
-
-describe('BaseChannel', () => {
-    let channel: TestChannel;
-
-    beforeEach(() => {
-        channel = new TestChannel(config);
-    });
-});
-```
+Create a concrete test implementation that exposes protected members (see
+`tests/unit/BaseChannel.test.ts` for the real one).
 
 ### Testing Promise Rejection
 
 ```typescript
-it('should reject with specific error', async () => {
-    await expect(instance.failingOperation()).rejects.toThrow(
-        'Expected error message'
-    );
-});
-
 it('should reject with error code', async () => {
-    await expect(instance.failingOperation()).rejects.toMatchObject({
-        code: 'ERROR_CODE',
-        message: expect.stringContaining('error'),
+    await expect(failingOperation()).rejects.toMatchObject({
+        code: 'ERR_TIMEOUT_NO_RESPONSE',
     });
-});
-```
-
-### Testing State Transitions
-
-```typescript
-it('should transition through expected states', async () => {
-    const states: string[] = [];
-    instance.on('stateChange', (state) => states.push(state));
-
-    await instance.connect();
-    await instance.disconnect();
-
-    expect(states).toEqual([
-        'connecting',
-        'connected',
-        'disconnecting',
-        'disconnected',
-    ]);
 });
 ```
 
@@ -969,45 +836,23 @@ it('should transition through expected states', async () => {
 
 ## Continuous Integration
 
-Tests run automatically on:
+`.github/workflows/test.yml` runs on pushes and pull requests to `main` and
+`development`, and daily at 02:00 UTC. All actions are pinned to commit SHAs and
+the workflow has read-only permissions.
 
-- Every pull request
-- Every commit to main branch
-- Scheduled daily runs
-
-### GitHub Actions Workflow
-
-See `.github/workflows/test.yml` for the full CI configuration:
-
-```yaml
-name: Tests
-
-on:
-    push:
-        branches: [main]
-    pull_request:
-        branches: [main]
-
-jobs:
-    test:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: '20'
-            - run: npm ci
-            - run: npm test
-            - run: npm run test:coverage
-```
+| Job                  | What it runs                                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `test` (Node 20, 22) | `npm ci`, `format:check`, `typecheck`, `lint:eslint`, `test:coverage` (thresholds enforced), Codecov upload |
+| `security`           | `npm audit --omit=dev --audit-level=high`, the security test suite, a security coverage report              |
+| `integration`        | The integration test suite                                                                                  |
+| `e2e`                | Installs Chromium, runs `npm run test:e2e`, uploads the Playwright report on failure                        |
+| `build`              | `npm run build` and `npm run size` (bundle size budget)                                                     |
 
 ### Coverage Enforcement
 
-Pull requests must maintain or improve coverage:
-
-- Overall coverage: 85%+ required
-- No decrease in coverage allowed without justification
-- New code should have 90%+ coverage
+The `test` job fails if coverage drops below the thresholds in
+`vitest.config.ts` (lines 66, functions 67, branches 62, statements 66). New
+code should come with tests so the thresholds can keep moving up.
 
 ---
 
@@ -1015,25 +860,24 @@ Pull requests must maintain or improve coverage:
 
 When contributing code:
 
-1. Write tests for all new features
-2. Maintain or improve coverage
-3. Follow existing test patterns
-4. Run full test suite before submitting PR
-5. Add tests for bug fixes
+1. Write tests for all new features and bug fixes
+2. Keep coverage at or above the enforced thresholds
+3. Follow existing test patterns (see the files referenced above)
+4. Run `npm run test:run`, `npm run typecheck` and, for messaging changes,
+   `npm run test:e2e` before submitting a PR
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guidelines.
+See
+[CONTRIBUTING.md](https://github.com/WebDev-Guy/parley-js/blob/main/CONTRIBUTING.md)
+for detailed guidelines.
 
 ---
 
 ## Additional Resources
 
 - <a href="https://vitest.dev/" target="_blank">Vitest Documentation</a>
+- <a href="https://playwright.dev/" target="_blank">Playwright Documentation</a>
 - <a href="https://github.com/capricorn86/happy-dom" target="_blank">happy-dom
   Documentation</a>
-- <a href="https://github.com/goldbergyoni/javascript-testing-best-practices" target="_blank">Testing
-  Best Practices</a>
-- <a href="https://martinfowler.com/bliki/TestCoverage.html" target="_blank">Test
-  Coverage Best Practices</a>
 
 For questions about testing patterns or to report issues with the test suite,
 please open an issue in the repository.
@@ -1052,6 +896,7 @@ please open an issue in the repository.
 
 - [Security Guide](./SECURITY.md) - Security testing
 - [Examples](./EXAMPLES.md) - Examples to test
-- [Contributing](../CONTRIBUTING.md) - Contributing tests
+- [Contributing](https://github.com/WebDev-Guy/parley-js/blob/main/CONTRIBUTING.md) -
+  Contributing tests
 
 **Back to**: [Documentation Home](./index.md)

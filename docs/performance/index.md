@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > Performance
+[Home](../index.md) > [Documentation](../FRAMEWORK_REFERENCE.md) > Performance
 
 # Performance Guide
 
@@ -18,7 +18,7 @@ optimization techniques, profiling, and performance best practices.
     - Batching strategies
     - Debouncing and throttling
     - Memory management
-    - Connection pooling
+    - Connection management
 
 ## Performance Characteristics
 
@@ -52,9 +52,9 @@ ParleyJS performance depends on:
 ### Message Size
 
 ```javascript
-// Slow - large payload
+// Slow - large payload (payloads over 10 MB serialized are rejected)
 await parley.send('update', {
-    data: hugeArray, // 10MB
+    data: hugeArray, // several MB
     metadata: {
         /* lots of data */
     },
@@ -101,15 +101,22 @@ For more patterns, see
 
 ### Measure Message Latency
 
-```javascript
-parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
-    console.time(`message-${event.messageId}`);
-});
+For request-response messages, ParleyJS measures the round trip for you. The
+`system:response_received` event carries a `duration` (milliseconds between
+sending the request and receiving its response):
 
-parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
-    console.timeEnd(`message-${event.correlationId}`);
+```javascript
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
+
+parley.onSystem(SYSTEM_EVENTS.RESPONSE_RECEIVED, (event) => {
+    // event: { responseId, requestId, success, duration, timestamp }
+    console.log(`Request ${event.requestId} took ${event.duration}ms`);
 });
 ```
+
+`requestId` is the `messageId` reported by `system:message_sent` for the same
+request. System event listeners are not awaited, so monitoring code never delays
+message delivery.
 
 ### Monitor Connection Health
 
@@ -121,14 +128,23 @@ parley.onSystem(SYSTEM_EVENTS.HEARTBEAT_MISSED, (event) => {
 
 ## Performance Benchmarks
 
-Typical performance characteristics:
+The repository includes micro-benchmarks for the message hot path
+(`tests/bench/hot-path.bench.ts`): fire-and-forget `send()` and inbound dispatch
+to one or five targets. Run them with:
 
-- **Message latency**: < 5ms (same origin)
-- **Message throughput**: 1000+ messages/sec
-- **Memory per connection**: ~10KB
-- **Serialization overhead**: ~1ms per MB
+```bash
+npm run bench
+```
 
-These numbers vary based on browser, payload complexity, and system load.
+Measured for 1.1.0 with `npm run bench`:
+
+- **`send()` with a 1 KB payload**: about 90,000 operations/second
+- **`send()` with a 1 MB payload**: about 9 ms per call
+
+The benchmarks run in a simulated DOM (happy-dom), not a real browser, so treat
+them as relative numbers for comparing versions and payload sizes. Real-world
+latency depends on the browser, payload complexity, and system load; profile
+your own application with the events shown above.
 
 ## Memory Management
 
@@ -139,9 +155,12 @@ function cleanup() {
 }
 
 // Or remove specific listeners
-const unsubscribe = parley.on('message', handler);
+const unsubscribe = parley.on('chat:message', handler);
 unsubscribe(); // Remove this listener only
 ```
+
+`destroy()` also rejects pending requests with `ERR_CONNECTION_CLOSED` and emits
+`system:disconnected` (reason `'destroyed'`) for each target.
 
 For details, see [Optimization Guide](./optimization.md).
 
@@ -176,4 +195,5 @@ Before deploying:
 - [Advanced Patterns](../CODE_PATTERNS.md)
 - [Architecture](../ARCHITECTURE.md)
 
-**Back to**: [Documentation Home](./index.md) | [Project Home](../../index.md)
+**Back to**: [Documentation Home](../index.md) |
+[Project Home](https://github.com/WebDev-Guy/parley-js/blob/main/README.md)

@@ -1,96 +1,37 @@
 # Types Reference
 
-[Home](../../index.md) > [Documentation](./index.md) >
+[Home](../index.md) > [Documentation](./index.md) >
 [API Reference](./index.md) > Types
 
 ## Overview
 
-ParleyJS is written in TypeScript and provides comprehensive type definitions
-for all configuration options, message payloads, event handlers, and error
-types. This reference documents all exported types and interfaces.
+ParleyJS is written in TypeScript and ships type definitions for its
+configuration, handlers, events and errors. This page documents the public types
+exported from `ignite-parleyjs`, exactly as they are declared in the source.
+
+```typescript
+import type {
+    ParleyConfig,
+    MessageHandler,
+    MessageMetadata,
+    SendOptions,
+    JsonSchema,
+} from 'ignite-parleyjs';
+```
 
 ## Table of Contents
 
-1. [Core Types](#core-types)
-2. [Configuration Types](#configuration-types)
+1. [Configuration Types](#configuration-types)
+2. [Handler Types](#handler-types)
 3. [Message Types](#message-types)
-4. [Handler Types](#handler-types)
-5. [Event Types](#event-types)
-6. [Error Types](#error-types)
-7. [Utility Types](#utility-types)
-8. [Type Guards](#type-guards)
-9. [Generic Usage](#generic-usage)
-
----
-
-## Core Types
-
-### Parley
-
-The main ParleyJS class for establishing communication channels.
-
-```typescript
-class Parley {
-    constructor(config?: ParleyConfig);
-
-    on<T = any, R = any>(
-        channel: string,
-        handler: MessageHandler<T, R>,
-        options?: HandlerOptions
-    ): () => void;
-
-    send<T = any, R = any>(
-        channel: string,
-        payload: T,
-        options?: SendOptions
-    ): Promise<R>;
-
-    emit<T = any>(channel: string, payload: T): void;
-
-    off(channel: string, handler?: MessageHandler): void;
-
-    destroy(): void;
-}
-```
-
-**Type Parameters**:
-
-- `T`: Type of message payload
-- `R`: Type of response data
-
-**Example**:
-
-```typescript
-import { Parley } from 'parleyjs';
-
-interface UserData {
-    userId: number;
-    username: string;
-}
-
-interface UserResponse {
-    success: boolean;
-    user?: UserData;
-}
-
-const parley = new Parley();
-
-// Typed message handler
-parley.on<UserData, UserResponse>('create-user', (payload, respond) => {
-    // payload is typed as UserData
-    const user = createUser(payload);
-
-    // respond accepts UserResponse
-    respond({ success: true, user });
-});
-
-// Typed send
-const response = await parley.send<UserData, UserResponse>('create-user', {
-    userId: 123,
-    username: 'alice',
-});
-// response is typed as UserResponse
-```
+4. [Schema Validation Types](#schema-validation-types)
+5. [Connection Types](#connection-types)
+6. [System Event Types](#system-event-types)
+7. [Analytics Types](#analytics-types)
+8. [Error Types](#error-types)
+9. [Protocol Types](#protocol-types)
+10. [Channel Types](#channel-types)
+11. [Generic Usage](#generic-usage)
 
 ---
 
@@ -98,291 +39,112 @@ const response = await parley.send<UserData, UserResponse>('create-user', {
 
 ### ParleyConfig
 
-Main configuration object for Parley instances.
+Configuration passed to `Parley.create()`. `Parley.create()` is the only way to
+create an instance; the constructor is private.
 
 ```typescript
 interface ParleyConfig {
-    /**
-     * Target for communication (window, worker, iframe)
-     * @default self (current context)
-     */
-    target?: Window | Worker | MessagePort;
-
-    /**
-     * Type of target being communicated with
-     */
-    targetType?: TargetType;
-
-    /**
-     * Default timeout for request-response operations (ms)
-     * @default 30000
-     */
-    timeout?: number;
-
-    /**
-     * Allowed origins for security validation
-     * @default ['*'] (allow all - not recommended for production)
-     */
-    allowedOrigins?: string[];
-
-    /**
-     * Heartbeat monitoring configuration
-     */
-    heartbeat?: HeartbeatConfig;
-
-    /**
-     * Enable debug logging
-     * @default false
-     */
-    debug?: boolean;
-
-    /**
-     * Custom serializer for message payloads
-     */
-    serializer?: MessageSerializer;
-
-    /**
-     * Namespace prefix for message channels
-     */
-    namespace?: string;
+    targetType: TargetType; // Required
+    timeout?: number; // Default: 5000
+    retries?: number; // Default: 0
+    allowedOrigins?: string[]; // Default: [window.location.origin]
+    logLevel?: LogLevel; // Default: 'none'
+    analyticsEnabled?: boolean; // Default: false
+    securityLayer?: SecurityLayer; // Default: new DefaultSecurityLayer()
+    instanceId?: string; // Default: generated 'parley_xxxxxxxx'
+    heartbeat?: HeartbeatConfig; // Default: see HeartbeatConfig
+    exposeHandlerErrors?: boolean; // Default: false
+    rateLimit?: {
+        enabled?: boolean; // Default: false
+        messagesPerSecond?: number; // Default: 100
+    };
 }
+
+type LogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug';
 ```
 
-**Example**:
+| Property              | Description                                                                                                                                                                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `targetType`          | `'iframe'` or `'window'`. One instance handles one target type                                                                                                                                                                                      |
+| `timeout`             | Handshake timeout and default request timeout, in milliseconds. Must be a positive number                                                                                                                                                           |
+| `retries`             | Default retry count. Each retry re-sends the same message (same id) after another `timeout`, with no backoff. Must not be negative                                                                                                                  |
+| `allowedOrigins`      | Origins allowed to communicate, matched exactly after normalization. No wildcard or subdomain patterns. Must be a non-empty array of non-empty strings and must not contain `'null'` or any entry containing `'*'` (e.g. `'https://*.example.com'`) |
+| `logLevel`            | Internal logging level                                                                                                                                                                                                                              |
+| `analyticsEnabled`    | Deliver analytics events to `onAnalyticsEvent()` handlers                                                                                                                                                                                           |
+| `securityLayer`       | Custom [SecurityLayer](#securitylayer) subclass                                                                                                                                                                                                     |
+| `instanceId`          | Identifier for this instance (sent as `senderId` in internal messages)                                                                                                                                                                              |
+| `heartbeat`           | Connection health monitoring, see [HeartbeatConfig](#heartbeatconfig)                                                                                                                                                                               |
+| `exposeHandlerErrors` | When this side's handler throws, send the real error message to the sender instead of `'Handler error'`                                                                                                                                             |
+| `rateLimit`           | Limit outgoing `send()` calls per fixed 1-second window, per `targetId` (or globally for untargeted sends). `broadcast()` and inbound messages are not limited. Exceeding it rejects with `ERR_SECURITY_RATE_LIMITED`                               |
+
+Options such as `debug`, `requireOriginMatch`, `validateMessages`, `target`,
+`serializer`, `namespace` or any reconnect option do not exist.
+
+`Parley.create()` throws a plain `Error('Configuration error: ...')` (there is
+no `ConfigurationError` class) when `targetType` is missing or invalid,
+`timeout` is not a positive number, `retries` is negative, or `allowedOrigins`
+is invalid as described above.
 
 ```typescript
 const config: ParleyConfig = {
-    target: workerInstance,
-    targetType: 'worker',
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.example.com'],
     timeout: 10000,
-    allowedOrigins: ['https://app.example.com'],
-    heartbeat: {
-        enabled: true,
-        interval: 5000,
-        timeout: 15000,
-    },
-    debug: process.env.NODE_ENV === 'development',
-    namespace: 'myapp',
+    logLevel: 'debug',
 };
 
-const parley = new Parley(config);
-```
-
-### HeartbeatConfig
-
-Configuration for heartbeat monitoring to detect connection issues.
-
-```typescript
-interface HeartbeatConfig {
-    /**
-     * Enable heartbeat monitoring
-     * @default false
-     */
-    enabled: boolean;
-
-    /**
-     * Interval between heartbeat pings (ms)
-     * @default 5000
-     */
-    interval?: number;
-
-    /**
-     * Timeout before considering target unresponsive (ms)
-     * @default 15000
-     */
-    timeout?: number;
-
-    /**
-     * Maximum missed heartbeats before triggering timeout
-     * @default 3
-     */
-    maxMissed?: number;
-}
-```
-
-**Example**:
-
-```typescript
-const heartbeat: HeartbeatConfig = {
-    enabled: true,
-    interval: 3000, // Send ping every 3 seconds
-    timeout: 10000, // Fail if no pong within 10 seconds
-    maxMissed: 2, // Fail after 2 consecutive missed heartbeats
-};
-
-const parley = new Parley({ heartbeat });
-```
-
-### TargetType
-
-Enum-like type for different communication targets.
-
-```typescript
-type TargetType = 'window' | 'worker' | 'iframe' | 'port';
-```
-
-**Usage**:
-
-```typescript
-import { Parley, TargetType } from 'parleyjs';
-
-const workerParley = new Parley({
-    target: myWorker,
-    targetType: 'worker' as TargetType,
-});
-
-const iframeParley = new Parley({
-    target: iframeWindow,
-    targetType: 'iframe' as TargetType,
-});
+const parley = Parley.create(config);
 ```
 
 ---
 
-## Message Types
-
-### SendOptions
-
-Options for `send()` operations.
+### HeartbeatConfig
 
 ```typescript
-interface SendOptions {
-    /**
-     * Override default timeout for this message (ms)
-     */
-    timeout?: number;
-
-    /**
-     * Message priority (higher number = higher priority)
-     * @default 0
-     */
-    priority?: number;
-
-    /**
-     * Transfer ownership of Transferable objects
-     */
-    transfer?: Transferable[];
-
-    /**
-     * Metadata to attach to message
-     */
-    metadata?: Record<string, any>;
+interface HeartbeatConfig {
+    enabled?: boolean; // Default: true
+    interval?: number; // Default: 5000 ms between pings
+    timeout?: number; // Default: 2000 ms to wait for each pong
+    maxMissed?: number; // Default: 3 consecutive missed pings
+    maxFailures?: number; // Default: 3 consecutive timed-out requests
 }
-```
 
-**Example**:
-
-```typescript
-// Send with custom timeout
-const response = await parley.send('slow-operation', data, {
-    timeout: 60000, // 60 second timeout
-});
-
-// Send with transferable objects (e.g., ArrayBuffer)
-const buffer = new ArrayBuffer(1024);
-await parley.send(
-    'process-buffer',
-    { buffer },
-    {
-        transfer: [buffer], // Transfer ownership to worker
-    }
-);
-
-// Send with priority
-await parley.send('urgent-task', data, {
-    priority: 10, // Higher priority than default
-    metadata: { userId: 123, requestId: 'req-456' },
-});
-```
-
-### MessageMetadata
-
-Metadata attached to every message.
-
-```typescript
-interface MessageMetadata {
-    /**
-     * Unique message identifier
-     */
-    messageId: string;
-
-    /**
-     * Message channel name
-     */
-    channel: string;
-
-    /**
-     * Timestamp when message was sent
-     */
-    timestamp: number;
-
-    /**
-     * Origin of the message sender
-     */
-    origin?: string;
-
-    /**
-     * Custom metadata provided in SendOptions
-     */
-    custom?: Record<string, any>;
-
-    /**
-     * Whether this message expects a response
-     */
-    expectsResponse: boolean;
-}
-```
-
-**Example**:
-
-```typescript
-parley.on('process', (payload, respond, metadata) => {
-    console.log('Message ID:', metadata.messageId);
-    console.log('Sent at:', new Date(metadata.timestamp));
-    console.log('From origin:', metadata.origin);
-    console.log('Custom data:', metadata.custom);
-
-    respond({ processed: true });
-});
-```
-
-### MessageSerializer
-
-Interface for custom message serialization.
-
-```typescript
-interface MessageSerializer {
-    /**
-     * Serialize payload before sending
-     */
-    serialize(payload: any): any;
-
-    /**
-     * Deserialize payload after receiving
-     */
-    deserialize(data: any): any;
-}
-```
-
-**Example**:
-
-```typescript
-import { ParleyConfig, MessageSerializer } from 'parleyjs';
-
-// Custom serializer using MessagePack
-const msgpackSerializer: MessageSerializer = {
-    serialize(payload) {
-        return msgpack.encode(payload);
-    },
-    deserialize(data) {
-        return msgpack.decode(data);
-    },
-};
-
-const config: ParleyConfig = {
-    serializer: msgpackSerializer,
+const DEFAULT_HEARTBEAT_CONFIG = {
+    enabled: true,
+    interval: 5000,
+    timeout: 2000,
+    maxMissed: 3,
+    maxFailures: 3,
 };
 ```
+
+- Each side pings each connected target every `interval`. The pong is the
+  response to the ping; a ping not answered within `timeout` is a miss
+  (`system:heartbeat_missed`). After `maxMissed` consecutive misses the target
+  is disconnected with reason `'heartbeat_timeout'`.
+- `maxFailures`: after that many consecutive timed-out requests to a specific
+  target (`send()` with a `targetId` that expects a response), the target is
+  disconnected with reason `'max_failures_reached'`. Any response (success or
+  error) resets the count. Untargeted sends and heartbeats do not count.
+  `maxFailures` applies even when `enabled` is `false`.
+- There is no automatic reconnection.
+
+`DEFAULT_HEARTBEAT_CONFIG` is exported.
+
+---
+
+### TargetType
+
+```typescript
+type TargetType = 'iframe' | 'window';
+```
+
+- `'iframe'`: the parent calls `connect(iframeElement)`; the page inside the
+  iframe calls `connect(window.parent)`.
+- `'window'`: the opener calls `connect(popupWindow)`; the popup calls
+  `connect(window.opener)`.
+
+Web Workers, `MessageChannel` ports and Service Workers are not supported.
 
 ---
 
@@ -390,364 +152,582 @@ const config: ParleyConfig = {
 
 ### MessageHandler
 
-Type for message event handlers.
+Handler passed to `parley.on()`.
 
 ```typescript
-type MessageHandler<T = any, R = any> = (
+type MessageHandler<T = unknown> = (
     payload: T,
-    respond: ResponseFunction<R>,
+    respond: ResponseFunction,
     metadata: MessageMetadata
 ) => void | Promise<void>;
 ```
 
-**Type Parameters**:
+The return value is ignored. Reply by calling `respond()` once. If the handler
+throws or rejects, the sender receives an `ERR_HANDLER_ERROR` error response (if
+it expects one and none was sent), `system:error` is emitted and the type's
+`onError` option is called.
 
-- `T`: Type of incoming payload
-- `R`: Type of response data
-
-**Example**:
-
-```typescript
-import { MessageHandler } from 'parleyjs';
-
-interface CalculateRequest {
-    operation: 'add' | 'subtract';
-    a: number;
-    b: number;
-}
-
-interface CalculateResponse {
-    result: number;
-}
-
-const calculateHandler: MessageHandler<CalculateRequest, CalculateResponse> = (
-    payload,
-    respond,
-    metadata
-) => {
-    const result =
-        payload.operation === 'add'
-            ? payload.a + payload.b
-            : payload.a - payload.b;
-
-    respond({ result });
-};
-
-parley.on('calculate', calculateHandler);
-```
+---
 
 ### ResponseFunction
 
-Function signature for responding to messages.
-
 ```typescript
-type ResponseFunction<R = any> = (response: R) => void;
+type ResponseFunction<R = unknown> = (response: R) => void;
 ```
 
-**Example**:
+The `respond` argument a handler receives is a `ResponseFunction` (non-generic,
+`R = unknown`). Calling it a second time for the same message throws an `Error`.
+The response is passed through the security layer's `sanitizePayload()` (a JSON
+clone by default) before it is posted.
+
+---
+
+### MessageMetadata
+
+Third argument of every handler.
 
 ```typescript
-parley.on<UserQuery, UserData>('get-user', async (payload, respond) => {
-    const user = await fetchUser(payload.userId);
-
-    // respond is typed as ResponseFunction<UserData>
-    respond({ userId: user.id, username: user.name });
-});
-```
-
-### HandlerOptions
-
-Options for registering message handlers.
-
-```typescript
-interface HandlerOptions {
-    /**
-     * JSON schema for payload validation
-     */
-    schema?: object;
-
-    /**
-     * Validate payload before calling handler
-     * @default true if schema provided
-     */
-    validate?: boolean;
-
-    /**
-     * Handler priority (higher = called earlier)
-     * @default 0
-     */
-    priority?: number;
-
-    /**
-     * Call handler only once, then auto-unregister
-     * @default false
-     */
-    once?: boolean;
+interface MessageMetadata {
+    messageId: string; // Unique message ID
+    senderId: string; // Local target ID of the sender (the id used in connect())
+    origin: string; // Browser-verified origin (event.origin)
+    timestamp: number; // When the sender created the message
+    expectsResponse: boolean; // Whether the sender waits for a response
 }
 ```
 
-**Example**:
+There is no `targetId`, `type` or `correlationId` on metadata. Since 1.1.0
+`origin` is the origin reported by the browser, never the origin the sender
+wrote into the message.
+
+---
+
+### MessageRegistrationOptions
+
+Options for `parley.register(type, options)`.
 
 ```typescript
-const userSchema = {
-    type: 'object',
-    properties: {
-        userId: { type: 'number' },
-        email: { type: 'string', format: 'email' },
-    },
-    required: ['userId', 'email'],
-};
+interface MessageRegistrationOptions {
+    schema?: JsonSchema;
+    timeout?: number;
+    retries?: number;
+    onError?: (error: ParleyError, metadata: MessageMetadata) => void;
+}
+```
 
-parley.on('create-user', handler, {
-    schema: userSchema, // Auto-validate against schema
-    validate: true, // Enable validation
-    priority: 10, // High priority handler
-    once: false, // Can be called multiple times
+| Property  | Description                                                                                                                                                                                                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `schema`  | Validated against outgoing payloads of this type (on `send()`/`broadcast()`) and incoming payloads of this type                                                                                                                                                                      |
+| `timeout` | Default timeout for `send()` of this type                                                                                                                                                                                                                                            |
+| `retries` | Default retry count for `send()` of this type                                                                                                                                                                                                                                        |
+| `onError` | Called when an inbound message of this type fails schema validation (a `ValidationError`) or one of its handlers throws (the thrown `ParleyError`, or the error wrapped in a `ParleyError` with code `ERR_UNKNOWN`). Errors thrown by `onError` are logged and ignored. New in 1.1.0 |
+
+Handlers are not part of the registration options; add them with `on()`.
+
+---
+
+## Message Types
+
+### SendOptions
+
+Options for `parley.send()`. `broadcast()` takes no options.
+
+```typescript
+interface SendOptions {
+    targetId?: string; // Default: all connected targets, first response wins
+    timeout?: number; // Default: type timeout, then instance timeout
+    retries?: number; // Default: type retries, then instance retries
+    expectsResponse?: boolean; // Default: true
+}
+```
+
+With `expectsResponse: false`, `send()` resolves with `undefined` once the
+message is posted.
+
+---
+
+### SYSTEM_MESSAGE_TYPES
+
+Internal message type names used by the protocol. Application types must not
+start with `__parley_` or `system:`.
+
+```typescript
+const SYSTEM_MESSAGE_TYPES = {
+    DISCONNECT: '__parley_disconnect',
+    HEARTBEAT_PING: '__parley_heartbeat_ping',
+};
+```
+
+There is no pong message type; the pong is the response to a ping. Handshake
+messages are internal to the channels and not listed here. The related payload
+types `DisconnectPayload`, `HeartbeatPingPayload` and `HeartbeatPongPayload` are
+also exported.
+
+---
+
+## Schema Validation Types
+
+### JsonSchema
+
+A simplified JSON Schema used by `register(type, { schema })`.
+
+```typescript
+interface JsonSchema {
+    type?:
+        | 'string'
+        | 'number'
+        | 'integer'
+        | 'boolean'
+        | 'object'
+        | 'array'
+        | 'null';
+    required?: string[];
+    properties?: Record<string, JsonSchema>;
+    items?: JsonSchema;
+    minimum?: number;
+    maximum?: number;
+    minLength?: number; // Strings and arrays
+    maxLength?: number; // Strings and arrays
+    pattern?: string;
+    enum?: unknown[];
+    additionalProperties?: boolean | JsonSchema;
+    description?: string; // Annotation only
+    default?: unknown; // Annotation only, never applied
+}
+```
+
+- Only the keywords above are enforced. `type` takes a single type name (no
+  arrays of types).
+- Other JSON Schema keywords (`format`, `minItems`, `maxItems`, `oneOf`,
+  `anyOf`, `allOf`, `$ref`, `const`, ...) are silently ignored. Use `pattern`
+  instead of `format`.
+- `required` and `properties` only consider own properties.
+- Errors are collected up to 100 per level; schemas may nest up to 50 levels.
+
+```typescript
+parley.register('user:update', {
+    schema: {
+        type: 'object',
+        required: ['id', 'email'],
+        properties: {
+            id: { type: 'integer', minimum: 1 },
+            email: { type: 'string', pattern: '^[^@\\s]+@[^@\\s]+$' },
+            role: { type: 'string', enum: ['admin', 'user'] },
+        },
+        additionalProperties: false,
+    },
 });
 ```
 
 ---
 
-## Event Types
+### ValidationResult and ValidationErrorDetail
 
-### System Events
-
-ParleyJS emits various system events for monitoring.
+Returned by the exported `validateSchema(data, schema)` helper (and
+`SchemaValidator#validate`).
 
 ```typescript
-type SystemEvent =
-    | 'ready'
+interface ValidationResult {
+    valid: boolean;
+    errors: ValidationErrorDetail[]; // Empty when valid
+}
+
+interface ValidationErrorDetail {
+    path: string; // e.g. 'user.email'
+    message: string;
+    expected?: string;
+    received?: string;
+    rule?: string; // The keyword that failed
+}
+```
+
+A `ValidationError` raised by schema validation carries these details in
+`validationErrors`.
+
+---
+
+## Connection Types
+
+### ConnectionState
+
+Returned by `parley.getConnectionState(targetId)` and used in
+`system:connection_state_changed`.
+
+```typescript
+enum ConnectionState {
+    CONNECTING = 'connecting',
+    CONNECTED = 'connected',
+    DISCONNECTING = 'disconnecting',
+    DISCONNECTED = 'disconnected',
+}
+```
+
+There is no `RECONNECTING` state. `ConnectionState` is exported as a value.
+
+---
+
+### DisconnectReason
+
+```typescript
+type DisconnectReason =
+    | 'manual_disconnect' // disconnect() on this side, or the peer called disconnect()
+    | 'connection_lost' // The target window was closed
+    | 'heartbeat_timeout' // heartbeat.maxMissed consecutive misses
+    | 'max_failures_reached' // heartbeat.maxFailures consecutive request timeouts
+    | 'cleanup' // Removed by periodic cleanup of dead targets
+    | 'destroyed'; // destroy() was called on this instance
+```
+
+---
+
+### ConnectionStateChange
+
+```typescript
+interface ConnectionStateChange {
+    targetId: string;
+    previousState: ConnectionState;
+    currentState: ConnectionState;
+    reason?: string;
+    timestamp: number;
+}
+```
+
+---
+
+## System Event Types
+
+### SystemEventName
+
+```typescript
+type SystemEventName = (typeof SYSTEM_EVENTS)[keyof typeof SYSTEM_EVENTS];
+// 'system:connected' | 'system:disconnected' | 'system:connection_lost'
+// | 'system:connection_state_changed' | 'system:heartbeat_missed'
+// | 'system:error' | 'system:timeout' | 'system:message_sent'
+// | 'system:message_received' | 'system:response_sent'
+// | 'system:response_received' | 'system:handshake_start'
+// | 'system:handshake_complete' | 'system:handshake_failed'
+```
+
+System events are listened to with `parley.onSystem(SYSTEM_EVENTS.X, handler)`,
+never with `on()`. The handler receives `data: unknown`; cast it to the matching
+data type below. See [System Events](./system-events.md) for when each event is
+emitted.
+
+### System Event Data
+
+| Event                                              | Data type                         |
+| -------------------------------------------------- | --------------------------------- |
+| `system:connected`                                 | `ConnectedEventData`              |
+| `system:disconnected`                              | `DisconnectedEventData`           |
+| `system:connection_lost`                           | `ConnectionLostEventData`         |
+| `system:connection_state_changed`                  | `ConnectionStateChangedEventData` |
+| `system:heartbeat_missed`                          | `HeartbeatMissedEventData`        |
+| `system:error`                                     | `ErrorEventData`                  |
+| `system:timeout`                                   | `TimeoutEventData`                |
+| `system:message_sent`                              | `MessageSentEventData`            |
+| `system:message_received`                          | `MessageReceivedEventData`        |
+| `system:response_sent`                             | `ResponseSentEventData`           |
+| `system:response_received`                         | `ResponseReceivedEventData`       |
+| `system:handshake_start` / `_complete` / `_failed` | `HandshakeEventData`              |
+
+```typescript
+interface ConnectedEventData {
+    targetId: string;
+    targetType: 'iframe' | 'window';
+    origin: string;
+    timestamp: number;
+}
+
+interface DisconnectedEventData {
+    targetId: string;
+    reason: DisconnectReason;
+    timestamp: number;
+}
+
+interface ConnectionLostEventData {
+    targetId: string;
+    reason:
+        | 'heartbeat_timeout'
+        | 'max_failures_reached'
+        | 'connection_lost'
+        | 'cleanup';
+    timestamp: number;
+}
+
+interface ConnectionStateChangedEventData {
+    targetId: string;
+    previousState: ConnectionState;
+    currentState: ConnectionState;
+    reason?: string;
+    timestamp: number;
+}
+
+interface HeartbeatMissedEventData {
+    targetId: string;
+    consecutiveMissed: number;
+    timestamp: number;
+}
+
+interface ErrorEventData {
+    code: string;
+    message: string;
+    targetId?: string;
+    messageId?: string;
+    details?: unknown;
+    timestamp: number;
+}
+
+interface TimeoutEventData {
+    messageId: string;
+    messageType: string;
+    targetId?: string;
+    timeoutMs: number;
+    retriesAttempted: number;
+    timestamp: number;
+}
+
+interface MessageSentEventData {
+    messageId: string;
+    messageType: string;
+    targetId?: string;
+    expectsResponse: boolean;
+    timestamp: number;
+}
+
+interface MessageReceivedEventData {
+    messageId: string;
+    messageType: string;
+    origin: string; // Browser-verified
+    timestamp: number;
+}
+
+interface ResponseSentEventData {
+    responseId: string;
+    requestId: string;
+    success: boolean;
+    timestamp: number;
+}
+
+interface ResponseReceivedEventData {
+    responseId: string;
+    requestId: string;
+    success: boolean;
+    duration: number; // Round trip in ms
+    timestamp: number;
+}
+
+interface HandshakeEventData {
+    targetId: string;
+    targetType: 'iframe' | 'window';
+    timestamp: number;
+    error?: { code: string; message: string }; // handshake_failed only
+}
+```
+
+`SystemEventData` is the union of these interfaces, and `SystemEventHandler<T>`
+is `(data: T) => void | Promise<void>`.
+
+---
+
+## Analytics Types
+
+Delivered to `parley.onAnalyticsEvent(handler)` when the instance was created
+with `analyticsEnabled: true`. All fields are top-level; there is no
+`event.data`.
+
+```typescript
+type AnalyticsEventType =
+    | 'message_sent'
+    | 'message_received'
+    | 'response_sent'
+    | 'response_received'
     | 'error'
-    | 'message:sent'
-    | 'message:received'
-    | 'connection:established'
-    | 'connection:lost'
-    | 'heartbeat:sent'
-    | 'heartbeat:received'
-    | 'heartbeat:timeout';
+    | 'timeout';
+
+interface BaseAnalyticsEvent {
+    type: AnalyticsEventType;
+    messageType: string;
+    messageId: string;
+    targetId?: string;
+    timestamp: number;
+}
+
+type AnalyticsEvent =
+    | (BaseAnalyticsEvent & { type: 'message_sent' })
+    | (BaseAnalyticsEvent & { type: 'message_received' })
+    | (BaseAnalyticsEvent & { type: 'response_sent'; success: boolean })
+    | (BaseAnalyticsEvent & {
+          type: 'response_received';
+          duration: number;
+          success: boolean;
+      })
+    | (BaseAnalyticsEvent & {
+          type: 'error';
+          errorCode: string;
+          errorMessage?: string;
+      })
+    | (BaseAnalyticsEvent & { type: 'timeout'; errorCode: string });
+
+type AnalyticsEventHandler = (event: AnalyticsEvent) => void;
 ```
 
-**Example**:
+The named member interfaces (`MessageSentAnalyticsEvent`,
+`MessageReceivedAnalyticsEvent`, `ResponseSentAnalyticsEvent`,
+`ResponseReceivedAnalyticsEvent`, `ErrorAnalyticsEvent`,
+`TimeoutAnalyticsEvent`) are exported, along with `AnalyticsAdapter` and
+`AnalyticsOptions` for use with the exported `AnalyticsManager`.
 
 ```typescript
-import { Parley, SystemEvent } from 'parleyjs';
-
-const parley = new Parley();
-
-parley.on('ready', () => {
-    console.log('Parley is ready');
+parley.onAnalyticsEvent((event) => {
+    if (event.type === 'response_received') {
+        metrics.timing(event.messageType, event.duration);
+    }
 });
-
-parley.on('error', (error) => {
-    console.error('Error occurred:', error);
-});
-
-parley.on('connection:lost', () => {
-    console.warn('Connection lost - attempting reconnect');
-});
-
-parley.on('heartbeat:timeout', () => {
-    console.error('Target is unresponsive');
-});
-```
-
-### EventCallback
-
-Generic callback type for system events.
-
-```typescript
-type EventCallback<T = any> = (data: T) => void | Promise<void>;
 ```
 
 ---
 
 ## Error Types
 
-All error types extend the base `ParleyError` class. See
-[Error Codes Reference](./error-codes.md) for detailed documentation.
-
-### ParleyError
+All errors thrown by ParleyJS operations (except configuration and usage errors,
+which are plain `Error`s) extend `ParleyError`. See
+[Error Codes](./error-codes.md) for when each code is produced.
 
 ```typescript
 class ParleyError extends Error {
-    code: string;
-    details?: any;
-    timestamp: number;
+    readonly code: ErrorCode;
+    readonly details?: unknown;
+    readonly timestamp: number;
+    toJSON(): Record<string, unknown>; // name, message, code, details, timestamp, stack
 }
-```
 
-### ValidationError
-
-```typescript
 class ValidationError extends ParleyError {
-    validationErrors: Array<{
-        field: string;
-        message: string;
-        value?: any;
-    }>;
-    schema?: object;
-    payload?: any;
+    readonly validationErrors?: ValidationErrorDetail[];
 }
-```
 
-### TimeoutError
-
-```typescript
 class TimeoutError extends ParleyError {
-    messageId: string;
-    timeout: number;
-    channel: string;
+    readonly messageId?: string;
+    readonly timeoutMs?: number;
+    readonly retriesAttempted?: number;
 }
-```
 
-### TargetNotFoundError
-
-```typescript
 class TargetNotFoundError extends ParleyError {
-    targetId?: string;
-    targetType?: string;
+    readonly targetId?: string;
 }
-```
 
-### SecurityError
-
-```typescript
 class SecurityError extends ParleyError {
-    origin?: string;
-    expectedOrigin?: string;
-    violationType?: string;
+    readonly receivedOrigin?: string;
+    readonly allowedOrigins?: string[];
 }
-```
 
-### SerializationError
+class SerializationError extends ParleyError {}
 
-```typescript
-class SerializationError extends ParleyError {
-    payload?: any;
-    serializationType?: string;
-}
-```
-
-### ConnectionError
-
-```typescript
 class ConnectionError extends ParleyError {
-    targetType?: string;
-    reconnectable?: boolean;
+    readonly targetId?: string;
 }
 ```
 
-### ConfigurationError
+`ValidationError.validationErrors` is set when the error comes from schema
+validation; its entries have the shape of
+[ValidationErrorDetail](#validationresult-and-validationerrordetail) (`path`,
+not `field`).
+
+There is no `ConfigurationError`, `TargetError` or `HandlerError` class.
+
+### Type Guards
 
 ```typescript
-class ConfigurationError extends ParleyError {
-    configKey?: string;
-    providedValue?: any;
-    expectedType?: string;
-}
+function isParleyError(error: unknown): error is ParleyError;
+function isValidationError(error: unknown): error is ValidationError;
+function isTimeoutError(error: unknown): error is TimeoutError;
+function isSecurityError(error: unknown): error is SecurityError;
 ```
+
+For the other classes use `instanceof`.
+
+### ErrorCode
+
+`ErrorCode` is the union of every string in `ERROR_CODES` (`'ERR_...'`). Error
+responses from the remote side can also carry the wire-only codes
+`'ERR_HANDLER_ERROR'` and `'ERR_NO_HANDLER'`, which are not part of the union.
 
 ---
 
-## Utility Types
+## Protocol Types
 
-### UnsubscribeFunction
-
-Return type from `parley.on()` for unsubscribing handlers.
-
-```typescript
-type UnsubscribeFunction = () => void;
-```
-
-**Example**:
+Low-level message shapes, exported for custom `SecurityLayer` implementations
+and tooling. Most applications never use them directly.
 
 ```typescript
-const unsubscribe = parley.on('message', handler);
+interface MessageProtocol<T = unknown> {
+    _parley: '__parley__';
+    _v: string; // Protocol version
+    _id: string; // UUID
+    _type: string;
+    _timestamp: number;
+    _origin: string; // Self-reported by the sender; not trusted
+    _target?: string;
+    _expectsResponse: boolean;
+    payload: T;
+}
 
-// Later, unsubscribe from this specific handler
-unsubscribe();
-```
-
-### ResolvedConfig
-
-Internal type representing fully resolved configuration with defaults applied.
-
-```typescript
-interface ResolvedConfig extends Required<ParleyConfig> {
-    // All optional ParleyConfig fields become required
+interface ResponseProtocol<T = unknown> {
+    _parley: '__parley__';
+    _v: string;
+    _id: string;
+    _requestId: string;
+    _timestamp: number;
+    _origin: string;
+    success: boolean;
+    payload?: T;
+    error?: { code: string; message: string; details?: unknown };
 }
 ```
+
+### SecurityLayer
+
+An abstract class (not an interface). Extend `DefaultSecurityLayer` and override
+what you need, or extend `SecurityLayer` and implement all three methods:
+
+```typescript
+abstract class SecurityLayer {
+    abstract validateOrigin(origin: string, allowedOrigins: string[]): boolean;
+    abstract sanitizePayload<T>(payload: T): T;
+    abstract validateMessage(message: MessageProtocol): boolean;
+}
+```
+
+The default `sanitizePayload()` is a JSON round-trip clone: functions,
+`undefined` and symbols are dropped, `Date` becomes a string, and circular
+references or `BigInt` values throw `SerializationError`. It does not escape
+HTML.
 
 ---
 
-## Type Guards
+## Channel Types
 
-### isParleyError
-
-Check if an error is a ParleyError instance.
+Exported for completeness; used by the low-level channel classes.
 
 ```typescript
-function isParleyError(error: any): error is ParleyError {
-    return error instanceof ParleyError;
+interface ChannelOptions {
+    allowedOrigins: string[];
+    handshakeTimeout: number;
 }
-```
 
-**Example**:
+type ChannelState = 'disconnected' | 'connecting' | 'connected' | 'error';
 
-```typescript
-import { isParleyError, ParleyError } from 'parleyjs';
-
-try {
-    await parley.send('operation', data);
-} catch (error) {
-    if (isParleyError(error)) {
-        console.error('ParleyJS error:', error.code);
-        console.error('Details:', error.details);
-    } else {
-        console.error('Unknown error:', error);
-    }
-}
-```
-
-### isValidationError
-
-```typescript
-function isValidationError(error: any): error is ValidationError {
-    return error instanceof ValidationError;
-}
-```
-
-### isTimeoutError
-
-```typescript
-function isTimeoutError(error: any): error is TimeoutError {
-    return error instanceof TimeoutError;
-}
-```
-
-### isSecurityError
-
-```typescript
-function isSecurityError(error: any): error is SecurityError {
-    return error instanceof SecurityError;
-}
-```
-
-**Example**:
-
-```typescript
-import { isValidationError, isTimeoutError, isSecurityError } from 'parleyjs';
-
-try {
-    await parley.send('process', data);
-} catch (error) {
-    if (isValidationError(error)) {
-        handleValidationErrors(error.validationErrors);
-    } else if (isTimeoutError(error)) {
-        retryWithLongerTimeout(error.channel);
-    } else if (isSecurityError(error)) {
-        logSecurityIncident(error.origin);
-    }
+interface TargetInfo {
+    id: string;
+    target: HTMLIFrameElement | Window;
+    type: 'iframe' | 'window';
+    origin: string;
+    connected: boolean;
+    state: ConnectionState;
+    lastActivity: number;
+    connectedAt?: number;
+    lastHeartbeat?: number;
+    missedHeartbeats: number;
+    consecutiveFailures: number;
 }
 ```
 
@@ -755,157 +735,59 @@ try {
 
 ## Generic Usage
 
-### Strongly Typed Handlers
-
-Define interfaces for your message contracts and use generics for type safety.
+### Typed Handlers and Requests
 
 ```typescript
-// Define message contracts
-interface UserCreateRequest {
-    username: string;
-    email: string;
-    password: string;
+import { Parley } from 'ignite-parleyjs';
+
+interface GetUserRequest {
+    userId: number;
 }
 
-interface UserCreateResponse {
-    success: boolean;
-    userId?: number;
-    errors?: string[];
+interface GetUserResponse {
+    id: number;
+    name: string;
 }
 
-// Typed handler
-const createUserHandler: MessageHandler<
-    UserCreateRequest,
-    UserCreateResponse
-> = (payload, respond) => {
-    // payload is fully typed
-    const user = createUser(payload.username, payload.email, payload.password);
-
-    // respond accepts only UserCreateResponse
-    respond({
-        success: true,
-        userId: user.id,
-    });
-};
-
-// Register with types
-parley.on<UserCreateRequest, UserCreateResponse>(
-    'user:create',
-    createUserHandler
-);
-
-// Send with types
-const result = await parley.send<UserCreateRequest, UserCreateResponse>(
-    'user:create',
-    { username: 'alice', email: 'alice@example.com', password: 'secret' }
-);
-
-// result is typed as UserCreateResponse
-if (result.success) {
-    console.log('User created:', result.userId);
-}
-```
-
-### Union Types for Channels
-
-```typescript
-type AppChannel =
-    | 'user:create'
-    | 'user:update'
-    | 'user:delete'
-    | 'post:create'
-    | 'post:publish';
-
-type ChannelPayload<T extends AppChannel> = T extends 'user:create'
-    ? UserCreateRequest
-    : T extends 'user:update'
-      ? UserUpdateRequest
-      : T extends 'user:delete'
-        ? { userId: number }
-        : T extends 'post:create'
-          ? PostCreateRequest
-          : T extends 'post:publish'
-            ? { postId: number }
-            : never;
-
-// Type-safe channel messaging
-async function typedSend<T extends AppChannel>(
-    channel: T,
-    payload: ChannelPayload<T>
-) {
-    return parley.send(channel, payload);
-}
-
-// Usage - TypeScript ensures correct payload type
-await typedSend('user:create', {
-    username: 'alice',
-    email: '...',
-    password: '...',
+const parley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: ['https://parent.example.com'],
 });
-await typedSend('post:publish', { postId: 123 });
+
+// Receiver
+parley.on<GetUserRequest>('user:get', async (payload, respond, metadata) => {
+    const user = await loadUser(payload.userId);
+    respond({ id: user.id, name: user.name } satisfies GetUserResponse);
+});
+
+// Sender: send<Payload, Response>, resolves to Response | undefined
+const user = await parley.send<GetUserRequest, GetUserResponse>('user:get', {
+    userId: 42,
+});
+console.log(user?.name);
 ```
+
+The generic parameters are compile-time only. Use a `schema` to validate
+payloads at runtime.
 
 ### Discriminated Unions for Responses
 
 ```typescript
-type ApiResponse<T> =
-    | { success: true; data: T }
-    | { success: false; error: string; code: string };
+type SaveResult = { ok: true; id: string } | { ok: false; reason: string };
 
-interface User {
-    id: number;
-    username: string;
-}
-
-const response = await parley.send<{ userId: number }, ApiResponse<User>>(
-    'get-user',
-    { userId: 123 }
-);
-
-// TypeScript narrows type based on success field
-if (response.success) {
-    console.log('User:', response.data.username); // data is available
-} else {
-    console.error('Error:', response.error); // error is available
-}
-```
-
-### Custom Type Validators
-
-```typescript
-import { MessageHandler } from 'parleyjs';
-
-function createTypedHandler<T, R>(
-    validator: (payload: any) => payload is T,
-    handler: (payload: T, respond: (r: R) => void) => void | Promise<void>
-): MessageHandler<any, R> {
-    return (payload, respond, metadata) => {
-        if (!validator(payload)) {
-            throw new ValidationError('Invalid payload type');
-        }
-        return handler(payload, respond);
-    };
-}
-
-// Type guard
-function isUserRequest(payload: any): payload is UserCreateRequest {
-    return (
-        typeof payload === 'object' &&
-        typeof payload.username === 'string' &&
-        typeof payload.email === 'string'
-    );
-}
-
-// Usage
-const handler = createTypedHandler<UserCreateRequest, UserCreateResponse>(
-    isUserRequest,
-    (payload, respond) => {
-        // payload is guaranteed to be UserCreateRequest
-        respond({ success: true, userId: createUser(payload) });
+parley.on('doc:save', async (payload, respond) => {
+    try {
+        const id = await save(payload);
+        respond({ ok: true, id } satisfies SaveResult);
+    } catch (error) {
+        respond({ ok: false, reason: 'save failed' } satisfies SaveResult);
     }
-);
+});
 
-parley.on('user:create', handler);
+const result = await parley.send<unknown, SaveResult>('doc:save', doc);
+if (result?.ok) {
+    console.log('Saved as', result.id);
+}
 ```
 
 ---
@@ -918,7 +800,8 @@ parley.on('user:create', handler);
 **Related**:
 
 - [Methods Reference](./methods.md)
-- [Getting Started with TypeScript](../getting-started/typescript.md)
+- [System Events](./system-events.md)
+- [Installation: TypeScript Support](../getting-started/installation.md#typescript-support)
 - [Message Validation](../security/message-validation.md)
 
 **Back to**: [API Reference](./index.md)

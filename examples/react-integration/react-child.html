@@ -78,6 +78,9 @@
             const [counter, setCounter] = useState(0);
             const [logs, setLogs] = useState([]);
             const parleyRef = useRef(null);
+            // Mirror of counter so handlers see the latest value without
+            // re-creating the Parley instance on every change
+            const counterRef = useRef(0);
 
             const addLog = useCallback((message) => {
                 setLogs(prev => [
@@ -95,7 +98,7 @@
                 parleyRef.current = window.Parley.create({
                     targetType: 'iframe',
                     allowedOrigins: [window.location.origin],
-                    debug: true
+                    logLevel: 'debug'
                 });
 
                 // Connection events
@@ -141,15 +144,17 @@
 
                 parleyRef.current.on('updateCounter', async (payload, respond, metadata) => {
                     addLog(`Counter update: ${payload.increment}`);
-                    setCounter(prev => prev + payload.increment);
+                    const newValue = counterRef.current + payload.increment;
+                    counterRef.current = newValue;
+                    setCounter(newValue);
 
                     // Notify parent of update
                     await parleyRef.current.send('child:update', {
                         type: 'counter',
-                        value: counter + payload.increment
+                        value: newValue
                     }, { targetId: 'parent' });
 
-                    respond({ success: true, newValue: counter + payload.increment });
+                    respond({ success: true, newValue });
                 });
 
                 // Connect to parent
@@ -167,7 +172,7 @@
                         parleyRef.current.destroy();
                     }
                 };
-            }, [addLog, counter]);
+            }, [addLog]);
 
             return (
                 <div className="container">

@@ -21,8 +21,9 @@ ParleyJS simplifies `window.postMessage()` communication between:
 
 - Parent and child windows (popups)
 - Parent and iframes
-- Workers and main thread
-- Multiple window contexts
+- Multiple window contexts (one connection per iframe or popup)
+
+Web Workers, Service Workers and `MessageChannel` ports are not supported.
 
 It provides:
 
@@ -43,12 +44,16 @@ send a message and wait for a reply
 
 ### Creating a Connection
 
+Both sides create an instance with the same `targetType` and call `connect()`.
+No `load` listeners or delays are needed.
+
 **Parent Window:**
 
 ```javascript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'],
 });
 
@@ -60,9 +65,10 @@ await parley.connect(iframe, 'child');
 **Child Window (Iframe):**
 
 ```javascript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://parent.example.com'],
 });
 
@@ -102,16 +108,17 @@ console.log(response);
 
 **Register a handler:**
 
-```javascript
-parley.on <
-    { message: string } >
-    ('notification',
-    (payload, respond) => {
-        console.log(payload.message);
-        // Optionally respond
-        respond({ received: true });
-    });
+```typescript
+parley.on<{ message: string }>('notification', (payload, respond) => {
+    console.log(payload.message);
+    // Optionally respond
+    respond({ received: true });
+});
 ```
+
+Handlers reply by calling `respond(value)`; a handler's return value is ignored.
+To validate payloads, register the type with a schema:
+`parley.register('notification', { schema })`.
 
 ## Common Patterns
 
@@ -155,8 +162,8 @@ parley.on('user-action', (payload) => {
 ### Pattern: Broadcasting
 
 ```javascript
-// Send to all connected targets
-await parley.broadcast('config-update', {
+// Send to all connected targets (returns void, no responses)
+parley.broadcast('config-update', {
     theme: 'dark',
     language: 'en',
 });
@@ -167,6 +174,13 @@ await parley.broadcast('config-update', {
 ### Try-Catch Pattern
 
 ```javascript
+import {
+    TimeoutError,
+    TargetNotFoundError,
+    ValidationError,
+    isParleyError,
+} from 'ignite-parleyjs';
+
 try {
     const response = await parley.send('risky-operation', data, {
         targetId: 'child',
@@ -174,43 +188,60 @@ try {
     });
 } catch (error) {
     if (error instanceof TimeoutError) {
+        // No response in time (also what you see if the other side
+        // silently dropped the message, e.g. origin not allowed)
         console.log('Request timed out');
-    } else if (error instanceof SecurityError) {
-        console.log('Origin validation failed');
+    } else if (error instanceof TargetNotFoundError) {
+        console.log('Target not connected');
     } else if (error instanceof ValidationError) {
-        console.log('Message validation failed');
+        console.log('Payload failed local schema validation');
+    } else if (isParleyError(error) && error.code === 'ERR_HANDLER_ERROR') {
+        console.log('Remote handler threw');
     }
 }
 ```
 
+Origin rejections on the receiving side are never reported back to the sender:
+messages from disallowed origins are dropped silently, so a `send()` to such a
+peer times out (and in practice `connect()` already fails with
+`ERR_CONNECTION_HANDSHAKE_FAILED`).
+
 ### Common Error Types
 
-- **TimeoutError**: Request exceeded timeout period
-- **SecurityError**: Origin validation failed
-- **ValidationError**: Message schema validation failed
-- **ConnectionError**: Unable to establish connection
+- **TimeoutError**: No response within the timeout (after all retries)
+- **TargetNotFoundError**: Target not connected (`ERR_TARGET_NOT_CONNECTED`)
+- **ValidationError**: Payload failed local schema validation or exceeds 10 MB
+- **ConnectionError**: Handshake failed, or target disconnected while waiting
+- **SerializationError**: Payload has circular references or BigInt values
+- **ParleyError** with a remote code: `ERR_HANDLER_ERROR`, `ERR_NO_HANDLER`,
+  `ERR_VALIDATION_SCHEMA_MISMATCH`
 
 ## Security
 
 ### Origin Validation (CRITICAL)
 
-Always specify exact origins. Never use wildcards in production.
+Always specify exact origins. Wildcards are not supported.
 
 **Correct:**
 
 ```javascript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted-domain.com'],
 });
 ```
 
-**Dangerous:**
+**Rejected:**
 
 ```javascript
-// WRONG - Don't do this!
+// Throws at create(): 'Configuration error: ...'
 const parley = Parley.create({
-    allowedOrigins: ['*'], // Accepts messages from ANY origin
+    targetType: 'iframe',
+    allowedOrigins: ['*'], // '*', 'null' and [] are rejected
 });
+
+// Also rejected: there is no pattern matching
+allowedOrigins: ['https://*.trusted-domain.com'];
 ```
 
 ### Message Validation
@@ -221,18 +252,26 @@ Always validate incoming data:
 parley.on('user-data', (payload, respond) => {
     // Validate structure
     if (!payload.id || typeof payload.id !== 'string') {
-        throw new Error('Invalid data structure');
+        respond({ success: false, error: 'Invalid data structure' });
+        return;
     }
 
     // Validate content
     if (payload.id.length > 100) {
-        throw new Error('ID too long');
+        respond({ success: false, error: 'ID too long' });
+        return;
     }
 
     // Safe to process
     processUser(payload);
+    respond({ success: true });
 });
 ```
+
+If a handler throws instead, the sender's `send()` rejects with a `ParleyError`
+(`ERR_HANDLER_ERROR`) whose message is `'Handler error'` unless the receiving
+instance sets `exposeHandlerErrors: true`; the full error is emitted locally as
+`system:error`.
 
 ### What NOT to Send
 
@@ -248,20 +287,34 @@ Never send through postMessage:
 
 ```javascript
 Parley.create({
-    // Security (required)
-    allowedOrigins: ['https://trusted.com'],
+    // Required
+    targetType: 'iframe', // 'iframe' | 'window'
+
+    // Security
+    allowedOrigins: ['https://trusted.com'], // default [window.location.origin]
+    securityLayer: new DefaultSecurityLayer(), // custom SecurityLayer (optional)
+    exposeHandlerErrors: false, // send real handler error messages to the sender
+    rateLimit: { enabled: false, messagesPerSecond: 100 }, // outgoing send() only
 
     // Timeouts
-    timeout: 5000, // Default timeout in ms
-    retries: 2, // Number of retries
+    timeout: 5000, // Handshake and request timeout in ms
+    retries: 0, // Number of retries (same message re-sent, no backoff)
 
-    // Debugging
-    debug: true, // Enable debug logging
-    logLevel: 'debug', // 'debug' | 'info' | 'warn' | 'error'
+    // Connection health
+    heartbeat: {
+        enabled: true,
+        interval: 5000,
+        timeout: 2000,
+        maxMissed: 3,
+        maxFailures: 3,
+    },
+
+    // Debugging / analytics
+    logLevel: 'none', // 'debug' | 'info' | 'warn' | 'error' | 'none'
+    analyticsEnabled: false, // required for onAnalyticsEvent()
 
     // Advanced
     instanceId: 'my-instance', // Custom instance ID
-    validateMessages: true, // Enable schema validation
 });
 ```
 
@@ -270,7 +323,7 @@ Parley.create({
 Monitor connection and message events:
 
 ```javascript
-import { SYSTEM_EVENTS } from 'parley-js';
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 // Connection events
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
@@ -293,6 +346,10 @@ parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
 // Error events
 parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
     console.log('Timeout:', event.messageId);
+});
+
+parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
+    console.log('Error:', event.code, event.message);
 });
 ```
 

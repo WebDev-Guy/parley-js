@@ -16,10 +16,16 @@ import type { ChannelState, ChannelOptions } from '../types/ChannelTypes';
 
 /**
  * Message event handler type
+ *
+ * @param message - The received Parley message
+ * @param source - The window that sent it (verified to be this channel's target)
+ * @param origin - The sender's origin as reported by the browser (`event.origin`),
+ *                 never the self-reported `_origin` field of the message
  */
 export type MessageEventHandler = (
     message: MessageProtocol | ResponseProtocol,
-    source: Window
+    source: Window,
+    origin: string
 ) => void;
 
 /**
@@ -244,9 +250,13 @@ export abstract class BaseChannel {
             return;
         }
 
-        // Validate source
-        if (!event.source) {
-            this._logger.warn('Message with no source blocked');
+        // Validate source: only accept messages from this channel's own target
+        // window. Without this, every channel would process messages from any
+        // window that shares an allowed origin.
+        if (!this._isExpectedSource(event.source)) {
+            this._logger.warn('Message from unexpected source blocked', {
+                origin: event.origin,
+            });
             return;
         }
 
@@ -265,7 +275,7 @@ export abstract class BaseChannel {
 
         // Pass to message handler if set
         if (this._messageHandler) {
-            this._messageHandler(data, event.source as Window);
+            this._messageHandler(data, event.source as Window, event.origin);
         }
     }
 
@@ -280,6 +290,12 @@ export abstract class BaseChannel {
             return false;
         }
 
+        // The opaque 'null' origin is shared by sandboxed iframes, data: URLs
+        // and file:// documents, so it can never identify a trusted peer.
+        if (!origin || origin === 'null') {
+            return false;
+        }
+
         return this._options.allowedOrigins.some((allowed) => {
             try {
                 const normalizedAllowed = new URL(allowed).origin.toLowerCase();
@@ -289,6 +305,81 @@ export abstract class BaseChannel {
                 return allowed.toLowerCase() === origin.toLowerCase();
             }
         });
+    }
+
+    /**
+     * The explicitly configured origin to post to when the target's origin
+     * cannot be read directly (cross-origin targets)
+     *
+     * Never derived from an iframe's src attribute, which can be changed.
+     * Parley.create() already rejects an empty allowedOrigins list; this is a
+     * backstop for channels constructed directly.
+     *
+     * @throws ConnectionError if no allowed origin is configured
+     */
+    protected _configuredTargetOrigin(): string {
+        const origin = this._options.allowedOrigins?.[0];
+        if (!origin) {
+            throw new ConnectionError(
+                'No allowedOrigins configured: list the target origin explicitly',
+                undefined,
+                CONNECTION_ERRORS.FAILED
+            );
+        }
+        return origin;
+    }
+
+    /**
+     * Keep re-running an action until a promise settles
+     *
+     * Used to re-send HANDSHAKE_INIT: a single INIT is lost if the other side
+     * has not attached its listener yet, which used to require arbitrary
+     * setTimeout delays in application code.
+     *
+     * @param action - Action to repeat (errors are logged, not thrown)
+     * @param settled - Promise whose settlement stops the repetition
+     * @param intervalMs - Delay between repetitions
+     */
+    protected _repeatUntilSettled(
+        action: () => void,
+        settled: Promise<unknown>,
+        intervalMs: number
+    ): void {
+        const timer = setInterval(() => {
+            try {
+                action();
+            } catch (error) {
+                this._logger.debug('Repeated action failed', error);
+            }
+        }, intervalMs);
+
+        const stop = (): void => {
+            clearInterval(timer);
+        };
+        settled.then(stop, stop);
+    }
+
+    /**
+     * Interval for re-sending HANDSHAKE_INIT (10% of the handshake timeout,
+     * clamped to 100-500ms)
+     */
+    protected get _handshakeRetryInterval(): number {
+        return Math.min(500, Math.max(100, Math.floor(this._options.handshakeTimeout / 10)));
+    }
+
+    /**
+     * Check that a message came from this channel's target window
+     *
+     * @param source - `event.source` of the incoming message
+     * @returns True only if the source is the channel's current target window
+     */
+    protected _isExpectedSource(source: MessageEventSource | null): boolean {
+        if (!source) {
+            return false;
+        }
+
+        const expected = this._getTargetWindow();
+        return expected !== null && source === expected;
     }
 
     /**

@@ -2,12 +2,16 @@ name: Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, development]
   pull_request:
-    branches: [main, develop]
+    branches: [main, development]
   schedule:
     # Run daily at 2 AM UTC
     - cron: '0 2 * * *'
+
+# Least privilege: these jobs only read the repo
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -20,10 +24,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -45,7 +49,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           file: ./coverage/lcov.info
           flags: unittests
@@ -58,10 +62,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20.x'
           cache: 'npm'
@@ -69,6 +73,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
+      - name: Audit production dependencies
+        # Fails on high/critical advisories in shipped (non-dev) dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Run security tests
         run: npm test tests/security/
       
@@ -83,10 +91,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20.x'
           cache: 'npm'
@@ -103,10 +111,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20.x'
           cache: 'npm'
@@ -121,7 +129,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: playwright-report
@@ -134,10 +142,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20.x'
           cache: 'npm'
@@ -150,3 +158,7 @@ jobs:
       
       - name: Check bundle size
         run: npm run size
+
+      - name: Build documentation site
+        # VitePress fails the build on dead links (ignoreDeadLinks: false)
+        run: npm run docs:build

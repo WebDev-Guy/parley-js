@@ -273,42 +273,6 @@ export function getCurrentOrigin(): string {
 }
 
 /**
- * Safe JSON parse with error handling
- *
- * @param json - JSON string to parse
- * @param defaultValue - Default value if parsing fails
- * @returns Parsed value or default
- *
- * @example
- * ```typescript
- * const data = safeJSONParse('{"valid": true}', {});
- * const fallback = safeJSONParse('invalid json', { default: true });
- * ```
- */
-export function safeJSONParse<T>(json: string, defaultValue: T): T {
-    try {
-        return JSON.parse(json) as T;
-    } catch {
-        return defaultValue;
-    }
-}
-
-/**
- * Safe JSON stringify with error handling
- *
- * @param value - Value to stringify
- * @param defaultValue - Default value if stringification fails
- * @returns JSON string or default
- */
-export function safeJSONStringify(value: unknown, defaultValue: string = ''): string {
-    try {
-        return JSON.stringify(value);
-    } catch {
-        return defaultValue;
-    }
-}
-
-/**
  * Wait for a specified number of milliseconds
  *
  * @param ms - Milliseconds to wait

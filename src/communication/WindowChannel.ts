@@ -248,6 +248,11 @@ export class WindowChannel extends BaseChannel {
             return;
         }
 
+        // Only our own target window may handshake or talk to this channel
+        if (!this._isExpectedSource(event.source)) {
+            return;
+        }
+
         const data: unknown = event.data;
         if (!this._isParleyMessage(data)) {
             return;
@@ -283,15 +288,7 @@ export class WindowChannel extends BaseChannel {
 
         // Security: Use explicit allowed origin, never use wildcard
         // See: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_considerations
-        if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
-            throw new ConnectionError(
-                'Cannot establish window connection to opener: no allowedOrigins configured. ' +
-                    'At least one explicit origin must be specified in allowedOrigins array.',
-                undefined,
-                CONNECTION_ERRORS.FAILED
-            );
-        }
-        this._targetOrigin = this._options.allowedOrigins[0]!;
+        this._targetOrigin = this._configuredTargetOrigin();
 
         // Send handshake init to opener
         const initMessage = createMessage({
@@ -300,10 +297,22 @@ export class WindowChannel extends BaseChannel {
             expectsResponse: false,
         });
 
+        // First send outside the retry loop so configuration errors surface
+        // immediately; postMessage delivery is async, so no ACK can arrive
+        // before the handshake starts below
         this.send(initMessage, opener, this._targetOrigin);
 
+        const handshake = this._waitForHandshake();
+        this._repeatUntilSettled(
+            () => {
+                this.send(initMessage, opener, this._targetOrigin);
+            },
+            handshake,
+            this._handshakeRetryInterval
+        );
+
         // Wait for handshake acknowledgment
-        await this._waitForHandshake();
+        await handshake;
     }
 
     /**
@@ -331,15 +340,7 @@ export class WindowChannel extends BaseChannel {
 
         if (!origin) {
             // For cross-origin windows, we must use an explicitly configured allowed origin
-            if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
-                throw new ConnectionError(
-                    'Cannot establish connection to cross-origin window: no allowedOrigins configured. ' +
-                        'For cross-origin window.open communication, at least one explicit origin must be specified.',
-                    undefined,
-                    CONNECTION_ERRORS.FAILED
-                );
-            }
-            origin = this._options.allowedOrigins[0]!;
+            origin = this._configuredTargetOrigin();
         }
 
         this._targetOrigin = origin;
@@ -355,7 +356,10 @@ export class WindowChannel extends BaseChannel {
      */
     private _waitForWindowReady(targetWindow: Window): Promise<void> {
         return new Promise((resolve, reject) => {
+            let settled = false;
+
             const timeout = setTimeout(() => {
+                settled = true;
                 reject(
                     new ConnectionError('Window ready timeout', undefined, CONNECTION_ERRORS.FAILED)
                 );
@@ -363,6 +367,11 @@ export class WindowChannel extends BaseChannel {
 
             // Poll for window ready state
             const checkReady = () => {
+                // Stop polling once the timeout has already rejected
+                if (settled) {
+                    return;
+                }
+
                 try {
                     if (targetWindow.closed) {
                         clearTimeout(timeout);

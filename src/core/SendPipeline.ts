@@ -15,7 +15,12 @@ import { getTimestamp } from '../utils/Helpers';
 import type { BaseChannel } from '../communication/BaseChannel';
 import { MessageRegistry } from './MessageRegistry';
 import { TargetManager } from './TargetManager';
-import { createMessage, type MessageProtocol, type ResponseProtocol } from './MessageProtocol';
+import {
+    createMessage,
+    isInternalMessageType,
+    type MessageProtocol,
+    type ResponseProtocol,
+} from './MessageProtocol';
 import { SYSTEM_EVENTS } from '../events/SystemEvents';
 import {
     ParleyError,
@@ -29,9 +34,10 @@ import {
     TARGET_ERRORS,
     CONNECTION_ERRORS,
     VALIDATION_ERRORS,
+    SECURITY_ERRORS,
     type ErrorCode,
 } from '../errors/ErrorCodes';
-import type { SecurityLayer } from '../security/SecurityLayer';
+import { sanitizeAndMeasure, type SecurityLayer } from '../security/SecurityLayer';
 import type { ResolvedConfig } from '../types/ConfigTypes';
 import type { SendOptions, PendingRequest } from '../types/MessageTypes';
 import type { TargetInfo } from '../types/ChannelTypes';
@@ -67,6 +73,12 @@ export interface SendPipelineDependencies {
 
     /** Callback to emit analytics events */
     emitAnalyticsEvent: (event: AnalyticsEvent) => void;
+
+    /**
+     * Called when a targeted request that expected a response either gets a
+     * response (true) or finally times out (false). Drives heartbeat.maxFailures.
+     */
+    onSendOutcome?: (targetId: string, success: boolean) => void;
 }
 
 /**
@@ -131,6 +143,17 @@ export class SendPipeline {
     private _emitAnalyticsEvent: (event: AnalyticsEvent) => void;
 
     /**
+     * Callback for request outcomes (see SendPipelineDependencies.onSendOutcome)
+     */
+    private _onSendOutcome?: (targetId: string, success: boolean) => void;
+
+    /**
+     * IDs of user requests whose outcome counts toward heartbeat.maxFailures
+     * (targeted, expecting a response; not internal system messages)
+     */
+    private _trackedRequests: Set<string> = new Set();
+
+    /**
      * Pending requests awaiting responses
      */
     private _pendingRequests: Map<string, PendingRequest> = new Map();
@@ -154,6 +177,7 @@ export class SendPipeline {
         this._targets = deps.targets;
         this._getChannel = deps.getChannel;
         this._emitAnalyticsEvent = deps.emitAnalyticsEvent;
+        this._onSendOutcome = deps.onSendOutcome;
     }
 
     /**
@@ -179,20 +203,22 @@ export class SendPipeline {
         // Security: Sanitize payload FIRST before validation
         // This ensures that any prototype pollution or injection attempts are removed
         // before we validate against the schema. The sanitized payload is what gets sent.
-        const sanitizedPayload = this._security.sanitizePayload(payload);
+        // (Sanitizing and measuring share one serialization pass.)
+        const { payload: sanitizedPayload, size } = sanitizeAndMeasure(this._security, payload);
 
         // DoS prevention: Validate payload size before further processing
-        this._validatePayloadSize(sanitizedPayload);
+        this._assertPayloadSize(size);
 
         // Validate sanitized payload against schema
         this._registry.validatePayload(messageType, sanitizedPayload);
 
-        // Create message
+        // Create message (payload is already a fresh sanitized copy)
         const message = createMessage({
             type: messageType,
             payload: sanitizedPayload,
             expectsResponse,
             target: targetId,
+            clonePayload: false,
         });
 
         // Get target(s) to send to
@@ -217,8 +243,9 @@ export class SendPipeline {
             timestamp: message._timestamp,
         });
 
-        // Emit system event
-        await this._emitter.emit(SYSTEM_EVENTS.MESSAGE_SENT, {
+        // Emit system event without waiting for listeners: a slow async
+        // listener must not delay delivery of the message itself
+        this._emitter.emitSync(SYSTEM_EVENTS.MESSAGE_SENT, {
             messageId: message._id,
             messageType,
             targetId,
@@ -242,6 +269,10 @@ export class SendPipeline {
         const retries =
             options?.retries ?? this._registry.getRetries(messageType, this._config.retries);
 
+        if (targetId !== undefined) {
+            this._trackedRequests.add(message._id);
+        }
+
         return this._waitForResponse<R>(message, timeout, retries, targetId);
     }
 
@@ -255,10 +286,10 @@ export class SendPipeline {
         // Security: Sanitize payload FIRST before validation
         // This ensures that any prototype pollution or injection attempts are removed
         // before we validate against the schema. The sanitized payload is what gets sent.
-        const sanitizedPayload = this._security.sanitizePayload(payload);
+        const { payload: sanitizedPayload, size } = sanitizeAndMeasure(this._security, payload);
 
         // DoS prevention: Validate payload size before further processing
-        this._validatePayloadSize(sanitizedPayload);
+        this._assertPayloadSize(size);
 
         // Validate sanitized payload against schema
         this._registry.validatePayload(messageType, sanitizedPayload);
@@ -268,6 +299,7 @@ export class SendPipeline {
             type: messageType,
             payload: sanitizedPayload,
             expectsResponse: false,
+            clonePayload: false,
         });
 
         // Send to all connected targets
@@ -278,8 +310,14 @@ export class SendPipeline {
             targetCount: targets.length,
         });
 
+        // One target failing (e.g. origin not yet established) must not stop
+        // the broadcast from reaching the remaining targets
         for (const target of targets) {
-            this._sendToTarget(message, target);
+            try {
+                this._sendToTarget(message, target);
+            } catch (error) {
+                this._logger.error('Broadcast to target failed', { targetId: target.id, error });
+            }
         }
     }
 
@@ -367,31 +405,49 @@ export class SendPipeline {
             return;
         }
 
+        // Security: a response is only accepted from the target the request
+        // was sent to. (Requests sent without a targetId go to every
+        // connected target, so any of them may answer.)
+        if (pending.targetId !== undefined && pending.targetId !== sourceTargetId) {
+            this._logger.warn('Response from unexpected target ignored', {
+                requestId: response._requestId,
+                expectedTargetId: pending.targetId,
+                sourceTargetId,
+            });
+            return;
+        }
+
         // Clear timeout and remove pending request
         clearTimeout(pending.timeoutHandle);
         this._pendingRequests.delete(response._requestId);
 
+        // Any response (success or error) means the target is reachable
+        this._reportOutcome(response._requestId, pending.targetId, true);
+
         // Calculate duration
         const duration = getTimestamp() - pending.sentAt;
 
-        // Emit events
-        this._emitter.emitSync(SYSTEM_EVENTS.RESPONSE_RECEIVED, {
-            responseId: response._id,
-            requestId: response._requestId,
-            success: response.success,
-            duration,
-            timestamp: getTimestamp(),
-        });
+        // Emit events (app traffic only; heartbeat/disconnect responses are
+        // protocol traffic and are reported via the connection-health events)
+        if (!isInternalMessageType(pending.messageType)) {
+            this._emitter.emitSync(SYSTEM_EVENTS.RESPONSE_RECEIVED, {
+                responseId: response._id,
+                requestId: response._requestId,
+                success: response.success,
+                duration,
+                timestamp: getTimestamp(),
+            });
 
-        this._emitAnalyticsEvent({
-            type: 'response_received',
-            messageType: pending.messageType,
-            messageId: response._requestId,
-            targetId: sourceTargetId,
-            timestamp: getTimestamp(),
-            duration,
-            success: response.success,
-        });
+            this._emitAnalyticsEvent({
+                type: 'response_received',
+                messageType: pending.messageType,
+                messageId: response._requestId,
+                targetId: sourceTargetId,
+                timestamp: getTimestamp(),
+                duration,
+                success: response.success,
+            });
+        }
 
         // Resolve or reject
         if (response.success) {
@@ -418,6 +474,7 @@ export class SendPipeline {
                 clearTimeout(pending.timeoutHandle);
                 pending.reject(new ConnectionError(reason, { targetId }, CONNECTION_ERRORS.CLOSED));
                 this._pendingRequests.delete(id);
+                this._trackedRequests.delete(id);
             }
         }
     }
@@ -438,6 +495,7 @@ export class SendPipeline {
             );
         }
         this._pendingRequests.clear();
+        this._trackedRequests.clear();
     }
 
     /**
@@ -503,7 +561,7 @@ export class SendPipeline {
                 const resolveUnknown = resolve as (value: unknown) => void;
                 const timeoutHandle = setTimeout(() => {
                     this._handleTimeout(
-                        message._id,
+                        message,
                         retries,
                         retries,
                         timeout,
@@ -536,7 +594,7 @@ export class SendPipeline {
      * Handle message timeout
      */
     private _handleTimeout(
-        messageId: string,
+        message: MessageProtocol,
         retriesRemaining: number,
         totalRetries: number,
         timeout: number,
@@ -544,22 +602,26 @@ export class SendPipeline {
         resolve: (value: unknown) => void,
         reject: (error: Error) => void
     ): void {
+        const messageId = message._id;
         const pending = this._pendingRequests.get(messageId);
         if (!pending) {
             return;
         }
 
         if (retriesRemaining > 0) {
-            // Retry
+            // Retry: re-post the same message (same _id, so a late response to
+            // any attempt still resolves the request)
             this._logger.debug('Retrying message', {
                 messageId,
                 retriesRemaining: retriesRemaining - 1,
             });
 
+            this._resend(message, targetId);
+
             // Create new timeout
             const timeoutHandle = setTimeout(() => {
                 this._handleTimeout(
-                    messageId,
+                    message,
                     retriesRemaining - 1,
                     totalRetries,
                     timeout,
@@ -585,26 +647,72 @@ export class SendPipeline {
                 TIMEOUT_ERRORS.NO_RESPONSE
             );
 
-            // Emit events
-            this._emitter.emitSync(SYSTEM_EVENTS.TIMEOUT, {
-                messageId,
-                messageType: pending.messageType,
-                targetId,
-                timeoutMs: timeout,
-                retriesAttempted: totalRetries,
-                timestamp: getTimestamp(),
-            });
+            // Emit events (app traffic only; a missed heartbeat is reported
+            // as system:heartbeat_missed instead)
+            if (!isInternalMessageType(pending.messageType)) {
+                this._emitter.emitSync(SYSTEM_EVENTS.TIMEOUT, {
+                    messageId,
+                    messageType: pending.messageType,
+                    targetId,
+                    timeoutMs: timeout,
+                    retriesAttempted: totalRetries,
+                    timestamp: getTimestamp(),
+                });
 
-            this._emitAnalyticsEvent({
-                type: 'timeout',
-                messageType: pending.messageType,
-                messageId,
-                targetId,
-                timestamp: getTimestamp(),
-                errorCode: TIMEOUT_ERRORS.NO_RESPONSE,
-            });
+                this._emitAnalyticsEvent({
+                    type: 'timeout',
+                    messageType: pending.messageType,
+                    messageId,
+                    targetId,
+                    timestamp: getTimestamp(),
+                    errorCode: TIMEOUT_ERRORS.NO_RESPONSE,
+                });
+            }
 
             reject(error);
+
+            // Reported after rejecting so the caller sees the timeout before
+            // any max-failures disconnect it may trigger
+            this._reportOutcome(messageId, targetId, false);
+        }
+    }
+
+    /**
+     * Report the outcome of a tracked request exactly once
+     */
+    private _reportOutcome(
+        requestId: string,
+        targetId: string | undefined,
+        success: boolean
+    ): void {
+        if (this._trackedRequests.delete(requestId) && targetId !== undefined) {
+            this._onSendOutcome?.(targetId, success);
+        }
+    }
+
+    /**
+     * Re-post a message for a retry attempt
+     *
+     * Send failures are logged rather than thrown: the pending request keeps
+     * its timeout and is rejected normally if no response arrives.
+     */
+    private _resend(message: MessageProtocol, targetId?: string): void {
+        const targets = this._getTargetsForSend(targetId);
+
+        if (targets.length === 0) {
+            this._logger.warn('Retry skipped: no connected target', {
+                messageId: message._id,
+                targetId,
+            });
+            return;
+        }
+
+        for (const target of targets) {
+            try {
+                this._sendToTarget(message, target);
+            } catch (error) {
+                this._logger.error('Retry send failed', { targetId: target.id, error });
+            }
         }
     }
 
@@ -612,34 +720,21 @@ export class SendPipeline {
      * Validate that payload does not exceed maximum size
      * Prevents DoS attacks through extremely large payloads
      *
-     * @param payload - Payload to validate
+     * @param size - Serialized (JSON) length of the payload
      * @throws ValidationError if payload exceeds maximum size
      */
-    private _validatePayloadSize(payload: unknown): void {
-        try {
-            const serialized = JSON.stringify(payload);
-            // JSON.stringify returns undefined for undefined values, skip size check in that case
-            if (serialized !== undefined && serialized.length > this.MAX_PAYLOAD_SIZE) {
-                throw new ValidationError(
-                    `Payload size ${serialized.length} bytes exceeds maximum of ${this.MAX_PAYLOAD_SIZE} bytes (10MB). ` +
-                        `This prevents DoS attacks through memory exhaustion and browser freezes.`,
-                    {
-                        size: serialized.length,
-                        maxSize: this.MAX_PAYLOAD_SIZE,
-                        rule: 'payloadSize',
-                    },
-                    VALIDATION_ERRORS.SCHEMA_MISMATCH
-                );
-            }
-        } catch (error) {
-            // If it's already a ValidationError from size check, re-throw it
-            if (error instanceof ValidationError) {
-                throw error;
-            }
-
-            // For other errors (like undefined serialization), let them be caught
-            // by the schema validator which will provide appropriate error handling
-            // This allows the normal error propagation path to continue
+    private _assertPayloadSize(size: number): void {
+        if (size > this.MAX_PAYLOAD_SIZE) {
+            throw new ValidationError(
+                `Payload size ${size} bytes exceeds maximum of ${this.MAX_PAYLOAD_SIZE} bytes (10MB). ` +
+                    `This prevents DoS attacks through memory exhaustion and browser freezes.`,
+                {
+                    size,
+                    maxSize: this.MAX_PAYLOAD_SIZE,
+                    rule: 'payloadSize',
+                },
+                VALIDATION_ERRORS.SCHEMA_MISMATCH
+            );
         }
     }
 
@@ -675,9 +770,23 @@ export class SendPipeline {
         const limit = this._config.rateLimit.messagesPerSecond ?? 100;
 
         if (tracker.count >= limit) {
-            throw new Error(`Rate limit exceeded for ${key}: ` + `${limit} messages/sec max`);
+            throw new ParleyError(
+                `Rate limit exceeded for ${key}: ${limit} messages/sec max`,
+                SECURITY_ERRORS.RATE_LIMITED,
+                { key, limit }
+            );
         }
 
         tracker.count++;
+
+        // Drop trackers whose window has expired so per-target entries don't
+        // accumulate for targets that are no longer used
+        if (this._rateLimitTrackers.size > 100) {
+            for (const [trackedKey, entry] of this._rateLimitTrackers) {
+                if (now - entry.windowStart > window) {
+                    this._rateLimitTrackers.delete(trackedKey);
+                }
+            }
+        }
     }
 }

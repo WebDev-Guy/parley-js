@@ -205,6 +205,12 @@ npm run test:coverage
 
 # Run tests in watch mode
 npm run test:watch
+
+# Build, then run the Playwright end-to-end tests
+npm run test:e2e
+
+# Run performance benchmarks
+npm run bench
 ```
 
 ### Coverage Requirements
@@ -342,8 +348,8 @@ type MessageHandler<T> = (payload: T) => void;
 
 // Enums: PascalCase with UPPER_SNAKE members
 enum ConnectionState {
-    CONNECTING = 'CONNECTING',
-    CONNECTED = 'CONNECTED',
+    CONNECTING = 'connecting',
+    CONNECTED = 'connected',
 }
 ```
 
@@ -435,6 +441,12 @@ npm run test:coverage
 
 # Run security tests
 npm test tests/security/
+
+# Build, then run the Playwright end-to-end tests
+npm run test:e2e
+
+# Run performance benchmarks (tests/bench/)
+npm run bench
 ```
 
 ### Writing Tests
@@ -449,6 +461,7 @@ describe('Parley', () => {
 
     beforeEach(() => {
         parley = Parley.create({
+            targetType: 'window',
             allowedOrigins: ['https://test.com'],
         });
     });
@@ -461,7 +474,7 @@ describe('Parley', () => {
         it('should send message to target', async () => {
             // Arrange
             const mockTarget = createMockTarget();
-            await parley.connect('test', mockTarget.window);
+            await parley.connect(mockTarget.window, 'test');
 
             // Act
             const result = await parley.send(
@@ -477,7 +490,7 @@ describe('Parley', () => {
         it('should throw TimeoutError when no response', async () => {
             await expect(
                 parley.send('message', {}, { targetId: 'test', timeout: 100 })
-            ).rejects.toThrow('Timeout');
+            ).rejects.toMatchObject({ code: 'ERR_TIMEOUT_NO_RESPONSE' });
         });
     });
 });
@@ -596,31 +609,31 @@ Update documentation when you:
 docs/
 ├── README.md                          # Documentation hub
 ├── getting-started/                   # Installation and first steps
-│   ├── README.md
+│   ├── index.md
 │   ├── installation.md
 │   ├── concepts.md
 │   └── first-example.md
 ├── guides/                            # Use-case specific guides
-│   ├── README.md
+│   ├── index.md
 │   ├── iframe-communication.md
 │   ├── popup-communication.md
 │   ├── multi-window-communication.md
 │   └── micro-frontends.md
 ├── patterns/                          # Common coding patterns
-│   ├── README.md
+│   ├── index.md
 │   ├── request-response.md
 │   ├── error-handling.md
 │   └── state-synchronization.md
 ├── api-reference/                     # Complete API docs
-│   ├── README.md
+│   ├── index.md
 │   ├── methods.md
 │   └── system-events.md
 ├── security/                          # Security guidelines
-│   ├── README.md
+│   ├── index.md
 │   ├── origin-validation.md
 │   └── message-validation.md
 ├── troubleshooting/                   # Common issues
-│   ├── README.md
+│   ├── index.md
 │   └── common-errors.md
 ├── DOCUMENTATION_STYLE_GUIDE.md       # Writing standards
 ├── DOCUMENTATION_NAVIGATION_STRATEGY.md # Navigation patterns
@@ -646,9 +659,6 @@ If you use AI assistants (Cursor, GitHub Copilot, Claude):
 - **AI Guidelines**: [.cursorrules](./.cursorrules)
 - **Example**: [basic-example.md](./docs/examples/basic-example.md) - Shows all
   standards applied
-
-For detailed documentation contribution guidelines, see
-[CONTRIBUTING_DOCUMENTATION.md](./docs/CONTRIBUTING_DOCUMENTATION.md).
 
 ## Pull Request Process
 
@@ -729,8 +739,13 @@ Releases are automated with
 3. **Publish** - merging the `chore: version packages` PR publishes to npm
    automatically with provenance attestation.
 
-Maintainer setup: the release workflow needs an `NPM_TOKEN` repository secret (a
-granular npm automation token with publish rights for `ignite-parleyjs`).
+Maintainer setup: the release workflow publishes with
+[npm trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so
+no npm token or `NPM_TOKEN` secret is used. On npmjs.com, `ignite-parleyjs` →
+Settings → Trusted Publisher must list GitHub Actions with user `WebDev-Guy`,
+repository `parley-js`, and workflow `release.yml`, with **Allow npm publish**
+enabled (dist-tag is not needed). The workflow needs `id-token: write` and npm
+11.5.1 or newer, both of which `release.yml` provides.
 
 ---
 

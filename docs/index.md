@@ -20,8 +20,9 @@ hero:
 features:
     - title: Security First
       details:
-          Built-in origin validation, message sanitization, and DoS prevention.
-          Production-ready security out of the box.
+          Exact-match origin validation, source-window binding, protocol checks
+          on every inbound message, and payload size limits. Opt-in rate
+          limiting.
 
     - title: Type Safety
       details:
@@ -30,8 +31,8 @@ features:
 
     - title: Zero Dependencies
       details:
-          Lightweight and fast. No external dependencies. Just 15KB minified and
-          gzipped.
+          Lightweight and fast. No runtime dependencies. About 16 KB gzipped
+          (~55 KB minified).
 
     - title: Simple API
       details:
@@ -45,8 +46,8 @@ features:
 
     - title: Multiple Patterns
       details:
-          Support for iframes, popups, web workers, and multi-window
-          communication. One API for all use cases.
+          Support for iframes, popups, and multi-window communication. One API
+          for parent-iframe and opener-popup messaging.
 
     - title: Monitoring Built-in
       details:
@@ -55,23 +56,25 @@ features:
 
     - title: Battle Tested
       details:
-          85% test coverage with comprehensive security and reliability testing.
+          Around 80% test coverage, with dedicated security and reliability
+          tests.
 ---
 
 ## Quick Example
 
 ```javascript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 // Parent window
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'],
     timeout: 5000,
 });
 
-// Connect to iframe
+// Connect to the iframe element
 const iframe = document.getElementById('myFrame');
-await parley.connect(iframe.contentWindow, 'child');
+await parley.connect(iframe, 'child');
 
 // Send message and wait for response
 const response = await parley.send(
@@ -87,7 +90,10 @@ console.log('Response:', response);
 
 ```javascript
 // Child iframe
+import { Parley } from 'ignite-parleyjs';
+
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://parent.example.com'],
 });
 
@@ -136,12 +142,16 @@ parley.on('getData', async (payload, respond) => {
 
 ## Enterprise Ready
 
-- **Security**: Origin validation, message sanitization, DoS prevention
-- **Reliability**: Timeout handling, connection monitoring, error recovery
+- **Security**: Origin validation, source-window binding, inbound message
+  validation, payload size limits, opt-in rate limiting (payloads are
+  JSON-cloned, not HTML-escaped: render received text with `textContent`)
+- **Reliability**: Timeout handling, retries, heartbeat monitoring, closed-popup
+  detection
 - **Type Safety**: Full TypeScript support with generics
-- **Testing**: 85%+ test coverage
+- **Testing**: Around 80% test coverage
 - **Documentation**: Comprehensive guides, API reference, and examples
-- **Performance**: Optimized for high-throughput scenarios
+- **Performance**: About 90k `send()` calls per second for 1 KB payloads
+  (`npm run bench`)
 
 ## Use Cases
 
@@ -149,7 +159,6 @@ parley.on('getData', async (payload, respond) => {
 - **iFrame widgets**: Embed third-party widgets securely
 - **OAuth flows**: Popup-based authentication
 - **Multi-window apps**: Coordinate state across windows
-- **Web Workers**: Offload heavy computations
 - **Analytics**: Track events across embedded content
 
 ## Next Steps

@@ -23,7 +23,6 @@ import type { ChannelOptions } from '../types/ChannelTypes';
  * Handles:
  * - Connection handshake
  * - Message sending/receiving
- * - Automatic reconnection (if configured)
  *
  * @example
  * ```typescript
@@ -235,6 +234,11 @@ export class IframeChannel extends BaseChannel {
             return;
         }
 
+        // Only our own target window may handshake or talk to this channel
+        if (!this._isExpectedSource(event.source)) {
+            return;
+        }
+
         const data: unknown = event.data;
         if (!this._isParleyMessage(data)) {
             return;
@@ -268,8 +272,13 @@ export class IframeChannel extends BaseChannel {
         this._isParent = true;
         this._iframe = iframe;
 
-        // Wait for iframe to load
-        if (iframe.contentDocument?.readyState !== 'complete') {
+        // Wait for a same-origin iframe that is still loading, so its origin
+        // can be read below. Cross-origin iframes have no accessible
+        // contentDocument; if one already finished loading its 'load' event
+        // will never fire again, so don't wait - the child re-sends
+        // HANDSHAKE_INIT until we acknowledge it.
+        const sameOriginDocument = iframe.contentDocument;
+        if (sameOriginDocument && sameOriginDocument.readyState !== 'complete') {
             await this._waitForIframeLoad(iframe);
         }
 
@@ -289,39 +298,11 @@ export class IframeChannel extends BaseChannel {
         }
 
         if (!origin) {
-            // Cross-origin iframe: require explicit origin configuration
-            // This prevents attacks where the src attribute is dynamically changed
-            if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
-                throw new ConnectionError(
-                    'Cannot establish cross-origin iframe connection: no allowedOrigins configured. ' +
-                        'For cross-origin iframes, you must explicitly configure the allowed origin(s). ' +
-                        'This prevents attacks where a dynamically-changed src attribute could expose your iframe to untrusted origins.',
-                    undefined,
-                    CONNECTION_ERRORS.FAILED
-                );
-            }
-
-            // Security: Use only the first configured origin for cross-origin iframes
-            // This ensures we have exactly one, explicitly-configured, known-safe origin
-            origin = this._options.allowedOrigins[0]!;
-
-            // Validate the configured origin against allowedOrigins to ensure consistency
-            // (redundant check, but provides defense-in-depth)
-            if (!this._isAllowedOrigin(origin)) {
-                throw new ConnectionError(
-                    'Invalid iframe connection: configured origin failed validation. ' +
-                        'This should not happen - please check your allowedOrigins configuration.',
-                    undefined,
-                    CONNECTION_ERRORS.FAILED
-                );
-            }
-
-            // Log warning about cross-origin connection for security audit
-            this._logger.warn(
-                'Cross-origin iframe connection: using pre-configured origin, not src attribute. ' +
-                    'This is a security feature to prevent origin injection attacks.',
-                { origin }
-            );
+            // Cross-origin iframe: use the first explicitly configured origin,
+            // never the (changeable) src attribute. The child's HANDSHAKE_INIT
+            // then pins the real origin via event.origin.
+            origin = this._configuredTargetOrigin();
+            this._logger.debug('Cross-origin iframe: using configured origin', { origin });
         }
 
         this._targetOrigin = origin;
@@ -341,15 +322,7 @@ export class IframeChannel extends BaseChannel {
 
         // Security: Use explicit allowed origin, never use wildcard
         // See: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_considerations
-        if (!this._options.allowedOrigins || this._options.allowedOrigins.length === 0) {
-            throw new ConnectionError(
-                'Cannot establish child iframe connection: no allowedOrigins configured. ' +
-                    'At least one explicit origin must be specified in allowedOrigins array.',
-                undefined,
-                CONNECTION_ERRORS.FAILED
-            );
-        }
-        this._targetOrigin = this._options.allowedOrigins[0]!;
+        this._targetOrigin = this._configuredTargetOrigin();
 
         // Send handshake init to parent
         const initMessage = createMessage({
@@ -358,10 +331,22 @@ export class IframeChannel extends BaseChannel {
             expectsResponse: false,
         });
 
+        // First send outside the retry loop so configuration errors surface
+        // immediately; postMessage delivery is async, so no ACK can arrive
+        // before the handshake starts below
         this.send(initMessage, parent, this._targetOrigin);
 
+        const handshake = this._waitForHandshake();
+        this._repeatUntilSettled(
+            () => {
+                this.send(initMessage, parent, this._targetOrigin);
+            },
+            handshake,
+            this._handshakeRetryInterval
+        );
+
         // Wait for handshake acknowledgment
-        await this._waitForHandshake();
+        await handshake;
     }
 
     /**

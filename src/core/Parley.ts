@@ -20,18 +20,23 @@ import {
     createResponse,
     isResponseMessage,
     isInternalMessage,
+    isCompatibleVersion,
+    validateMessageProtocol,
+    validateResponseProtocol,
     type MessageProtocol,
     type ResponseProtocol,
 } from './MessageProtocol';
 import { SYSTEM_EVENTS, type SystemEventName } from '../events/SystemEvents';
 import { ConnectionState } from '../types/ConnectionTypes';
-import { ValidationError } from '../errors/ErrorTypes';
+import { ParleyError, ValidationError } from '../errors/ErrorTypes';
+import { GENERAL_ERRORS, SECURITY_ERRORS, VALIDATION_ERRORS } from '../errors/ErrorCodes';
 import { DefaultSecurityLayer, type SecurityLayer } from '../security/SecurityLayer';
 import {
     DEFAULT_HEARTBEAT_CONFIG,
     type ParleyConfig,
     type ResolvedConfig,
     type ResolvedHeartbeatConfig,
+    validateConfig,
 } from '../types/ConfigTypes';
 import type {
     MessageHandler,
@@ -169,6 +174,9 @@ export class Parley {
             emitAnalyticsEvent: (event) => {
                 this._emitAnalyticsEvent(event);
             },
+            onSendOutcome: (targetId, success) => {
+                this._connection.recordSendOutcome(targetId, success);
+            },
         });
 
         // Set up the connection manager (connection lifecycle)
@@ -179,8 +187,8 @@ export class Parley {
             registry: this._registry,
             targets: this._targets,
             getHeartbeatManager: () => this._heartbeatManager,
-            onIncomingMessage: (message, source, sourceTargetId) => {
-                this._handleIncomingMessage(message, source, sourceTargetId);
+            onIncomingMessage: (message, source, sourceTargetId, origin) => {
+                this._handleIncomingMessage(message, source, sourceTargetId, origin);
             },
             sendSystemMessage: (type, payload, targetId, timeout) =>
                 this._sendPipeline.sendSystemMessage(type, payload, targetId, timeout),
@@ -226,6 +234,10 @@ export class Parley {
      * ```
      */
     public static create(config: ParleyConfig): Parley {
+        // Reject invalid configuration up front (bad timeouts, wildcard or
+        // 'null' origins, etc.) instead of failing later in surprising ways
+        validateConfig(config);
+
         // Resolve heartbeat configuration
         const heartbeatConfig: ResolvedHeartbeatConfig = {
             enabled: config.heartbeat?.enabled ?? DEFAULT_HEARTBEAT_CONFIG.enabled,
@@ -248,6 +260,13 @@ export class Parley {
             securityLayer: config.securityLayer ?? new DefaultSecurityLayer(),
             instanceId: config.instanceId ?? `parley_${generateUUID().slice(0, 8)}`,
             heartbeat: heartbeatConfig,
+            exposeHandlerErrors: config.exposeHandlerErrors ?? false,
+            rateLimit: config.rateLimit
+                ? {
+                      enabled: config.rateLimit.enabled ?? false,
+                      messagesPerSecond: config.rateLimit.messagesPerSecond ?? 100,
+                  }
+                : undefined,
         };
 
         return new Parley(resolvedConfig);
@@ -506,11 +525,12 @@ export class Parley {
             this._heartbeatManager = null;
         }
 
-        // Disconnect all targets
-        this._connection.destroy();
-
-        // Reject all pending requests
+        // Reject all pending requests (before disconnecting, so they reject
+        // with 'Parley instance destroyed' rather than 'Target disconnected')
         this._sendPipeline.destroy();
+
+        // Disconnect all targets (emits system:disconnected, reason 'destroyed')
+        this._connection.destroy();
 
         // Clean up
         this._emitter.destroy();
@@ -527,18 +547,85 @@ export class Parley {
     private _handleIncomingMessage(
         message: MessageProtocol | ResponseProtocol,
         source: Window,
-        sourceTargetId: string
+        sourceTargetId: string,
+        origin: string
     ): void {
+        if (!this._isAcceptableIncoming(message, origin, sourceTargetId)) {
+            return;
+        }
+
         // Update activity
         this._targets.updateActivity(sourceTargetId);
 
         if (isResponseMessage(message)) {
             this._sendPipeline.handleResponse(message, sourceTargetId);
         } else {
-            this._handleRequest(message, source, sourceTargetId).catch((error: unknown) => {
+            this._handleRequest(message, source, sourceTargetId, origin).catch((error: unknown) => {
                 this._logger.error('Error handling incoming message:', error);
             });
         }
+    }
+
+    /**
+     * Run every inbound security check before a message is dispatched
+     *
+     * - Origin is re-checked through the configured SecurityLayer, so custom
+     *   validateOrigin() implementations are actually enforced
+     * - Protocol structure is validated (requests and responses)
+     * - Protocol major version must be compatible
+     * - Requests go through SecurityLayer.validateMessage()
+     *
+     * @returns True if the message may be processed
+     */
+    private _isAcceptableIncoming(
+        message: MessageProtocol | ResponseProtocol,
+        origin: string,
+        sourceTargetId: string
+    ): boolean {
+        const reject = (code: string, reason: string): false => {
+            this._logger.warn('Inbound message rejected', {
+                code,
+                reason,
+                targetId: sourceTargetId,
+                origin,
+            });
+            this._emitter.emitSync(SYSTEM_EVENTS.ERROR, {
+                code,
+                message: `Inbound message rejected: ${reason}`,
+                targetId: sourceTargetId,
+                timestamp: getTimestamp(),
+            });
+            return false;
+        };
+
+        if (!this._security.validateOrigin(origin, this._config.allowedOrigins)) {
+            return reject(SECURITY_ERRORS.ORIGIN_MISMATCH, 'origin not allowed');
+        }
+
+        const isResponse = isResponseMessage(message);
+
+        try {
+            if (isResponse) {
+                validateResponseProtocol(message);
+            } else {
+                validateMessageProtocol(message);
+            }
+        } catch (error) {
+            return reject(
+                VALIDATION_ERRORS.INVALID_PROTOCOL,
+                error instanceof Error ? error.message : 'invalid protocol'
+            );
+        }
+
+        if (!isCompatibleVersion(message._v)) {
+            return reject(SECURITY_ERRORS.VERSION_MISMATCH, `incompatible protocol ${message._v}`);
+        }
+
+        if (!isResponse && !this._security.validateMessage(message)) {
+            return reject(VALIDATION_ERRORS.INVALID_PROTOCOL, 'rejected by security layer');
+        }
+
+        return true;
     }
 
     /**
@@ -547,16 +634,19 @@ export class Parley {
     private async _handleRequest(
         message: MessageProtocol,
         source: Window,
-        sourceTargetId: string
+        sourceTargetId: string,
+        origin: string
     ): Promise<void> {
         const isInternal = isInternalMessage(message);
 
         // For non-internal messages, emit received event and analytics
         if (!isInternal) {
-            await this._emitter.emit(SYSTEM_EVENTS.MESSAGE_RECEIVED, {
+            // Don't make handlers wait on (possibly slow, async) system listeners
+            this._emitter.emitSync(SYSTEM_EVENTS.MESSAGE_RECEIVED, {
                 messageId: message._id,
                 messageType: message._type,
-                origin: message._origin,
+                // Browser-verified origin, never the self-reported message._origin
+                origin,
                 timestamp: getTimestamp(),
             });
 
@@ -588,6 +678,17 @@ export class Parley {
             return;
         }
 
+        // Create metadata
+        const metadata: MessageMetadata = {
+            messageId: message._id,
+            senderId: sourceTargetId,
+            // Browser-verified origin (event.origin); message._origin is
+            // self-reported by the sender and must not be trusted
+            origin,
+            timestamp: message._timestamp,
+            expectsResponse: message._expectsResponse,
+        };
+
         // Validate payload (skip for internal messages)
         if (!isInternal) {
             try {
@@ -598,6 +699,8 @@ export class Parley {
                         type: message._type,
                         errors: error.validationErrors,
                     });
+
+                    this._notifyTypeError(message._type, error, metadata);
 
                     if (message._expectsResponse) {
                         this._sendErrorResponse(message, source, sourceTargetId, {
@@ -611,15 +714,6 @@ export class Parley {
                 throw error;
             }
         }
-
-        // Create metadata
-        const metadata: MessageMetadata = {
-            messageId: message._id,
-            senderId: sourceTargetId,
-            origin: message._origin,
-            timestamp: message._timestamp,
-            expectsResponse: message._expectsResponse,
-        };
 
         // Track if response was sent using shared object for atomicity
         const responseHandled = { sent: false };
@@ -638,9 +732,11 @@ export class Parley {
                 requestId: message._id,
                 success: true,
                 payload: this._security.sanitizePayload(responsePayload),
+                // sanitizePayload already produced a fresh copy
+                clonePayload: false,
             });
 
-            this._sendResponse(response, source, sourceTargetId);
+            this._sendResponse(response, source, sourceTargetId, isInternal);
         };
 
         // Call handlers
@@ -649,6 +745,18 @@ export class Parley {
                 await handler(message.payload, respond, metadata);
             } catch (error) {
                 this._logger.error('Handler error', { type: message._type, error });
+
+                this._notifyTypeError(
+                    message._type,
+                    error instanceof ParleyError
+                        ? error
+                        : new ParleyError(
+                              error instanceof Error ? error.message : 'Handler error',
+                              GENERAL_ERRORS.UNKNOWN,
+                              { cause: error }
+                          ),
+                    metadata
+                );
 
                 // Emit error event
                 this._emitter.emitSync(SYSTEM_EVENTS.ERROR, {
@@ -661,9 +769,14 @@ export class Parley {
 
                 if (message._expectsResponse && !responseHandled.sent) {
                     responseHandled.sent = true;
+                    // Don't leak internal error details to the remote window
+                    // unless explicitly enabled via exposeHandlerErrors
                     this._sendErrorResponse(message, source, sourceTargetId, {
                         code: 'ERR_HANDLER_ERROR',
-                        message: error instanceof Error ? error.message : 'Handler error',
+                        message:
+                            this._config.exposeHandlerErrors && error instanceof Error
+                                ? error.message
+                                : 'Handler error',
                     });
                 }
             }
@@ -671,9 +784,38 @@ export class Parley {
     }
 
     /**
+     * Invoke the onError option registered for a message type, if any
+     *
+     * Called when an inbound message of that type fails schema validation
+     * or one of its handlers throws. Errors thrown by onError itself are
+     * logged and swallowed.
+     */
+    private _notifyTypeError(
+        messageType: string,
+        error: ParleyError,
+        metadata: MessageMetadata
+    ): void {
+        const onError = this._registry.get(messageType)?.options.onError;
+        if (!onError) {
+            return;
+        }
+
+        try {
+            onError(error, metadata);
+        } catch (callbackError) {
+            this._logger.error('onError callback threw', { type: messageType, callbackError });
+        }
+    }
+
+    /**
      * Send a response
      */
-    private _sendResponse(response: ResponseProtocol, target: Window, targetId: string): void {
+    private _sendResponse(
+        response: ResponseProtocol,
+        target: Window,
+        targetId: string,
+        internal = false
+    ): void {
         const targetInfo = this._targets.get(targetId);
         const channel = this._connection.getChannel(targetId);
 
@@ -691,6 +833,12 @@ export class Parley {
         }
 
         channel.send(response, target, targetInfo.origin);
+
+        // Responses to protocol traffic (heartbeat pings, disconnect
+        // notifications) are not app-level events
+        if (internal) {
+            return;
+        }
 
         // Emit events
         this._emitter.emitSync(SYSTEM_EVENTS.RESPONSE_SENT, {
@@ -725,7 +873,7 @@ export class Parley {
             error,
         });
 
-        this._sendResponse(response, target, targetId);
+        this._sendResponse(response, target, targetId, isInternalMessage(originalMessage));
     }
 
     /**

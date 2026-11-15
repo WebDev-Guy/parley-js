@@ -91,9 +91,6 @@ describe('BaseChannel', () => {
     const defaultOptions: ChannelOptions = {
         allowedOrigins: ['https://example.com', 'https://other.com'],
         handshakeTimeout: 5000,
-        autoReconnect: false,
-        reconnectDelay: 1000,
-        maxReconnectAttempts: 3,
     };
 
     beforeEach(() => {
@@ -340,9 +337,10 @@ describe('BaseChannel', () => {
             expect(handler).not.toHaveBeenCalled();
         });
 
-        it('should call handler for valid Parley messages', () => {
+        it('should call handler for valid Parley messages from the target window', () => {
             const handler = vi.fn();
             channel.setMessageHandler(handler);
+            channel.targetWindow = window;
 
             const message = createTestMessage('test:type', { data: 'test' });
             const event = new MessageEvent('message', {
@@ -352,7 +350,38 @@ describe('BaseChannel', () => {
             });
 
             channel.testHandleMessageEvent(event);
-            expect(handler).toHaveBeenCalledWith(message, window);
+            // Third argument is the browser-verified event.origin
+            expect(handler).toHaveBeenCalledWith(message, window, 'https://example.com');
+        });
+
+        it('should block messages from a window other than the target', () => {
+            const handler = vi.fn();
+            channel.setMessageHandler(handler);
+            channel.targetWindow = { postMessage: vi.fn() } as unknown as Window;
+
+            const event = new MessageEvent('message', {
+                data: createTestMessage('test:type', {}),
+                origin: 'https://example.com',
+                source: window,
+            });
+
+            channel.testHandleMessageEvent(event);
+            expect(handler).not.toHaveBeenCalled();
+        });
+
+        it('should block messages when no target window is set', () => {
+            const handler = vi.fn();
+            channel.setMessageHandler(handler);
+            channel.targetWindow = null;
+
+            const event = new MessageEvent('message', {
+                data: createTestMessage('test:type', {}),
+                origin: 'https://example.com',
+                source: window,
+            });
+
+            channel.testHandleMessageEvent(event);
+            expect(handler).not.toHaveBeenCalled();
         });
 
         it('should work without message handler set', () => {

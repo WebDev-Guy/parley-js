@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > [Guides](./index.md) >
+[Home](../index.md) > [Documentation](./index.md) > [Guides](./index.md) >
 Multi-Window Communication
 
 # Multi-Window Communication Guide
@@ -11,7 +11,7 @@ Coordinating communication between multiple windows using ParleyJS.
 2. [Basic Setup](#basic-setup)
 3. [Broadcasting to Multiple Windows](#broadcasting-to-multiple-windows)
 4. [Hub-and-Spoke Pattern](#hub-and-spoke-pattern)
-5. [Peer-to-Peer Communication](#peer-to-peer-communication)
+5. [Messaging Between Children](#messaging-between-children)
 6. [Complete Example](#complete-example)
 
 ---
@@ -19,8 +19,18 @@ Coordinating communication between multiple windows using ParleyJS.
 ## Overview
 
 Multi-window scenarios involve a main window coordinating with multiple child
-windows (iframes, popups, or tabs). ParleyJS makes this easy with target
-management and broadcasting capabilities.
+windows (iframes, or popups/tabs it opened with `window.open()`). ParleyJS makes
+this easy with target management and broadcasting capabilities.
+
+Two rules shape every multi-window design:
+
+- **One instance per target type.** An instance created with
+  `targetType: 'iframe'` connects to iframes; one created with
+  `targetType: 'window'` connects to popups. A hub that talks to both creates
+  two instances.
+- **Children cannot connect to each other directly.** Sibling iframes (or two
+  popups) have no ParleyJS channel between them; the main window acts as a hub
+  and routes messages.
 
 **Use cases**:
 
@@ -36,9 +46,10 @@ management and broadcasting capabilities.
 ### Managing Multiple Connections
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         'https://widget1.example.com',
         'https://widget2.example.com',
@@ -46,14 +57,17 @@ const parley = Parley.create({
     ],
 });
 
-// Connect to multiple iframes
+// Connect to multiple iframes (pass the iframe elements).
+// Each widget page calls parley.connect(window.parent) on its side.
 const iframe1 = document.querySelector('#widget-1');
 const iframe2 = document.querySelector('#widget-2');
 const iframe3 = document.querySelector('#widget-3');
 
-await parley.connect(iframe1.contentWindow, 'widget-1');
-await parley.connect(iframe2.contentWindow, 'widget-2');
-await parley.connect(iframe3.contentWindow, 'widget-3');
+await Promise.all([
+    parley.connect(iframe1, 'widget-1'),
+    parley.connect(iframe2, 'widget-2'),
+    parley.connect(iframe3, 'widget-3'),
+]);
 
 // Now you can send to specific windows
 await parley.send(
@@ -64,8 +78,8 @@ await parley.send(
     }
 );
 
-// Or broadcast to all
-await parley.broadcast('global-update', { data: 'value' });
+// Or broadcast to all (fire-and-forget; returns nothing)
+parley.broadcast('global-update', { data: 'value' });
 ```
 
 For individual iframe setup details, see
@@ -81,13 +95,17 @@ details, see
 
 ```typescript
 // Broadcast configuration change to all windows
-await parley.broadcast('theme-change', {
+parley.broadcast('theme-change', {
     theme: 'dark',
     timestamp: Date.now(),
 });
 
-// All connected windows receive the message
+// All windows connected to this instance receive the message
 ```
+
+`broadcast()` returns `void`: don't `await` it, and don't expect responses or
+per-target failure reports. When you need replies, use `send()` per target as
+shown in [Broadcast with Acknowledgment](#broadcast-with-acknowledgment).
 
 For state synchronization across windows using broadcast, see
 [State Synchronization Pattern](../patterns/state-synchronization.md).
@@ -148,32 +166,36 @@ architectural patterns, see [Architecture Guide](../ARCHITECTURE.md).
 ### Hub (Main Window)
 
 ```typescript
+import { Parley } from 'ignite-parleyjs';
+
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'],
 });
 
-// Track connected windows
+// Track connected iframes
 const connectedWindows = new Map();
 
-// Connect multiple windows
-async function connectWindow(window, id) {
-    await parley.connect(window, id);
-    connectedWindows.set(id, { window, status: 'connected' });
+// Connect an iframe element
+async function connectWindow(iframe: HTMLIFrameElement, id: string) {
+    await parley.connect(iframe, id);
+    connectedWindows.set(id, { iframe, status: 'connected' });
 
     console.log(`Connected to ${id}. Total: ${connectedWindows.size}`);
 }
 
-// Handle messages from any child
+// Handle messages from any child.
+// metadata.senderId is the targetId this hub gave the sender in connect().
 parley.on('child-message', (payload, respond, metadata) => {
-    console.log(`Message from ${metadata.targetId}:`, payload);
+    console.log(`Message from ${metadata.senderId}:`, payload);
 
-    // Forward to other children if needed
-    for (const [targetId, info] of connectedWindows) {
-        if (targetId !== metadata.targetId) {
+    // Forward to the other children
+    for (const targetId of connectedWindows.keys()) {
+        if (targetId !== metadata.senderId) {
             parley.send(
                 'forwarded-message',
                 {
-                    from: metadata.targetId,
+                    from: metadata.senderId,
                     data: payload,
                 },
                 {
@@ -188,27 +210,24 @@ parley.on('child-message', (payload, respond, metadata) => {
 });
 
 // Broadcast to all children
-async function broadcastToAll(type, data) {
-    const promises = [];
-
-    for (const targetId of connectedWindows.keys()) {
-        promises.push(
-            parley.send(type, data, {
-                targetId,
-                expectsResponse: false,
-            })
-        );
-    }
-
-    await Promise.all(promises);
+function broadcastToAll(type: string, data: unknown) {
+    parley.broadcast(type, data);
 }
 ```
 
-### Spoke (Child Windows)
+### Spoke (Child Iframes)
 
 ```typescript
+import { Parley } from 'ignite-parleyjs';
+
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://main.example.com'],
+});
+
+// Register handlers before connecting
+parley.on('forwarded-message', (payload) => {
+    console.log(`Message from ${payload.from}:`, payload.data);
 });
 
 // Connect to hub
@@ -225,11 +244,6 @@ await parley.send(
         targetId: 'hub',
     }
 );
-
-// Receive broadcasts from hub
-parley.on('forwarded-message', (payload) => {
-    console.log(`Message from ${payload.from}:`, payload.data);
-});
 ```
 
 For request-response messaging patterns in hub-and-spoke architecture, see
@@ -237,9 +251,11 @@ For request-response messaging patterns in hub-and-spoke architecture, see
 
 ---
 
-## Peer-to-Peer Communication
+## Messaging Between Children
 
-Enable direct communication between child windows through hub.
+Child windows cannot open a ParleyJS connection to each other (for example, two
+sibling iframes). Instead, each child talks to the hub and the hub relays the
+message to the intended recipient.
 
 ### Hub Routing Messages
 
@@ -252,7 +268,7 @@ parley.on('send-to-peer', async (payload, respond, metadata) => {
         const response = await parley.send(
             'peer-message',
             {
-                from: metadata.targetId,
+                from: metadata.senderId,
                 message,
             },
             {
@@ -310,85 +326,86 @@ parley.on('peer-message', (payload, respond) => {
 
 ## Complete Example
 
+This hub talks to two iframes and a popup. Because an instance handles a single
+target type, the hub creates one instance for iframes and one for popups, and
+shares the routing logic between them.
+
 ### Main Window (Hub)
 
-```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
+```javascript
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
-const parley = Parley.create({
+const iframeParley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
 });
 
-// Track windows
+const popupParley = Parley.create({
+    targetType: 'window',
+    allowedOrigins: [window.location.origin],
+});
+
+// targetId -> the instance that owns that connection
 const windows = new Map();
 
-// Setup iframe 1
-const iframe1 = document.querySelector('#iframe-1');
-iframe1.addEventListener('load', async () => {
-    await parley.connect(iframe1.contentWindow, 'iframe-1');
-    windows.set('iframe-1', iframe1);
-    console.log('Connected: iframe-1');
-});
+async function connectChild(instance, target, id) {
+    await instance.connect(target, id);
+    windows.set(id, instance);
+    console.log(`Connected: ${id}`);
+}
 
-// Setup iframe 2
-const iframe2 = document.querySelector('#iframe-2');
-iframe2.addEventListener('load', async () => {
-    await parley.connect(iframe2.contentWindow, 'iframe-2');
-    windows.set('iframe-2', iframe2);
-    console.log('Connected: iframe-2');
-});
+// Iframes: connect directly, no load listener needed
+connectChild(iframeParley, document.querySelector('#iframe-1'), 'iframe-1');
+connectChild(iframeParley, document.querySelector('#iframe-2'), 'iframe-2');
 
-// Setup popup
+// Popup: open from a click handler, then connect right away
 document.getElementById('open-popup').addEventListener('click', async () => {
     const popup = window.open('/popup.html', 'popup', 'width=400,height=300');
-
-    await new Promise((resolve) => {
-        popup.addEventListener('load', resolve, { once: true });
-    });
-
-    await parley.connect(popup, 'popup');
-    windows.set('popup', popup);
-    console.log('Connected: popup');
-});
-
-// Handle messages from children
-parley.on('broadcast-request', async (payload, respond, metadata) => {
-    // Child wants to broadcast to all others
-    for (const [targetId, window] of windows) {
-        if (targetId !== metadata.targetId) {
-            await parley.send(
-                'broadcast-message',
-                {
-                    from: metadata.targetId,
-                    ...payload,
-                },
-                {
-                    targetId,
-                    expectsResponse: false,
-                }
-            );
-        }
+    if (!popup) {
+        console.error('Popup blocked');
+        return;
     }
-
-    respond({ broadcasted: windows.size - 1 });
+    await connectChild(popupParley, popup, 'popup');
 });
 
-// Broadcast button
-document.getElementById('broadcast-all').addEventListener('click', async () => {
-    await parley.broadcast('hub-broadcast', {
-        message: 'Hello from hub!',
-        timestamp: Date.now(),
+// Same handlers and monitoring on both instances
+for (const instance of [iframeParley, popupParley]) {
+    // A child asks the hub to relay a message to every other child
+    instance.on('broadcast-request', (payload, respond, metadata) => {
+        let relayed = 0;
+        for (const [targetId, owner] of windows) {
+            if (targetId !== metadata.senderId) {
+                owner
+                    .send(
+                        'broadcast-message',
+                        { from: metadata.senderId, ...payload },
+                        { targetId, expectsResponse: false }
+                    )
+                    .catch((error) =>
+                        console.error(`Relay to ${targetId} failed:`, error)
+                    );
+                relayed++;
+            }
+        }
+        respond({ broadcasted: relayed });
     });
-});
 
-// Monitor connections
-parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
-    updateConnectionStatus();
-});
+    instance.onSystem(SYSTEM_EVENTS.CONNECTED, () => {
+        updateConnectionStatus();
+    });
 
-parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
-    windows.delete(event.targetId);
-    updateConnectionStatus();
+    instance.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
+        // A closed popup arrives here with reason 'connection_lost'
+        windows.delete(event.targetId);
+        updateConnectionStatus();
+    });
+}
+
+// Broadcast button: broadcast() is per instance and returns void
+document.getElementById('broadcast-all').addEventListener('click', () => {
+    const message = { message: 'Hello from hub!', timestamp: Date.now() };
+    iframeParley.broadcast('hub-broadcast', message);
+    popupParley.broadcast('hub-broadcast', message);
 });
 
 function updateConnectionStatus() {
@@ -399,16 +416,18 @@ function updateConnectionStatus() {
 
 ### Child Window (Iframe/Popup)
 
-```typescript
-import { Parley } from 'parley-js';
+The same child script works in both places: it picks its `targetType` and the
+hub reference depending on how it was opened.
+
+```javascript
+import { Parley } from 'ignite-parleyjs';
+
+const isPopup = window.opener !== null;
 
 const parley = Parley.create({
+    targetType: isPopup ? 'window' : 'iframe',
     allowedOrigins: [window.location.origin],
 });
-
-// Connect to hub
-const parent = window.opener || window.parent;
-await parley.connect(parent, 'hub');
 
 // Receive broadcasts from hub
 parley.on('hub-broadcast', (payload) => {
@@ -416,18 +435,21 @@ parley.on('hub-broadcast', (payload) => {
     displayMessage(`Hub: ${payload.message}`);
 });
 
-// Receive broadcasts from peers
+// Receive messages relayed from other children
 parley.on('broadcast-message', (payload) => {
     console.log(`Message from ${payload.from}:`, payload);
     displayMessage(`${payload.from}: ${payload.message || 'ping'}`);
 });
+
+// Connect to hub (register handlers first so nothing is missed)
+await parley.connect(isPopup ? window.opener : window.parent, 'hub');
 
 // Broadcast to all button
 document.getElementById('broadcast').addEventListener('click', async () => {
     const response = await parley.send(
         'broadcast-request',
         {
-            message: 'Hello from ' + window.name,
+            message: 'Hello from ' + (window.name || 'a child'),
         },
         {
             targetId: 'hub',
@@ -444,8 +466,9 @@ function displayMessage(text) {
 }
 ```
 
-For complete working examples, see [examples/](../../examples/). For system
-event monitoring in multi-window scenarios, see
+For complete working examples, see
+[examples/](https://github.com/WebDev-Guy/parley-js/tree/main/examples). For
+system event monitoring in multi-window scenarios, see
 [System Events documentation](../api-reference/system-events.md).
 
 ---
@@ -470,5 +493,4 @@ event monitoring in multi-window scenarios, see
 - [Testing Patterns](../TESTING_PATTERNS.md) - Unit and integration testing
   strategies
 
-**Back to**: [Use Case Guides](./index.md) |
-[Documentation Home](../../index.md)
+**Back to**: [Use Case Guides](./index.md) | [Documentation Home](../index.md)

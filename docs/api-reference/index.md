@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > API Reference
+[Home](../index.md) > [Documentation](./index.md) > API Reference
 
 # API Reference
 
@@ -20,6 +20,8 @@ For quick examples and common patterns, see
 - **[Methods](./methods.md)** - All ParleyJS methods with parameters and return
   types
 - **[System Events](./system-events.md)** - System event reference
+- **[Types](./types.md)** - TypeScript interfaces, unions and enums
+- **[Error Codes](./error-codes.md)** - Error classes and error codes
 - **[Common Errors](../troubleshooting/common-errors.md)** - Error reference and
   solutions
 
@@ -34,16 +36,25 @@ For quick examples and common patterns, see
 **Creating an instance**:
 
 ```javascript
+import { Parley } from 'ignite-parleyjs';
+
 const parley = Parley.create({
+    targetType: 'iframe', // or 'window' for popups
     allowedOrigins: ['https://example.com'],
 });
 ```
 
-**Connecting to a window**:
+**Connecting to a target**:
 
 ```javascript
-await parley.connect(targetWindow, 'target-id');
+// Parent page (targetType: 'iframe')
+await parley.connect(iframeElement, 'target-id');
+
+// Page inside the iframe (also targetType: 'iframe')
+await parley.connect(window.parent, 'parent');
 ```
+
+Both sides must call `connect()`.
 
 **Sending messages**:
 
@@ -56,7 +67,8 @@ const response = await parley.send('message-type', payload, {
 **Receiving messages**:
 
 ```javascript
-parley.on('message-type', (payload, respond) => {
+parley.on('message-type', (payload, respond, metadata) => {
+    // Reply by calling respond(); a handler's return value is ignored
     respond({ result: 'success' });
 });
 ```
@@ -69,7 +81,8 @@ The API documentation is organized by:
 
 - **Methods** - Grouped by functionality (connection, messaging, events)
 - **System Events** - Lifecycle and monitoring events
-- **Errors** - Common errors with solutions
+- **Types** - Configuration, handler, event and error types
+- **Errors** - Error classes, codes and common errors with solutions
 
 ## Using This Reference
 
@@ -77,6 +90,8 @@ The API documentation is organized by:
 
 - Find a specific method: See [Methods](./methods.md)
 - Understand system events: See [System Events](./system-events.md)
+- Look up a type: See [Types](./types.md)
+- Look up an error code: See [Error Codes](./error-codes.md)
 - Debug an error: See [Common Errors](../troubleshooting/common-errors.md)
 - See complete examples: See [API.md](../API.md)
 
@@ -109,6 +124,8 @@ For details on TypeScript usage, see
 
 - [Methods](./methods.md) - Method reference
 - [System Events](./system-events.md) - Event reference
+- [Types](./types.md) - Type reference
+- [Error Codes](./error-codes.md) - Error code reference
 - [Common Errors](../troubleshooting/common-errors.md) - Error reference
 
-**Back to**: [Documentation Home](./index.md) | [Project Home](../../index.md)
+**Back to**: [Documentation Home](./index.md) | [Project Home](../index.md)

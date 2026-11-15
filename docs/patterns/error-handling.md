@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Code Patterns](./index.md) > Error Handling Pattern
+[Home](../index.md) > [Code Patterns](./index.md) > Error Handling Pattern
 
 # Error Handling Pattern
 
@@ -61,9 +61,10 @@ user experience.
 **Simple Error Handling**:
 
 ```javascript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
 });
 
@@ -101,6 +102,12 @@ async function fetchUserData(userId) {
         } else if (error.code === 'ERR_VALIDATION_SCHEMA_MISMATCH') {
             console.error('Invalid message format');
             showNotification('Invalid data format');
+        } else if (error.code === 'ERR_HANDLER_ERROR') {
+            // The child's handler threw. error.message is 'Handler error'
+            // unless the child set exposeHandlerErrors: true.
+            showNotification('The request failed. Please try again.');
+        } else if (error.code === 'ERR_NO_HANDLER') {
+            console.error('Child has no handler for getUser');
         } else {
             console.error('Unexpected error:', error.message);
             showNotification('An error occurred. Please try again.');
@@ -127,7 +134,24 @@ try {
 
 ### Retry Pattern
 
-**Automatic Retry with Exponential Backoff**:
+ParleyJS retries timed-out requests on its own when you set `retries` (in
+`Parley.create()`, `register(type, { retries })`, or per `send()` call). Each
+retry re-sends the same message (same message id) after another `timeout`
+period. There is no backoff, and only timeouts are retried:
+
+```javascript
+// Up to 3 attempts, 5 seconds each, before ERR_TIMEOUT_NO_RESPONSE
+await parley.send('processData', data, {
+    targetId: 'worker-iframe',
+    timeout: 5000,
+    retries: 2,
+});
+```
+
+**Optional: application-level retry with exponential backoff**:
+
+If you need increasing delays between attempts, write a wrapper like the one
+below. This is application code, not a ParleyJS feature:
 
 ```javascript
 async function sendWithRetry(messageType, payload, options = {}) {
@@ -157,8 +181,11 @@ async function sendWithRetry(messageType, payload, options = {}) {
                 throw error;
             }
 
-            // Don't retry if target is not connected
-            if (error.code === 'ERR_TARGET_NOT_CONNECTED') {
+            // Don't retry if target is not connected or has no handler
+            if (
+                error.code === 'ERR_TARGET_NOT_CONNECTED' ||
+                error.code === 'ERR_NO_HANDLER'
+            ) {
                 throw error;
             }
 
@@ -315,16 +342,14 @@ parley.on('processOrder', async (payload, respond) => {
             total: order.total,
         });
     } catch (error) {
-        // Unexpected errors
+        // Unexpected errors. (If you let the error escape instead, the
+        // parent's send() rejects with ERR_HANDLER_ERROR and the generic
+        // message 'Handler error'.)
         respond({
             success: false,
             error: {
                 code: 'PROCESSING_FAILED',
-                message: error.message,
-                stack:
-                    process.env.NODE_ENV === 'development'
-                        ? error.stack
-                        : undefined,
+                message: 'Order processing failed',
             },
         });
     }
@@ -466,10 +491,49 @@ ParleyJS provides specific error types for different failure scenarios:
    The target may have disconnected or never connected.
 
 4. **ConnectionError** (ERR_CONNECTION_CLOSED, ERR_CONNECTION_HANDSHAKE_FAILED):
-   Connection-level errors during handshake or while connected.
+   Connection-level errors during handshake or while connected. A pending
+   `send()` rejects with ERR_CONNECTION_CLOSED when the target disconnects or
+   the instance is destroyed.
+
+5. **SerializationError** (ERR_SERIALIZATION_CIRCULAR_REFERENCE,
+   ERR_SERIALIZATION_SERIALIZE_FAILED): The payload could not be JSON-cloned
+   (circular reference or BigInt).
+
+6. **ParleyError with a remote code**: `ERR_HANDLER_ERROR` when the receiver's
+   handler threw (message `'Handler error'` unless the receiver set
+   `exposeHandlerErrors: true`), and `ERR_NO_HANDLER` when the receiver has no
+   handler for the message type.
 
 Each error type has a code property you can check to handle specific scenarios
-appropriately.
+appropriately. All of these are thrown to the caller of `send()`; they are not
+emitted as `system:error` events.
+
+### Observing Errors on the Receiving Side
+
+On the side that handles messages, ParleyJS reports failures in two ways:
+
+- `system:error` (via `onSystem`) fires when a local handler throws
+  (`ERR_HANDLER_ERROR`, with the full error message) and when inbound messages
+  are rejected by security checks (`ERR_SECURITY_ORIGIN_MISMATCH`,
+  `ERR_VALIDATION_INVALID_PROTOCOL`, `ERR_SECURITY_VERSION_MISMATCH`).
+- `register(type, { onError })` observes failures for a single message type:
+  inbound payloads that fail the registered schema (a ValidationError) and
+  handler errors (wrapped in a ParleyError).
+
+```javascript
+parley.register('processOrder', {
+    schema: orderSchema,
+    onError: (error, metadata) => {
+        logErrorToServer({
+            type: 'processOrder',
+            code: error.code,
+            message: error.message,
+            senderId: metadata.senderId,
+            origin: metadata.origin,
+        });
+    },
+});
+```
 
 ### Why Structured Error Handling Matters
 
@@ -486,7 +550,7 @@ Good error handling improves reliability and user trust.
 
 Different errors require different recovery strategies:
 
-- **Timeout**: Retry with exponential backoff
+- **Timeout**: Use the built-in `retries` option, or your own backoff wrapper
 - **Connection lost**: Attempt reconnection, use cached data
 - **Validation error**: Fix the code, don't retry
 - **Application error**: Show user-friendly message, log for debugging
@@ -500,15 +564,34 @@ Choose the strategy based on the error type and user impact.
 
 **Centralized Error Handling**:
 
+`system:error` only carries local handler errors and rejected inbound messages.
+Timeouts arrive as `system:timeout`, lost connections as
+`system:connection_lost`, and `send()` failures are thrown to the caller, so a
+global handler subscribes to each event it cares about:
+
 ```javascript
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
+
 class ParleyErrorHandler {
     constructor(parley) {
         this.parley = parley;
         this.errorListeners = new Set();
 
-        // Listen for system errors
-        parley.onSystem('system:error', (error) => {
-            this.handleError(error);
+        // Local handler errors and rejected inbound messages
+        parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
+            // event: { code, message, targetId?, messageId?, details?, timestamp }
+            this.handleError(event);
+        });
+
+        // Requests that timed out after all retries
+        parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
+            // event: { messageId, messageType, targetId?, timeoutMs, retriesAttempted, timestamp }
+            showNotification('Connection timeout', 'warning');
+        });
+
+        // Connection lost (heartbeat timeout, repeated failures, closed window)
+        parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, (event) => {
+            showNotification(`Connection lost (${event.reason})`, 'error');
         });
     }
 
@@ -524,11 +607,8 @@ class ParleyErrorHandler {
             }
         });
 
-        // Show user notification
-        if (error.code === 'ERR_TIMEOUT_NO_RESPONSE') {
-            showNotification('Connection timeout', 'warning');
-        } else if (error.code === 'ERR_TARGET_NOT_CONNECTED') {
-            showNotification('Connection lost', 'error');
+        if (error.code === 'ERR_SECURITY_ORIGIN_MISMATCH') {
+            console.warn('Rejected a message from an untrusted origin');
         }
     }
 
@@ -586,11 +666,12 @@ async function sendWithProgress(messageType, payload, options = {}) {
     }
 }
 
-// Usage
+// Usage. Payloads are JSON-cloned, so a File object would arrive as {}.
+// Convert it to text, a base64 string, or plain data before sending.
 await sendWithProgress(
     'processLargeFile',
     {
-        file: largeFile,
+        file: { name: largeFile.name, content: await largeFile.text() },
     },
     {
         targetId: 'processor',
@@ -605,6 +686,12 @@ await sendWithProgress(
 ### Variation 3: Error Boundaries
 
 **React-Style Error Boundaries**:
+
+You do not need a wrapper just to avoid unhandled exceptions: if a handler
+throws, ParleyJS already sends an error response (the sender's `send()` rejects
+with `ERR_HANDLER_ERROR`), emits `system:error` locally, and calls the type's
+`register(type, { onError })` callback. A wrapper is useful when you want the
+sender to receive a structured, successful response instead of a rejection:
 
 ```javascript
 class ParleyErrorBoundary {
@@ -734,10 +821,12 @@ Test error handling by simulating various failure scenarios.
 
 ```javascript
 import { describe, it, expect, vi } from 'vitest';
+import { Parley } from 'ignite-parleyjs';
 
 describe('Error Handling - Timeouts', () => {
     it('should handle timeout errors', async () => {
         const parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin],
         });
 
@@ -754,7 +843,12 @@ describe('Error Handling - Timeouts', () => {
         });
     });
 
-    it('should retry on timeout', async () => {
+    it('should retry on timeout (application-level wrapper)', async () => {
+        const parley = Parley.create({
+            targetType: 'iframe',
+            allowedOrigins: [window.location.origin],
+        });
+
         const sendWithRetry = async (type, payload) => {
             for (let i = 0; i < 3; i++) {
                 try {
@@ -786,6 +880,11 @@ describe('Error Handling - Timeouts', () => {
 ```javascript
 describe('Error Handling - Fallbacks', () => {
     it('should use fallback on error', async () => {
+        const parley = Parley.create({
+            targetType: 'iframe',
+            allowedOrigins: [window.location.origin],
+        });
+
         const getDataWithFallback = async () => {
             try {
                 return await parley.send(
@@ -812,7 +911,7 @@ describe('Error Handling - Fallbacks', () => {
 
 For comprehensive testing strategies, see
 [Testing Patterns](../TESTING_PATTERNS.md). For testing error scenarios, see
-[Testing Error Scenarios](../TESTING_PATTERNS.md#error-scenarios).
+[Testing Error Scenarios](../TESTING_PATTERNS.md#testing-error-scenarios).
 
 ## Related Patterns
 

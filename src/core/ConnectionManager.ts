@@ -19,6 +19,7 @@ import { TargetManager } from './TargetManager';
 import { HeartbeatManager } from './HeartbeatManager';
 import type { MessageProtocol, ResponseProtocol } from './MessageProtocol';
 import { SYSTEM_EVENTS } from '../events/SystemEvents';
+import { ParleyError } from '../errors/ErrorTypes';
 import { ConnectionState } from '../types/ConnectionTypes';
 import type { DisconnectReason } from '../types/ConnectionTypes';
 import type { ResolvedConfig } from '../types/ConfigTypes';
@@ -60,7 +61,8 @@ export interface ConnectionManagerDependencies {
     onIncomingMessage: (
         message: MessageProtocol | ResponseProtocol,
         source: Window,
-        sourceTargetId: string
+        sourceTargetId: string,
+        origin: string
     ) => void;
 
     /** Callback to send a system message and await its response */
@@ -126,7 +128,8 @@ export class ConnectionManager {
     private _onIncomingMessage: (
         message: MessageProtocol | ResponseProtocol,
         source: Window,
-        sourceTargetId: string
+        sourceTargetId: string,
+        origin: string
     ) => void;
 
     /**
@@ -167,6 +170,17 @@ export class ConnectionManager {
 
         // Register internal system message handlers
         this._registerSystemMessageHandlers();
+
+        // Targets found dead by TargetManager's periodic cleanup must be fully
+        // disconnected (channel, listener, heartbeat, pending requests)
+        this._targets.setDeadTargetHandler((targetId) => {
+            this._emitter.emitSync(SYSTEM_EVENTS.CONNECTION_LOST, {
+                targetId,
+                reason: 'cleanup',
+                timestamp: getTimestamp(),
+            });
+            this.performLocalDisconnect(targetId, 'cleanup');
+        });
     }
 
     /**
@@ -197,9 +211,6 @@ export class ConnectionManager {
         const channelOptions: ChannelOptions = {
             allowedOrigins: this._config.allowedOrigins,
             handshakeTimeout: this._config.timeout,
-            autoReconnect: false,
-            reconnectDelay: 1000,
-            maxReconnectAttempts: 0,
         };
 
         // Create appropriate channel
@@ -209,16 +220,56 @@ export class ConnectionManager {
                 : new WindowChannel(channelOptions, this._logger);
 
         // Set up message handler
-        channel.setMessageHandler((message, source) => {
-            this._onIncomingMessage(message, source, id);
+        channel.setMessageHandler((message, source, origin) => {
+            this._onIncomingMessage(message, source, id, origin);
+        });
+
+        // A window closing is detected by the channel's polling; surface it as
+        // a lost connection so Parley state, events and heartbeats follow
+        channel.on('disconnected', (data) => {
+            const reason = (data as { reason?: string } | undefined)?.reason;
+            if (reason === 'closed' && this._channels.get(id) === channel) {
+                this._emitter.emitSync(SYSTEM_EVENTS.CONNECTION_LOST, {
+                    targetId: id,
+                    reason: 'connection_lost',
+                    timestamp: getTimestamp(),
+                });
+                this.performLocalDisconnect(id, 'connection_lost');
+            }
         });
 
         // Store channel
         this._channels.set(id, channel);
 
         try {
-            // Connect
-            await channel.connect(target);
+            const handshakeEvent = {
+                targetId: id,
+                targetType: this._config.targetType,
+            };
+            this._emitter.emitSync(SYSTEM_EVENTS.HANDSHAKE_START, {
+                ...handshakeEvent,
+                timestamp: getTimestamp(),
+            });
+
+            // Connect (performs the handshake)
+            try {
+                await channel.connect(target);
+            } catch (error) {
+                this._emitter.emitSync(SYSTEM_EVENTS.HANDSHAKE_FAILED, {
+                    ...handshakeEvent,
+                    timestamp: getTimestamp(),
+                    error: {
+                        code: error instanceof ParleyError ? error.code : 'ERR_UNKNOWN',
+                        message: error instanceof Error ? error.message : String(error),
+                    },
+                });
+                throw error;
+            }
+
+            this._emitter.emitSync(SYSTEM_EVENTS.HANDSHAKE_COMPLETE, {
+                ...handshakeEvent,
+                timestamp: getTimestamp(),
+            });
 
             // Update target origin from channel (now known after handshake)
             const channelOrigin = channel.getTargetOrigin();
@@ -381,6 +432,12 @@ export class ConnectionManager {
      * @param targetId - Target ID whose heartbeat failed
      */
     public handleHeartbeatFailure(targetId: string, _consecutiveMissed: number): void {
+        if (!this._targets.has(targetId)) {
+            // Target already gone: stop its heartbeat instead of pinging forever
+            this._getHeartbeatManager()?.stop(targetId);
+            return;
+        }
+
         const consecutiveMissed = this._targets.recordMissedHeartbeat(targetId);
 
         // Emit heartbeat missed event
@@ -472,27 +529,9 @@ export class ConnectionManager {
             true // internal
         );
 
-        // Handle heartbeat pongs (responses)
-        this._registry.addHandler(
-            SYSTEM_MESSAGE_TYPES.HEARTBEAT_PONG,
-            (
-                _payload: HeartbeatPongPayload,
-                _respond: (response: unknown) => void,
-                metadata: MessageMetadata
-            ) => {
-                // Security: Only record success for the target that actually sent this pong
-                // Using metadata.senderId ensures we only reset the heartbeat timer for the sending target
-                // This prevents a malicious target from sending pongs to keep all connections marked as "alive"
-                const senderId = metadata.senderId;
-
-                const heartbeatManager = this._getHeartbeatManager();
-                if (heartbeatManager?.isRunning(senderId)) {
-                    heartbeatManager.recordSuccess(senderId);
-                    this._targets.recordHeartbeat(senderId);
-                }
-            },
-            true // internal
-        );
+        // Pongs arrive as the *response* to HEARTBEAT_PING and are handled by
+        // sendHeartbeatPing(); there is deliberately no pong request handler
+        // (one would let a peer fake liveness).
     }
 
     /**
@@ -531,12 +570,48 @@ export class ConnectionManager {
      * corresponding targets.
      */
     public destroy(): void {
-        // Disconnect all targets
-        for (const [id, channel] of this._channels) {
-            channel.disconnect();
-            channel.destroy();
-            this._targets.unregister(id);
+        // Disconnect every target through the normal path so listeners get
+        // system:disconnected with reason 'destroyed'
+        for (const id of [...this._channels.keys()]) {
+            this.performLocalDisconnect(id, 'destroyed');
         }
         this._channels.clear();
+    }
+
+    /**
+     * Record the outcome of a request that expected a response
+     *
+     * Implements heartbeat.maxFailures: after that many consecutive requests
+     * to a target time out, the connection is considered dead.
+     *
+     * @param targetId - Target the request was sent to
+     * @param success - Whether a response arrived (success or error response)
+     */
+    public recordSendOutcome(targetId: string, success: boolean): void {
+        if (!this._targets.has(targetId)) {
+            return;
+        }
+
+        if (success) {
+            this._targets.recordSendSuccess(targetId);
+            return;
+        }
+
+        const failures = this._targets.recordSendFailure(targetId);
+        const maxFailures = this._config.heartbeat.maxFailures;
+        this._logger.warn('Request to target failed', {
+            targetId,
+            consecutiveFailures: failures,
+            maxFailures,
+        });
+
+        if (failures >= maxFailures) {
+            this._emitter.emitSync(SYSTEM_EVENTS.CONNECTION_LOST, {
+                targetId,
+                reason: 'max_failures_reached',
+                timestamp: getTimestamp(),
+            });
+            this.performLocalDisconnect(targetId, 'max_failures_reached');
+        }
     }
 }

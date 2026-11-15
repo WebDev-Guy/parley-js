@@ -23,6 +23,25 @@ test.describe('cross-origin iframe communication', () => {
         });
     });
 
+    test('connects when connect() is called after the cross-origin iframe has loaded', async ({
+        page,
+    }) => {
+        await page.goto(PARENT_PAGE);
+
+        // The iframe's 'load' event has already fired and its first
+        // HANDSHAKE_INIT was sent before the parent started listening.
+        // Previously the parent waited for a 'load' that never came, and the
+        // child never re-sent INIT, so this timed out.
+        const connectResult = await page.evaluate(
+            (childOrigin) => window.setupParley(childOrigin, { connectAfterLoad: 300 }),
+            CHILD_ORIGIN
+        );
+        expect(connectResult).toBe('connected');
+
+        const response = await page.evaluate(() => window.sendEcho({ value: 7 }));
+        expect(response).toMatchObject({ echoed: true, value: 7 });
+    });
+
     test('rejects with HANDSHAKE_FAILED when the child never initializes Parley', async ({
         page,
     }) => {

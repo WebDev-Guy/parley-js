@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > [Security](./index.md) >
+[Home](../index.md) > [Documentation](./index.md) > [Security](./index.md) >
 Message Validation
 
 # Message Validation
@@ -23,8 +23,9 @@ cross-window communication.
 ## Overview
 
 Message validation ensures that incoming payloads match expected structures and
-types before processing. ParleyJS provides built-in validation support through
-JSON Schema and custom validators.
+types before processing. ParleyJS provides built-in validation for a subset of
+JSON Schema, and you can add your own validators (or libraries such as Zod)
+inside handlers.
 
 Validation prevents:
 
@@ -33,16 +34,25 @@ Validation prevents:
 - Application crashes from invalid payloads
 - Data corruption from incorrect types
 
+What ParleyJS validates automatically:
+
+- **Protocol structure** of every inbound message (not your payload)
+- **Your payload**, only for message types registered with a `schema`
+
+What it does **not** do: escape HTML, strip dangerous keys, or enforce business
+rules. That is your handler's job.
+
 ---
 
 ## Why Validate Messages
 
 Cross-window communication involves untrusted data sources. Always validate
-messages to protect your application.
+messages to protect your application, even when they come from an allowed
+origin.
 
 ### Security Risks Without Validation
 
-**XSS via Messages**:
+**XSS via Messages** (Parley does not escape HTML):
 
 ```typescript
 // DANGEROUS - No validation
@@ -65,7 +75,7 @@ parley.on('set-quantity', (payload, respond) => {
 ```typescript
 // DANGEROUS - No validation
 parley.on('update-settings', (payload, respond) => {
-    Object.assign(settings, payload); // Could pollute Object.prototype!
+    Object.assign(settings, payload); // Copies any key, including unexpected ones
 });
 ```
 
@@ -81,14 +91,17 @@ parley.on('update-settings', (payload, respond) => {
 
 ## JSON Schema Validation
 
-ParleyJS supports JSON Schema for declarative validation.
+ParleyJS supports a subset of JSON Schema for declarative validation. Attach a
+schema with `register(type, { schema })`, then add the handler with `on()`.
+(`on()` itself does not take options; a schema passed to it is not used.)
 
 ### Basic Schema Validation
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
 });
 
@@ -98,34 +111,74 @@ const userSchema = {
     properties: {
         userId: { type: 'number' },
         username: { type: 'string', minLength: 3, maxLength: 20 },
-        email: { type: 'string', format: 'email' },
+        email: { type: 'string', pattern: '^[^@\\s]+@[^@\\s]+$' },
         role: { type: 'string', enum: ['admin', 'user', 'guest'] },
     },
     required: ['userId', 'username', 'email'],
     additionalProperties: false,
-};
+} as const;
 
-// Register handler with schema validation
-parley.on(
-    'create-user',
-    (payload, respond, metadata) => {
-        // Schema validated automatically by ParleyJS
-        const { userId, username, email, role } = payload;
-
-        // Process validated data safely
-        const user = createUser({ userId, username, email, role });
-        respond({ success: true, user });
+// Register the type with its schema
+parley.register('create-user', {
+    schema: userSchema,
+    // Optional: observe rejected payloads and handler errors for this type
+    onError: (error, metadata) => {
+        console.warn('create-user rejected', error.code, metadata.origin);
     },
-    {
-        schema: userSchema,
-    }
-);
+});
+
+// Add the handler
+parley.on('create-user', (payload, respond, metadata) => {
+    // Only called if the payload passed the schema
+    const { userId, username, email, role } = payload;
+
+    const user = createUser({ userId, username, email, role });
+    respond({ success: true, user });
+});
 ```
+
+How registered schemas are applied:
+
+- **On send**: `send()` validates the payload against the local schema for that
+  type and rejects with `ValidationError` (`ERR_VALIDATION_SCHEMA_MISMATCH`)
+  before anything is posted.
+- **On receive**: the receiver validates against its own registered schema. If
+  validation fails, the handler is not called, the type's `onError` is invoked,
+  and (if the sender expects a response) the sender's `send()` rejects with a
+  `ParleyError` carrying `ERR_VALIDATION_SCHEMA_MISMATCH`.
+
+### Supported Keywords
+
+Only these keywords are enforced:
+
+| Keyword                | Applies to         | Notes                                                                                |
+| ---------------------- | ------------------ | ------------------------------------------------------------------------------------ |
+| `type`                 | all                | A single string: `string`, `number`, `integer`, `boolean`, `object`, `array`, `null` |
+| `required`             | objects            | Own properties only                                                                  |
+| `properties`           | objects            |                                                                                      |
+| `additionalProperties` | objects            | `false` or a schema                                                                  |
+| `items`                | arrays             | A single schema applied to every item                                                |
+| `minLength/maxLength`  | strings and arrays | Use these for array length (there is no `minItems` / `maxItems`)                     |
+| `minimum/maximum`      | numbers            |                                                                                      |
+| `pattern`              | strings            | Regular expression source                                                            |
+| `enum`                 | all                |                                                                                      |
+| `description/default`  | all                | Annotations only; `default` is not applied to payloads                               |
+
+Everything else is **silently ignored**, including `format`, `minItems`,
+`maxItems`, `oneOf`, `anyOf`, `allOf`, `$ref`, `const` and type arrays such as
+`type: ['string', 'null']`. Do not rely on them for security. For richer
+validation, use a library inside the handler (see
+[Validation Libraries](#validation-libraries)).
+
+Validation stops at a schema nesting depth of 50 and collects at most 100 errors
+per level.
 
 ### Schema Validation with SchemaValidator
 
+You can also validate manually:
+
 ```typescript
-import { SchemaValidator } from 'parley-js';
+import { SchemaValidator } from 'ignite-parleyjs';
 
 const validator = new SchemaValidator();
 
@@ -148,10 +201,11 @@ const messageSchema = {
 
 // Validate manually
 parley.on('process-action', (payload, respond) => {
-    const result = validator.validate(payload, messageSchema);
+    const result = validator.validate(payload, messageSchema); // { valid, errors }
 
     if (!result.valid) {
-        throw new ValidationError('Invalid payload', result.errors);
+        respond({ success: false, errors: result.errors });
+        return;
     }
 
     // Process validated payload
@@ -192,8 +246,8 @@ const schema = {
                 },
                 required: ['id', 'name'],
             },
-            minItems: 1,
-            maxItems: 100,
+            minLength: 1, // array length: use minLength/maxLength
+            maxLength: 100,
         },
     },
 };
@@ -226,11 +280,14 @@ const schema = {
 ## Type Validation
 
 TypeScript provides compile-time type checking. Combine with runtime validation
-for complete safety.
+for complete safety: the generic on `on<T>()` is only a type annotation and does
+not validate anything at runtime.
 
 ### TypeScript Interface Validation
 
 ```typescript
+import type { ResponseFunction } from 'ignite-parleyjs';
+
 interface UpdateRequest {
     userId: number;
     updates: {
@@ -249,7 +306,7 @@ interface UpdateResponse {
     error?: string;
 }
 
-// TypeScript ensures type safety
+// TypeScript types the payload; runtime checks still required
 parley.on<UpdateRequest>(
     'update-user',
     async (payload, respond: ResponseFunction<UpdateResponse>) => {
@@ -293,7 +350,8 @@ function isUserPayload(payload: unknown): payload is UserPayload {
 
 parley.on('process-user', (payload, respond) => {
     if (!isUserPayload(payload)) {
-        throw new ValidationError('Invalid user payload');
+        respond({ success: false, error: 'Invalid user payload' });
+        return;
     }
 
     // TypeScript knows payload is UserPayload here
@@ -307,7 +365,9 @@ parley.on('process-user', (payload, respond) => {
 
 ## Content Sanitization
 
-Sanitize HTML and dangerous content before processing or displaying messages.
+ParleyJS does not sanitize content for display. Sanitize HTML and dangerous
+content yourself before processing or displaying messages. The simplest safe
+option is to render text with `textContent` instead of `innerHTML`.
 
 ### HTML Sanitization
 
@@ -329,9 +389,9 @@ parley.on('display-content', (payload, respond) => {
 ### String Sanitization
 
 ```typescript
-function sanitizeString(input: unknown): string {
+function sanitizeString(input: unknown): string | null {
     if (typeof input !== 'string') {
-        throw new ValidationError('Input must be a string');
+        return null;
     }
 
     // Remove null bytes
@@ -350,6 +410,10 @@ function sanitizeString(input: unknown): string {
 
 parley.on('submit-comment', (payload, respond) => {
     const comment = sanitizeString(payload.text);
+    if (comment === null) {
+        respond({ success: false, error: 'text must be a string' });
+        return;
+    }
     saveComment(comment);
     respond({ success: true });
 });
@@ -385,7 +449,8 @@ parley.on('open-link', (payload, respond) => {
 
 ## Validation Libraries
 
-Integrate popular validation libraries with ParleyJS.
+Integrate popular validation libraries with ParleyJS for anything the built-in
+schema subset cannot express (formats such as email/URI, unions, refinements).
 
 ### Zod
 
@@ -402,24 +467,22 @@ const userSchema = z.object({
 type User = z.infer<typeof userSchema>;
 
 parley.on<unknown>('create-user', (payload, respond) => {
-    try {
-        // Zod validates and transforms
-        const user = userSchema.parse(payload);
+    const result = userSchema.safeParse(payload);
 
-        // user is now typed as User
-        createUser(user);
-        respond({ success: true, user });
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            respond({
-                success: false,
-                errors: error.errors.map((e) => ({
-                    path: e.path.join('.'),
-                    message: e.message,
-                })),
-            });
-        }
+    if (!result.success) {
+        respond({
+            success: false,
+            errors: result.error.errors.map((e) => ({
+                path: e.path.join('.'),
+                message: e.message,
+            })),
+        });
+        return;
     }
+
+    // result.data is typed as User
+    createUser(result.data);
+    respond({ success: true, user: result.data });
 });
 ```
 
@@ -444,9 +507,13 @@ parley.on('log-message', async (payload, respond) => {
         logMessage(validated);
         respond({ success: true });
     } catch (error) {
-        if (error instanceof yup.ValidationError) {
-            respond({ success: false, errors: error.errors });
-        }
+        respond({
+            success: false,
+            errors:
+                error instanceof yup.ValidationError
+                    ? error.errors
+                    : ['Invalid payload'],
+        });
     }
 });
 ```
@@ -457,7 +524,6 @@ parley.on('log-message', async (payload, respond) => {
 import Joi from 'joi';
 
 const configSchema = Joi.object({
-    apiKey: Joi.string().alphanum().length(32).required(),
     endpoint: Joi.string().uri().required(),
     timeout: Joi.number().integer().min(1000).max(30000).default(5000),
     retries: Joi.number().integer().min(0).max(5).default(3),
@@ -488,48 +554,80 @@ parley.on('update-config', (payload, respond) => {
 
 Handle validation errors gracefully and provide helpful feedback.
 
-### ValidationError Handling
+### What the Sender Sees
+
+| Situation on the receiving side             | Sender's `send()` rejects with                                                                                                              |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Payload fails the receiver's schema         | `ParleyError`, code `ERR_VALIDATION_SCHEMA_MISMATCH`                                                                                        |
+| Handler throws                              | `ParleyError`, code `ERR_HANDLER_ERROR`, message `'Handler error'` (the real message only if the receiver sets `exposeHandlerErrors: true`) |
+| No handler for the type                     | `ParleyError`, code `ERR_NO_HANDLER`                                                                                                        |
+| Handler calls `respond({ success: false })` | Resolves normally with that object                                                                                                          |
+
+Prefer responding with a structured error object for expected validation
+failures; reserve thrown errors for unexpected failures. A thrown error is
+reported locally via `system:error` (with the full message) and the type's
+`onError`, but the sender only sees the generic `'Handler error'`.
+
+### Observing Validation Failures with onError
 
 ```typescript
-import { ValidationError } from 'parley-js';
+import { Parley, isValidationError } from 'ignite-parleyjs';
 
-parley.on('process-data', (payload, respond) => {
-    try {
-        validatePayload(payload);
-        processData(payload);
-        respond({ success: true });
-    } catch (error) {
-        if (error instanceof ValidationError) {
-            // Validation error with details
-            respond({
-                success: false,
-                error: 'Validation failed',
-                details: error.validationErrors,
+parley.register('submit-form', {
+    schema: formSchema,
+    onError: (error, metadata) => {
+        if (isValidationError(error)) {
+            // error.validationErrors: Array<{ path, message, expected?, received?, rule? }>
+            securityLog.warn('Invalid submit-form payload', {
+                senderId: metadata.senderId,
+                origin: metadata.origin,
+                errors: error.validationErrors,
             });
         } else {
-            // Unexpected error
-            respond({
-                success: false,
-                error: 'Processing failed',
-            });
+            errorLog.error('submit-form handler failed', error);
         }
-    }
+    },
 });
+```
+
+### Handling ValidationError on the Sending Side
+
+```typescript
+import { ValidationError, isParleyError } from 'ignite-parleyjs';
+
+try {
+    await parley.send('process-data', data, { targetId: 'child' });
+} catch (error) {
+    if (error instanceof ValidationError) {
+        // Rejected locally by this side's schema (or payload > 10 MB)
+        console.error('Invalid payload', error.validationErrors);
+    } else if (
+        isParleyError(error) &&
+        error.code === 'ERR_VALIDATION_SCHEMA_MISMATCH'
+    ) {
+        // Rejected by the receiver's schema
+        console.error('Receiver rejected payload', error.details);
+    } else {
+        throw error;
+    }
+}
 ```
 
 ### Detailed Error Reporting
 
 ```typescript
+import type { ResponseFunction } from 'ignite-parleyjs';
+
 function validateAndRespond(
     payload: unknown,
-    schema: object,
+    schema: JsonSchema,
     respond: ResponseFunction
 ) {
     const result = validator.validate(payload, schema);
 
     if (!result.valid) {
         const errors = result.errors.map((err) => ({
-            field: err.field,
+            path: err.path,
             message: err.message,
             expected: err.expected,
             received: err.received,
@@ -563,18 +661,11 @@ parley.on('submit-form', (payload, respond) => {
 ### Validate Everything
 
 ```typescript
+parley.register('update-settings', { schema: settingsSchema });
+
 // ALWAYS validate before processing
 parley.on('update-settings', (payload, respond) => {
-    // 1. Type validation
-    if (typeof payload !== 'object' || payload === null) {
-        throw new ValidationError('Payload must be an object');
-    }
-
-    // 2. Schema validation
-    const result = validator.validate(payload, settingsSchema);
-    if (!result.valid) {
-        throw new ValidationError('Schema validation failed', result.errors);
-    }
+    // 1-2. Type and schema validation already done by the registered schema
 
     // 3. Business logic validation
     if (payload.maxUsers < payload.currentUsers) {
@@ -585,7 +676,7 @@ parley.on('update-settings', (payload, respond) => {
         return;
     }
 
-    // 4. Sanitization
+    // 4. Sanitization / copying known fields only
     const sanitized = sanitizeSettings(payload);
 
     // 5. Process
@@ -594,16 +685,16 @@ parley.on('update-settings', (payload, respond) => {
 });
 ```
 
-### Whitelist, Not Blacklist
+### Allowlist, Not Blocklist
 
 ```typescript
-// GOOD - Whitelist allowed fields
-function extractAllowedFields(payload: unknown): Settings {
+// GOOD - Allowlist fields
+function extractAllowedFields(payload: any): Settings | null {
     if (typeof payload !== 'object' || payload === null) {
-        throw new ValidationError('Invalid payload');
+        return null;
     }
 
-    const allowed: Settings = {
+    return {
         theme: isValidTheme(payload.theme) ? payload.theme : 'light',
         language: isValidLanguage(payload.language) ? payload.language : 'en',
         notifications:
@@ -611,12 +702,10 @@ function extractAllowedFields(payload: unknown): Settings {
                 ? payload.notifications
                 : true,
     };
-
-    return allowed;
 }
 
-// BAD - Trying to blacklist dangerous fields (incomplete)
-function removeProtoFields(payload: object) {
+// BAD - Trying to blocklist dangerous fields (incomplete)
+function removeProtoFields(payload: any) {
     delete payload.__proto__;
     delete payload.constructor;
     return payload; // Still vulnerable!
@@ -624,6 +713,10 @@ function removeProtoFields(payload: object) {
 ```
 
 ### Size Limits
+
+ParleyJS rejects **outgoing** payloads larger than 10 MB (fixed), but does not
+limit what a peer sends you. Constrain inbound sizes with `maxLength` in your
+schema, or check explicitly:
 
 ```typescript
 const MAX_PAYLOAD_SIZE = 1024 * 100; // 100 KB
@@ -665,7 +758,7 @@ const strictSchema = {
 ### Secure User Registration
 
 ```typescript
-import { Parley, ValidationError } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -682,21 +775,29 @@ const registerSchema = z.object({
 });
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://app.example.com'],
 });
 
 parley.on('register-user', async (payload, respond) => {
-    try {
-        // Validate with Zod
-        const validated = registerSchema.parse(payload);
+    const parsed = registerSchema.safeParse(payload);
+    if (!parsed.success) {
+        respond({
+            success: false,
+            validationErrors: parsed.error.errors.map((e) => ({
+                path: e.path.join('.'),
+                message: e.message,
+            })),
+        });
+        return;
+    }
+    const validated = parsed.data;
 
+    try {
         // Additional business logic validation
         const userExists = await checkUserExists(validated.username);
         if (userExists) {
-            respond({
-                success: false,
-                error: 'Username already taken',
-            });
+            respond({ success: false, error: 'Username already taken' });
             return;
         }
 
@@ -711,21 +812,8 @@ parley.on('register-user', async (payload, respond) => {
         });
 
         respond({ success: true, userId: user.id });
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            respond({
-                success: false,
-                validationErrors: error.errors.map((e) => ({
-                    field: e.path.join('.'),
-                    message: e.message,
-                })),
-            });
-        } else {
-            respond({
-                success: false,
-                error: 'Registration failed',
-            });
-        }
+    } catch {
+        respond({ success: false, error: 'Registration failed' });
     }
 });
 ```
@@ -733,38 +821,32 @@ parley.on('register-user', async (payload, respond) => {
 ### Safe Data Processing
 
 ```typescript
-const dataSchema = {
-    type: 'object',
-    properties: {
-        items: {
-            type: 'array',
+parley.register('process-batch', {
+    schema: {
+        type: 'object',
+        properties: {
             items: {
-                type: 'object',
-                properties: {
-                    id: { type: 'string', pattern: '^[a-zA-Z0-9-]+$' },
-                    value: { type: 'number', minimum: 0 },
-                    label: { type: 'string', maxLength: 100 },
+                type: 'array',
+                items: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string', pattern: '^[a-zA-Z0-9-]+$' },
+                        value: { type: 'number', minimum: 0 },
+                        label: { type: 'string', maxLength: 100 },
+                    },
+                    required: ['id', 'value'],
+                    additionalProperties: false,
                 },
-                required: ['id', 'value'],
-                additionalProperties: false,
+                maxLength: 1000, // array length limit
             },
-            maxItems: 1000,
         },
+        required: ['items'],
+        additionalProperties: false,
     },
-    required: ['items'],
-    additionalProperties: false,
-};
+});
 
 parley.on('process-batch', (payload, respond) => {
-    // Schema validation
-    const result = validator.validate(payload, dataSchema);
-    if (!result.valid) {
-        respond({
-            success: false,
-            errors: result.errors,
-        });
-        return;
-    }
+    // Schema already validated by ParleyJS
 
     // Additional validation
     const uniqueIds = new Set(payload.items.map((item) => item.id));
@@ -789,8 +871,8 @@ parley.on('process-batch', (payload, respond) => {
 - **[Origin Validation](./origin-validation.md)** - Validate message origins
 - **[Error Handling Pattern](../patterns/error-handling.md)** - Handle
   validation errors
-- **[API Reference: Methods](../api-reference/methods.md)** - Schema validation
-  in handlers
+- **[API Reference: Methods](../api-reference/methods.md)** - `register()` and
+  schema options
 - **[Security Guide](./index.md)** - Complete security overview
 
 ---

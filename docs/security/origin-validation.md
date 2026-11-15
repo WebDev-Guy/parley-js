@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Security](./index.md) > Origin Validation
+[Home](../index.md) > [Security](./index.md) > Origin Validation
 
 # Origin Validation in ParleyJS
 
@@ -10,7 +10,7 @@ implement it correctly.
 
 1. [Why Origin Validation Matters](#why-origin-validation-matters)
 2. [How Origin Validation Works](#how-origin-validation-works)
-3. [Exact vs Wildcard Matching](#exact-vs-wildcard-matching)
+3. [Exact Matching Only](#exact-matching-only)
 4. [Correct Implementation](#correct-implementation)
 5. [Common Mistakes](#common-mistakes)
 6. [Real-World Examples](#real-world-examples)
@@ -31,14 +31,19 @@ legitimate widget. These messages could request sensitive data, trigger
 unauthorized transactions, or manipulate the UI to phish for credentials.
 
 ParleyJS validates the origin of every incoming message against your configured
-allowed origins list. Messages from unauthorized origins are silently rejected
-before any of your code runs. This prevents attackers from exploiting your
-message handlers even if they discover your message types.
+allowed origins list. Messages from origins that are not in the list are dropped
+silently by the channel before any of your code runs (they are only logged, at
+`warn` level, when `logLevel` allows it). This prevents attackers from reaching
+your message handlers even if they discover your message types.
 
-The security model is simple: only messages from explicitly trusted origins are
-processed. All others are rejected. This zero-trust approach ensures that even
-if an attacker controls the content of messages, they cannot bypass origin
-validation.
+Since 1.1.0, each connection also checks `event.source`: a message is only
+accepted if it comes from the exact window that connection was made with. A
+second window that happens to share an allowed origin cannot talk to that
+connection, and responses are only accepted from the target the request was sent
+to.
+
+The security model is simple: only messages from explicitly trusted origins and
+the connected window are processed. All others are rejected.
 
 ## How Origin Validation Works
 
@@ -49,22 +54,47 @@ example, `https://example.com:443` breaks down as:
 - Hostname: `example.com`
 - Port: `443` (default for HTTPS)
 
-ParleyJS compares the origin of every incoming postMessage event against your
-allowedOrigins configuration. The comparison is exact and case-sensitive.
-`https://example.com` is different from `http://example.com` (different scheme)
-and different from `https://Example.com` (different case).
+ParleyJS compares the browser-supplied `event.origin` of every incoming
+postMessage event against your `allowedOrigins` configuration:
 
-When you create a Parley instance, you specify which origins are allowed to
-communicate with your application. ParleyJS intercepts all postMessage events
-and checks the event.origin property. Only messages from allowed origins are
-processed by your handlers.
+1. Each configured entry is normalized to its URL origin (scheme, host, port)
+   and lowercased. `https://Example.com/some/path` becomes
+   `https://example.com`.
+2. The incoming origin is lowercased and must **exactly equal** one of the
+   normalized entries.
 
-## Exact vs Wildcard Matching
+So `https://example.com` is different from `http://example.com` (different
+scheme) and from `https://example.com:8443` (different port), but
+`https://Example.com` is treated the same as `https://example.com` (hostnames
+are case-insensitive).
 
-ParleyJS supports both exact origin matching and wildcard matching. However,
-wildcards should only be used in development, never in production.
+The opaque `'null'` origin (sandboxed iframes without `allow-same-origin`,
+`data:` URLs, `file://` pages) is never accepted.
 
-### Exact Matching (Recommended)
+Inbound processing happens in this order:
+
+1. **Channel**: origin allowlist check, then `event.source` check. Failures are
+   dropped silently.
+2. **Parley**: `securityLayer.validateOrigin()`, protocol structure and version,
+   then `securityLayer.validateMessage()` for requests. Failures here emit
+   `system:error`.
+3. **Schema** validation (if the type was registered with a schema), then your
+   handlers.
+
+With the default security layer, step 2's origin check repeats the same exact
+match, so in practice it only rejects anything when you supply a **custom**
+`validateOrigin()`; such rejections emit `system:error` with code
+`ERR_SECURITY_ORIGIN_MISMATCH`.
+
+The origin passed to your handlers as `metadata.origin` is the browser-verified
+`event.origin`, never a value reported by the sender.
+
+## Exact Matching Only
+
+ParleyJS supports exact origin matching only. There is no wildcard, pattern or
+subdomain matching.
+
+### Exact Matching
 
 Exact matching requires the origin to match precisely:
 
@@ -76,26 +106,37 @@ This configuration only accepts messages from `https://trusted.example.com`.
 Messages from `https://evil.com`, `http://trusted.example.com` (wrong scheme),
 or `https://trusted.example.com:8080` (different port) are rejected.
 
-### Wildcard Matching (Development Only)
-
-The wildcard `*` accepts messages from any origin:
+### Wildcards Are Rejected
 
 ```typescript
-allowedOrigins: ['*']; // DANGEROUS - accepts ANY origin
+allowedOrigins: ['*']; // Parley.create() throws 'Configuration error: ...'
+allowedOrigins: ['null']; // Parley.create() throws
+allowedOrigins: ['']; // Parley.create() throws
+allowedOrigins: []; // Parley.create() throws (list cannot be empty)
+
+allowedOrigins: ['*.example.com']; // Parley.create() throws (no pattern matching)
 ```
 
-This disables origin validation entirely. Use only for local development and
-never deploy to production with wildcard origins.
+There is no development-mode wildcard. For local development, list your local
+origins explicitly (for example `'http://localhost:3000'`).
 
-### Same-Origin Shortcut
+### Same-Origin Default
 
-For same-origin communication (parent and iframe on same domain):
+For same-origin communication (parent and iframe on the same origin) you can
+omit `allowedOrigins`; it defaults to `[window.location.origin]`:
 
 ```typescript
-allowedOrigins: [window.location.origin];
+const parley = Parley.create({ targetType: 'iframe' });
+// equivalent to allowedOrigins: [window.location.origin]
 ```
 
-This uses the current window's origin, which is safe for same-origin scenarios.
+### The First Entry Matters on the Connecting Side
+
+The side that calls `connect(window.parent)` (iframe child) or
+`connect(window.opener)` (popup) cannot read the other window's origin, so it
+posts its handshake to the **first** entry of `allowedOrigins`. List the
+parent's (or opener's) origin first in the child/popup configuration. After the
+handshake, Parley uses the origin the browser reported for the peer.
 
 ## Correct Implementation
 
@@ -106,16 +147,16 @@ Follow these patterns for secure origin validation.
 **Correct - Explicit Origins**:
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted-widget.example.com'],
 });
 ```
 
 This accepts messages only from the specified origin. The scheme (https),
-hostname (trusted-widget.example.com), and default port (443) must match
-exactly.
+hostname (trusted-widget.example.com), and default port (443) must match.
 
 ### Multiple Trusted Origins
 
@@ -123,6 +164,7 @@ exactly.
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         'https://widget1.example.com',
         'https://widget2.example.com',
@@ -142,14 +184,15 @@ trusted domains. Each origin must be listed explicitly.
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: isDevelopment
         ? ['http://localhost:3000', 'http://localhost:5000']
         : ['https://production.example.com'],
 });
 ```
 
-Use different origins for development and production. Never use wildcards or
-localhost origins in production.
+Use different origins for development and production. Never ship localhost
+origins in production builds.
 
 ### Same-Origin Communication
 
@@ -158,47 +201,50 @@ localhost origins in production.
 ```typescript
 // Parent window
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
 });
 
-// Child iframe (same domain)
+// Child iframe (same origin)
 const childParley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
 });
 ```
 
-When both windows are on the same origin, use `window.location.origin` to allow
-communication between them.
+When both windows are on the same origin, use `window.location.origin` (or omit
+`allowedOrigins`, which defaults to it).
 
 ## Common Mistakes
 
-These are the most common origin validation mistakes that create security
-vulnerabilities.
+These are the most common origin validation mistakes.
 
-### Mistake 1: Using Wildcard in Production
+### Mistake 1: Trying to Use a Wildcard
 
-**WRONG - Accepts Any Origin**:
+**WRONG - Wildcard Origin**:
 
 ```typescript
-// SECURITY RISK - DO NOT USE IN PRODUCTION
+// Throws at create(): 'Configuration error: ...'
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['*'],
 });
 ```
 
-**Why this is wrong**: This accepts messages from any website. An attacker can
-host a malicious page that sends messages to your application, potentially
-triggering actions or exfiltrating data.
+**Why this is wrong**: Accepting any origin would let any website send messages
+to your application. ParleyJS refuses this configuration outright, and patterns
+like `'*.example.com'` are rejected too: there is no pattern matching.
 
 **CORRECT - Explicit Origins**:
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted-domain.com'],
 });
 ```
 
-For troubleshooting wildcard origin errors, see
+For troubleshooting configuration errors, see
 [Common Errors: Security Vulnerabilities](../troubleshooting/common-errors.md#security-vulnerabilities).
 
 ### Mistake 2: Mixing HTTP and HTTPS
@@ -208,6 +254,7 @@ For troubleshooting wildcard origin errors, see
 ```typescript
 // Parent on HTTPS, child on HTTP
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['http://child.example.com'], // Wrong scheme
 });
 ```
@@ -220,6 +267,7 @@ browsers.
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'], // Correct scheme
 });
 ```
@@ -235,6 +283,7 @@ troubleshooting protocol mismatch errors, see
 ```typescript
 // Child runs on https://widget.example.com:8443
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://widget.example.com'], // Missing :8443
 });
 ```
@@ -246,6 +295,7 @@ runs on a non-standard port, you must include it in allowedOrigins.
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://widget.example.com:8443'],
 });
 ```
@@ -256,23 +306,26 @@ be specified. For troubleshooting port-related origin errors, see
 
 ### Mistake 4: Using Subdomains Incorrectly
 
-**WRONG - Assuming Subdomain Wildcard**:
+**WRONG - Assuming Subdomain Matching**:
 
 ```typescript
-// Won't accept *.example.com
+// Does NOT accept widget.example.com or api.example.com
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://example.com'], // Only exact match
 });
 ```
 
-**Why this is wrong**: ParleyJS does not support subdomain wildcards.
+**Why this is wrong**: ParleyJS does not support subdomain matching.
 `https://example.com` will not match `https://widget.example.com` or
-`https://api.example.com`.
+`https://api.example.com`, and `'https://*.example.com'` is rejected by
+`Parley.create()`.
 
 **CORRECT - List All Subdomains**:
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         'https://widget.example.com',
         'https://api.example.com',
@@ -290,6 +343,7 @@ For troubleshooting subdomain-related origin errors, see
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         'https://production.example.com',
         'http://localhost:3000', // Development origin in production
@@ -308,7 +362,7 @@ const allowedOrigins =
         ? ['https://production.example.com']
         : ['http://localhost:3000'];
 
-const parley = Parley.create({ allowedOrigins });
+const parley = Parley.create({ targetType: 'iframe', allowedOrigins });
 ```
 
 For troubleshooting localhost configuration issues, see
@@ -319,18 +373,22 @@ For troubleshooting localhost configuration issues, see
 **WRONG - No Origins Specified**:
 
 ```typescript
+// Throws at create(): allowedOrigins cannot be empty
 const parley = Parley.create({
-    allowedOrigins: [], // No origins allowed
+    targetType: 'iframe',
+    allowedOrigins: [],
 });
 ```
 
-**Why this is wrong**: This rejects all messages, breaking communication. While
-not a security risk, it prevents legitimate functionality.
+**Why this is wrong**: An empty list could never accept a message, so
+`Parley.create()` rejects it. Either list the origins you trust or omit the
+option to default to `[window.location.origin]`.
 
 **CORRECT - Specify Origins**:
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted-domain.com'],
 });
 ```
@@ -358,21 +416,21 @@ payloads.
 
 ```typescript
 parley.on('executeAction', (payload, respond) => {
-    // Validate origin (done automatically by ParleyJS)
+    // Origin was validated automatically by ParleyJS
     // AND validate message content
     if (!payload.action || typeof payload.action !== 'string') {
         respond({ success: false, error: 'Invalid action' });
         return;
     }
 
-    // Whitelist allowed actions
+    // Allowlist actions
     const allowedActions = ['save', 'load', 'delete'];
     if (!allowedActions.includes(payload.action)) {
         respond({ success: false, error: 'Unauthorized action' });
         return;
     }
 
-    // Execute only whitelisted actions
+    // Execute only allowlisted actions
     performAction(payload.action);
     respond({ success: true });
 });
@@ -384,45 +442,40 @@ content. For comprehensive message validation strategies, see
 
 ## Real-World Examples
 
-These examples show correct origin validation in common scenarios.
+These examples show correct origin validation in common scenarios. Both sides
+call `connect()`; the child/popup side keeps re-sending its handshake until the
+other side answers, so no `load` listeners or delays are needed.
 
 ### iFrame Communication
 
 **Parent Window**:
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 // Parent on https://myapp.example.com
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://widget.example.com'],
 });
 
 // Connect to iframe
-const iframe = document.getElementById('widget-iframe');
-iframe.addEventListener('load', async () => {
-    await parley.connect(iframe, 'widget');
+const iframe = document.getElementById('widget-iframe') as HTMLIFrameElement;
+await parley.connect(iframe, 'widget');
 
-    // Send configuration
-    await parley.send(
-        'configure',
-        {
-            theme: 'dark',
-            apiKey: 'abc123',
-        },
-        { targetId: 'widget' }
-    );
-});
+// Send configuration
+await parley.send('configure', { theme: 'dark' }, { targetId: 'widget' });
 ```
 
 **Child Iframe (widget.example.com)**:
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 // Child on https://widget.example.com
 const parley = Parley.create({
-    allowedOrigins: ['https://myapp.example.com'],
+    targetType: 'iframe',
+    allowedOrigins: ['https://myapp.example.com'], // parent origin first
 });
 
 // Handle configuration
@@ -447,6 +500,7 @@ complete iframe implementation guide, see
 ```typescript
 // Main window on https://myapp.example.com
 const parley = Parley.create({
+    targetType: 'window',
     allowedOrigins: ['https://auth.example.com'],
 });
 
@@ -454,11 +508,11 @@ const parley = Parley.create({
 const popup = window.open('https://auth.example.com/oauth', 'oauth');
 
 parley.on('auth:success', (payload) => {
-    console.log('OAuth token:', payload.token);
-    popup.close();
+    handleToken(payload.token);
+    popup?.close();
 });
 
-await parley.connect(popup, 'auth-popup');
+await parley.connect(popup!, 'auth-popup');
 ```
 
 **Popup Window (auth.example.com)**:
@@ -466,22 +520,19 @@ await parley.connect(popup, 'auth-popup');
 ```typescript
 // Popup on https://auth.example.com
 const parley = Parley.create({
-    allowedOrigins: ['https://myapp.example.com'],
+    targetType: 'window',
+    allowedOrigins: ['https://myapp.example.com'], // opener origin first
 });
+
+// Connect to the opener first
+await parley.connect(window.opener, 'main');
 
 // After OAuth success
 await parley.send(
     'auth:success',
-    {
-        token: 'oauth-token-xyz',
-    },
-    {
-        targetId: 'main',
-        expectsResponse: false,
-    }
+    { token: 'oauth-token-xyz' },
+    { targetId: 'main', expectsResponse: false }
 );
-
-await parley.connect(window.opener, 'main');
 ```
 
 For complete popup communication and OAuth flow examples, see
@@ -494,6 +545,7 @@ For complete popup communication and OAuth flow examples, see
 ```typescript
 // Dashboard on https://dashboard.example.com
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [
         'https://analytics.example.com',
         'https://metrics.example.com',
@@ -506,10 +558,8 @@ await parley.connect(analyticsIframe, 'analytics');
 await parley.connect(metricsIframe, 'metrics');
 await parley.connect(reportsIframe, 'reports');
 
-// Broadcast theme change to all widgets
-await parley.broadcast('theme:change', {
-    theme: 'dark',
-});
+// Broadcast theme change to all widgets (fire-and-forget, returns void)
+parley.broadcast('theme:change', { theme: 'dark' });
 ```
 
 **Widget Iframes**:
@@ -517,6 +567,7 @@ await parley.broadcast('theme:change', {
 ```typescript
 // Each widget iframe
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://dashboard.example.com'],
 });
 
@@ -527,7 +578,10 @@ parley.on('theme:change', (payload) => {
 await parley.connect(window.parent, 'dashboard');
 ```
 
-For managing multiple window connections and broadcasting, see
+Because each connection is bound to its own iframe window, the analytics widget
+cannot impersonate the metrics widget even though both origins are in the
+dashboard's allowlist. For managing multiple window connections and
+broadcasting, see
 [Multi-Window Communication Guide](../guides/multi-window-communication.md).
 
 ### Cross-Origin Widget with Fallback
@@ -538,6 +592,7 @@ For managing multiple window connections and broadcasting, see
 const isDevelopment = window.location.hostname === 'localhost';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: isDevelopment
         ? ['http://localhost:3000']
         : ['https://cdn.widgets.example.com'],
@@ -552,159 +607,105 @@ const iframe = document.createElement('iframe');
 iframe.src = widgetUrl;
 document.body.appendChild(iframe);
 
-iframe.addEventListener('load', async () => {
-    await parley.connect(iframe, 'widget');
-});
+await parley.connect(iframe, 'widget');
 ```
 
 ## Testing Origin Validation
 
 Test origin validation to ensure only trusted origins are accepted.
 
-### Testing Rejection of Unauthorized Origins
+Dispatching hand-made `MessageEvent`s at `window` is **not** a useful test: such
+events do not have Parley's protocol shape and do not come from the connected
+window (`event.source`), so they are dropped regardless of origin and a "handler
+not called" assertion would pass for the wrong reason. Instead, unit-test the
+origin rules directly and use end-to-end tests with real cross-origin pages for
+the full flow.
+
+### Unit Testing the Origin Rules
 
 ```typescript
-import { describe, it, expect, vi } from 'vitest';
-import { Parley } from 'parley-js';
+import { describe, it, expect } from 'vitest';
+import { Parley, DefaultSecurityLayer } from 'ignite-parleyjs';
 
 describe('Origin Validation', () => {
-    it('should reject messages from unauthorized origins', () => {
-        const parley = Parley.create({
-            allowedOrigins: ['https://trusted.com'],
-        });
+    const security = new DefaultSecurityLayer();
+    const allowed = ['https://trusted.com'];
 
-        const handler = vi.fn();
-        parley.on('test-message', handler);
-
-        // Simulate message from unauthorized origin
-        const event = new MessageEvent('message', {
-            data: {
-                type: 'test-message',
-                payload: {},
-            },
-            origin: 'https://evil.com', // Unauthorized origin
-        });
-
-        window.dispatchEvent(event);
-
-        // Handler should not be called
-        expect(handler).not.toHaveBeenCalled();
-    });
-
-    it('should accept messages from authorized origins', () => {
-        const parley = Parley.create({
-            allowedOrigins: ['https://trusted.com'],
-        });
-
-        const handler = vi.fn();
-        parley.on('test-message', handler);
-
-        // Simulate message from authorized origin
-        const event = new MessageEvent('message', {
-            data: {
-                type: 'test-message',
-                payload: { data: 'test' },
-            },
-            origin: 'https://trusted.com', // Authorized origin
-        });
-
-        window.dispatchEvent(event);
-
-        // Handler should be called
-        expect(handler).toHaveBeenCalledWith(
-            expect.objectContaining({ data: 'test' }),
-            expect.any(Function),
-            expect.objectContaining({ origin: 'https://trusted.com' })
+    it('accepts an exact match', () => {
+        expect(security.validateOrigin('https://trusted.com', allowed)).toBe(
+            true
         );
     });
 
-    it('should handle multiple allowed origins', () => {
-        const parley = Parley.create({
-            allowedOrigins: ['https://trusted1.com', 'https://trusted2.com'],
-        });
-
-        const handler = vi.fn();
-        parley.on('test-message', handler);
-
-        // Message from first trusted origin
-        const event1 = new MessageEvent('message', {
-            data: { type: 'test-message', payload: {} },
-            origin: 'https://trusted1.com',
-        });
-        window.dispatchEvent(event1);
-
-        // Message from second trusted origin
-        const event2 = new MessageEvent('message', {
-            data: { type: 'test-message', payload: {} },
-            origin: 'https://trusted2.com',
-        });
-        window.dispatchEvent(event2);
-
-        // Both should be accepted
-        expect(handler).toHaveBeenCalledTimes(2);
+    it('normalizes case', () => {
+        expect(security.validateOrigin('https://TRUSTED.com', allowed)).toBe(
+            true
+        );
     });
 
-    it('should reject origins with wrong scheme', () => {
-        const parley = Parley.create({
-            allowedOrigins: ['https://trusted.com'],
-        });
-
-        const handler = vi.fn();
-        parley.on('test-message', handler);
-
-        // HTTP instead of HTTPS
-        const event = new MessageEvent('message', {
-            data: { type: 'test-message', payload: {} },
-            origin: 'http://trusted.com', // Wrong scheme
-        });
-
-        window.dispatchEvent(event);
-
-        expect(handler).not.toHaveBeenCalled();
+    it('rejects unauthorized origins', () => {
+        expect(security.validateOrigin('https://evil.com', allowed)).toBe(
+            false
+        );
     });
 
-    it('should reject origins with different port', () => {
-        const parley = Parley.create({
-            allowedOrigins: ['https://trusted.com'],
-        });
+    it('rejects a different scheme', () => {
+        expect(security.validateOrigin('http://trusted.com', allowed)).toBe(
+            false
+        );
+    });
 
-        const handler = vi.fn();
-        parley.on('test-message', handler);
+    it('rejects a different port', () => {
+        expect(
+            security.validateOrigin('https://trusted.com:8080', allowed)
+        ).toBe(false);
+    });
 
-        // Different port
-        const event = new MessageEvent('message', {
-            data: { type: 'test-message', payload: {} },
-            origin: 'https://trusted.com:8080', // Different port
-        });
+    it('rejects lookalike and subdomain origins', () => {
+        expect(
+            security.validateOrigin('https://trusted.com.evil.com', allowed)
+        ).toBe(false);
+        expect(
+            security.validateOrigin('https://sub.trusted.com', allowed)
+        ).toBe(false);
+    });
 
-        window.dispatchEvent(event);
+    it('handles multiple allowed origins', () => {
+        const many = ['https://trusted1.com', 'https://trusted2.com'];
+        expect(security.validateOrigin('https://trusted1.com', many)).toBe(
+            true
+        );
+        expect(security.validateOrigin('https://trusted2.com', many)).toBe(
+            true
+        );
+    });
 
-        expect(handler).not.toHaveBeenCalled();
+    it('rejects wildcard and empty configurations at create()', () => {
+        expect(() =>
+            Parley.create({ targetType: 'iframe', allowedOrigins: ['*'] })
+        ).toThrow(/Configuration error/);
+        expect(() =>
+            Parley.create({ targetType: 'iframe', allowedOrigins: ['null'] })
+        ).toThrow(/Configuration error/);
+        expect(() =>
+            Parley.create({ targetType: 'iframe', allowedOrigins: [] })
+        ).toThrow(/Configuration error/);
     });
 });
 ```
 
-### Integration Testing
+### Integration / End-to-End Testing
 
-```typescript
-describe('Origin Validation - Integration', () => {
-    it('should validate origin in real iframe scenario', async () => {
-        // Setup parent
-        const parentParley = Parley.create({
-            allowedOrigins: ['https://child.example.com'],
-        });
+Real origin checks depend on the browser setting `event.origin` and
+`event.source`, so the full flow is best tested with an end-to-end tool (the
+project itself uses Playwright, `npm run test:e2e`) serving the parent and child
+from **different origins**:
 
-        // Setup child (would be in separate window/iframe)
-        const childParley = Parley.create({
-            allowedOrigins: ['https://parent.example.com'],
-        });
-
-        // Only messages with correct origins should work
-        // Messages with wrong origins should be rejected
-        // (Full integration test would require actual iframe setup)
-    });
-});
-```
+- With matching `allowedOrigins` on both sides, `connect()` resolves and
+  messages flow.
+- With the child's origin missing from the parent's `allowedOrigins`, the parent
+  drops the child's handshake and the parent's `connect()` rejects with
+  `ConnectionError` `ERR_CONNECTION_HANDSHAKE_FAILED` after `timeout`.
 
 For comprehensive testing strategies, see
 [Testing Patterns](../TESTING_PATTERNS.md).
@@ -721,8 +722,8 @@ After validating the origin, validate the message content:
 - [Message Validation Guide](./message-validation.md) - Validate payload
   structure and content
 - Use JSON Schema validation for type safety
-- Sanitize user-provided data before display
-- Whitelist allowed values for enumerated fields
+- Render received strings with `textContent`; Parley does not escape HTML
+- Allowlist values for enumerated fields
 
 ### HTTPS Enforcement
 
@@ -731,7 +732,7 @@ Always use HTTPS in production:
 - Prevents man-in-the-middle attacks
 - Ensures origin integrity
 - Required for secure cookies and storage APIs
-- See [Security Best Practices](../SECURITY.md#https-enforcement)
+- See [Security Best Practices](../SECURITY.md#1-always-use-https)
 
 ### Content Security Policy
 
@@ -750,11 +751,11 @@ This provides defense-in-depth by restricting which origins can be embedded.
 
 Never rely on a single security mechanism:
 
-1. Origin validation (ParleyJS automatic)
-2. Message content validation (your code)
+1. Origin validation and source binding (ParleyJS automatic)
+2. Message content validation (schemas + your code)
 3. HTTPS enforcement (server configuration)
 4. CSP headers (server configuration)
-5. Input sanitization (your code)
+5. Safe rendering / output encoding (your code)
 
 For complete security guidance, see [Security Guide](../SECURITY.md).
 
@@ -764,38 +765,51 @@ For complete security guidance, see [Security Guide](../SECURITY.md).
 
 ```typescript
 interface ParleyConfig {
-    allowedOrigins: string[]; // Required
+    targetType: 'iframe' | 'window'; // Required
+    allowedOrigins?: string[]; // Default: [window.location.origin]
+    securityLayer?: SecurityLayer; // Default: new DefaultSecurityLayer()
     // ... other config options
 }
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted-domain.com'],
 });
 ```
 
-**allowedOrigins** (required):
+**allowedOrigins** (optional):
 
 - Type: `string[]`
-- Array of allowed origin strings
-- Must be exact origins: `'https://example.com'`
-- Use `'*'` for development only (accepts any origin)
-- Scheme, hostname, and port must match exactly
+- Default: `[window.location.origin]`
+- Must be explicit origins: `'https://example.com'`
+- Normalized to URL origin and lowercased; compared by exact match
+- Cannot be empty and cannot contain `'*'`, `'null'` or `''` (create() throws)
+- No wildcard or subdomain patterns
+- On the iframe child / popup side, the first entry is where the handshake is
+  sent, so list the parent's / opener's origin first
+
+**securityLayer** (optional): a custom `SecurityLayer` whose
+`validateOrigin(origin, allowedOrigins)` runs on every inbound message after the
+channel's own check. It can further restrict origins but cannot accept origins
+the channel already dropped. See
+[Security Guide: Custom Security Layer](../SECURITY.md#custom-security-layer).
 
 For complete API documentation, see:
 
 - [Parley.create() Reference](../api-reference/methods.md#parleycreate)
-- [Configuration Options](../api-reference/README.md#configuration)
-- [Security Configuration](../SECURITY.md#configuration)
+- [Configuration Options](../api-reference/index.md#configuration)
+- [Security Guide](../SECURITY.md)
 
 ## Security Checklist
 
 Before deploying to production:
 
-- [ ] No wildcard (`*`) in allowedOrigins
+- [ ] Every origin listed explicitly (no `*` or patterns)
 - [ ] All origins use HTTPS (not HTTP)
 - [ ] Port numbers included if non-standard
 - [ ] No localhost origins in production
 - [ ] Environment-specific configuration
+- [ ] Parent / opener origin listed first on the child / popup side
 - [ ] Origin validation tests pass
 - [ ] Combined with message content validation
 - [ ] CSP headers configured (if applicable)

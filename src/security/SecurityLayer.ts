@@ -8,6 +8,8 @@
  */
 
 import type { MessageProtocol } from '../core/MessageProtocol';
+import { SerializationError } from '../errors/ErrorTypes';
+import { SERIALIZATION_ERRORS } from '../errors/ErrorCodes';
 
 /**
  * Abstract security layer class
@@ -114,6 +116,8 @@ export class DefaultSecurityLayer extends SecurityLayer {
      *
      * @param payload - Payload to sanitize
      * @returns Sanitized payload
+     * @throws SerializationError if the payload cannot be serialized
+     *         (e.g. circular references or BigInt values)
      */
     sanitizePayload<T>(payload: T): T {
         if (payload === null || payload === undefined) {
@@ -128,9 +132,10 @@ export class DefaultSecurityLayer extends SecurityLayer {
             // JSON parse/stringify creates a clean object
             // without prototype chain or non-serializable values
             return JSON.parse(JSON.stringify(payload)) as T;
-        } catch {
-            // If serialization fails, return a safe empty object/array
-            return (Array.isArray(payload) ? [] : {}) as T;
+        } catch (error) {
+            // Never silently replace the payload with {} / [] - the caller
+            // would send (or respond with) data it never meant to send
+            throw toSerializationError(error);
         }
     }
 
@@ -201,6 +206,62 @@ export class DefaultSecurityLayer extends SecurityLayer {
             return origin.toLowerCase().trim();
         }
     }
+}
+
+/**
+ * Convert a JSON serialization failure into a SerializationError
+ */
+function toSerializationError(error: unknown): SerializationError {
+    const reason = error instanceof Error ? error.message : String(error);
+    return new SerializationError(
+        `Payload cannot be serialized: ${reason}`,
+        { reason },
+        /circular/i.test(reason)
+            ? SERIALIZATION_ERRORS.CIRCULAR_REFERENCE
+            : SERIALIZATION_ERRORS.SERIALIZE_FAILED
+    );
+}
+
+/**
+ * Sanitize an outgoing payload and measure its serialized size
+ *
+ * For the default security layer, sanitization is a JSON round trip, so the
+ * payload is serialized once and that string is reused for both the size
+ * check and the sanitized clone (instead of stringify + parse + stringify).
+ * Custom security layers keep their own sanitizePayload(); the size is then
+ * measured separately.
+ *
+ * @internal
+ * @param layer - Security layer in use
+ * @param payload - Outgoing payload
+ * @returns Sanitized payload (a fresh copy for object payloads with the
+ *          default layer) and its JSON length (0 if not JSON-serializable)
+ * @throws SerializationError if the default layer cannot serialize it
+ */
+export function sanitizeAndMeasure<T>(
+    layer: SecurityLayer,
+    payload: T
+): { payload: T; size: number } {
+    const isDefault = layer.sanitizePayload === DefaultSecurityLayer.prototype.sanitizePayload;
+
+    if (isDefault && payload !== null && typeof payload === 'object') {
+        let json: string;
+        try {
+            json = JSON.stringify(payload);
+        } catch (error) {
+            throw toSerializationError(error);
+        }
+        return { payload: JSON.parse(json) as T, size: json.length };
+    }
+
+    const sanitized = layer.sanitizePayload(payload);
+    let size = 0;
+    try {
+        size = JSON.stringify(sanitized)?.length ?? 0;
+    } catch {
+        // Not JSON-serializable (e.g. a BigInt primitive): size unknown
+    }
+    return { payload: sanitized, size };
 }
 
 /**

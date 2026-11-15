@@ -22,11 +22,14 @@ For complete implementation examples, see [Examples](./EXAMPLES.md).
 
 ```javascript
 // Sender
+import { Parley } from 'ignite-parleyjs';
+
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'],
 });
 
-await parley.connect(childWindow, 'child');
+await parley.connect(childIframe, 'child'); // the <iframe> element
 
 await parley.send(
     'notify',
@@ -45,6 +48,7 @@ await parley.send(
 
 ```javascript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://parent.example.com'],
 });
 
@@ -120,46 +124,50 @@ console.log(result.result); // 8
 ```javascript
 // Handler with validation
 parley.on('fetch-data', async (payload, respond) => {
-  // Validate input
-  if (!payload.id || typeof payload.id !== 'string') {
-    respond({
-      success: false,
-      error: 'Invalid ID format'
-    });
-    return;
-  }
+    // Validate input
+    if (!payload.id || typeof payload.id !== 'string') {
+        respond({
+            success: false,
+            error: 'Invalid ID format',
+        });
+        return;
+    }
 
-  if (payload.id.length > 50) {
-    respond({
-      success: false,
-      error: 'ID too long'
-    });
-    return;
-  }
+    if (payload.id.length > 50) {
+        respond({
+            success: false,
+            error: 'ID too long',
+        });
+        return;
+    }
 
-  // Process
-  try {
-    const result = await database.query(payload.id);
-    respond({
-      success: true,
-      data: result
-    });
-  } catch (err) {
-    respond({
-      success: false,
-      error: err.message
-    });
-  }
+    // Process
+    try {
+        const result = await database.query(payload.id);
+        respond({
+            success: true,
+            data: result,
+        });
+    } catch (err) {
+        respond({
+            success: false,
+            error: err.message,
+        });
+    }
 });
 
 // Consumer
-const response = await parley.send('fetch-data', { id: 'user-123 }, {
-  targetId: 'child'
-});
+const response = await parley.send(
+    'fetch-data',
+    { id: 'user-123' },
+    {
+        targetId: 'child',
+    }
+);
 if (response.success) {
-  useData(response.data);
+    useData(response.data);
 } else {
-  handleError(response.error);
+    handleError(response.error);
 }
 ```
 
@@ -207,6 +215,12 @@ For troubleshooting common errors, see
 ### Try-Catch Pattern
 
 ```javascript
+import {
+    TimeoutError,
+    TargetNotFoundError,
+    ConnectionError,
+} from 'ignite-parleyjs';
+
 async function safeRequest(type, data, timeoutMs = 5000) {
     try {
         return await parley.send(type, data, {
@@ -215,11 +229,15 @@ async function safeRequest(type, data, timeoutMs = 5000) {
         });
     } catch (error) {
         if (error instanceof TimeoutError) {
+            // Also the symptom when the other side silently drops the
+            // message (e.g. its allowedOrigins doesn't include this origin)
             console.error('Request timed out after', timeoutMs, 'ms');
-        } else if (error instanceof SecurityError) {
-            console.error('Origin validation failed');
+        } else if (error instanceof TargetNotFoundError) {
+            console.error('Target not connected');
         } else if (error instanceof ConnectionError) {
-            console.error('Connection error');
+            console.error('Connection closed while waiting for a response');
+        } else if (error.code === 'ERR_HANDLER_ERROR') {
+            console.error('Remote handler threw');
         } else {
             console.error('Unexpected error:', error.message);
         }
@@ -291,16 +309,16 @@ parley.on('risky-operation', async (payload, respond) => {
             result: result,
         });
     } catch (error) {
-        // Return structured error
+        // Return a structured error (keep internal details out of it;
+        // log them locally instead)
+        console.error('risky-operation failed', error);
         respond({
             success: false,
             error: {
                 code: error.code || 'UNKNOWN',
-                message: error.message,
-                // Include helpful context
+                message: 'Operation failed',
                 context: {
                     operation: 'risky-operation',
-                    input: payload,
                     timestamp: new Date().toISOString(),
                 },
             },
@@ -343,8 +361,8 @@ class EventBridge {
         };
     }
 
-    async emit(event, data) {
-        return this.parley.broadcast(event, data);
+    emit(event, data) {
+        this.parley.broadcast(event, data); // returns void, fire-and-forget
     }
 }
 
@@ -387,9 +405,9 @@ class SyncedState {
         return { ...this.state };
     }
 
-    async updateRemote(updates) {
+    updateRemote(updates) {
         this.setState(updates); // Update locally first
-        await this.parley.broadcast('state-update', updates); // Sync to remote
+        this.parley.broadcast('state-update', updates); // Sync to remote (void)
     }
 
     subscribe(listener) {
@@ -405,7 +423,7 @@ appState.subscribe((newState, oldState) => {
     console.log('State changed:', newState);
 });
 
-await appState.updateRemote({ theme: 'dark' });
+appState.updateRemote({ theme: 'dark' });
 ```
 
 ## Performance Patterns

@@ -57,7 +57,5 @@ export type DisconnectReason =
     | 'connection_lost'
     | 'heartbeat_timeout'
     | 'max_failures_reached'
-    | 'timeout'
-    | 'error'
     | 'cleanup'
     | 'destroyed';

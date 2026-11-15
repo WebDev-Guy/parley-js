@@ -1,4 +1,5 @@
-[Home](../../index.md) > [Documentation](./index.md) > Troubleshooting
+[Home](../index.md) > [Documentation](../FRAMEWORK_REFERENCE.md) >
+Troubleshooting
 
 # Troubleshooting Guide
 
@@ -36,10 +37,12 @@ debugging strategies.
 
 **Quick fixes**:
 
-1. Wait for iframe load event
-2. Check both sides call `connect()`
-3. Verify origins match exactly
-4. Enable debug mode: `debug: true`
+1. Check both sides call `connect()` (no `load` listener or delay is needed; the
+   child or popup re-sends the handshake until it is acknowledged)
+2. Check `targetType` matches the target: `'iframe'` with the iframe element
+   (not `iframe.contentWindow`), `'window'` for popups
+3. Verify origins match exactly and pages are served over http(s), not `file://`
+4. Enable debug logging: `logLevel: 'debug'`
 
 See [Connection Issues](./common-errors.md#connection-issues) for details.
 
@@ -58,17 +61,30 @@ See [Message Not Received](./common-errors.md#message-not-received) for details.
 
 ### Origin Validation Errors
 
-**Problem**: SecurityError - Origin mismatch
+**Problem**: Messages from the other window are silently dropped (origin not in
+`allowedOrigins`)
 
 **Quick fixes**:
 
 1. Check protocol matches (http vs https)
-2. Remove port numbers if using defaults
-3. Check for subdomain mismatches
+2. Check non-default port numbers are included
+3. Check for subdomain mismatches (entries containing `*`, such as
+   `*.example.com`, are rejected; list every origin)
 4. Use environment variables for origins
 
 See [Origin Validation Errors](./common-errors.md#origin-validation-errors) for
 details.
+
+### Configuration Errors
+
+**Problem**: `Parley.create()` throws `Error('Configuration error: ...')`
+
+**Quick fixes**:
+
+1. Pass `targetType: 'iframe'` or `targetType: 'window'`
+2. Use a positive `timeout` and a non-negative `retries`
+3. Pass a non-empty `allowedOrigins` array of real origins (entries containing
+   `'*'`, `'null'` and empty strings are rejected)
 
 ### Timeout Errors
 
@@ -76,28 +92,31 @@ details.
 
 **Quick fixes**:
 
-1. Ensure handler calls `respond()`
-2. Catch errors in handler and respond
-3. Increase timeout value
-4. Verify handler is registered
+1. Ensure the handler calls `respond()` (its return value is ignored)
+2. Increase the timeout value or set `retries`
+3. Check the other side is connected and not blocked by a long-running task
+
+A handler that throws does not cause a timeout: `send()` rejects with
+`ERR_HANDLER_ERROR`. A missing handler rejects with `ERR_NO_HANDLER`.
 
 See [Timeout Errors](./common-errors.md#timeout-errors) for details.
 
 ## Debugging Tools
 
-### Enable Debug Mode
+### Enable Debug Logging
 
 ```javascript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.com'],
-    debug: true, // Logs all messages
+    logLevel: 'debug', // Logs messages, rejections and errors
 });
 ```
 
 ### Monitor System Events
 
 ```javascript
-import { SYSTEM_EVENTS } from 'parley-js';
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
     console.error('ParleyJS Error:', event);
@@ -121,10 +140,11 @@ window.addEventListener('message', (event) => {
 
 ## Common Mistakes
 
-1. **Not waiting for connection** before sending
-2. **Using wildcard origins** in production
+1. **Not awaiting `connect()`** before sending
+2. **Using wildcard origins** (`'*'` is rejected by `Parley.create()`)
 3. **Forgetting to call respond()** in handlers
-4. **Sending non-serializable data** (functions, circular refs)
+4. **Sending non-serializable data** (functions are silently dropped; circular
+   references make `send()` reject with a `SerializationError`)
 5. **Not cleaning up** listeners and connections
 
 See [Common Mistakes](../TROUBLESHOOTING.md#common-mistakes) for details.
@@ -173,4 +193,5 @@ If you're still stuck:
 - [Complete Troubleshooting](../TROUBLESHOOTING.md)
 - [Error Handling Pattern](../patterns/error-handling.md)
 
-**Back to**: [Documentation Home](./index.md) | [Project Home](../../index.md)
+**Back to**: [Documentation Home](../index.md) |
+[Project Home](https://github.com/WebDev-Guy/parley-js/blob/main/README.md)

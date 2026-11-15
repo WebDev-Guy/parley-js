@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > Getting Started
+[Home](../index.md) > [Documentation](./index.md) > Getting Started
 
 # Getting Started with ParleyJS
 
@@ -76,4 +76,4 @@ No prior knowledge of postMessage API is required.
 
 **Next**: [Installation](./installation.md)
 
-**Back to**: [Documentation Home](./index.md) | [Project Home](../../index.md)
+**Back to**: [Documentation Home](./index.md) | [Project Home](../index.md)

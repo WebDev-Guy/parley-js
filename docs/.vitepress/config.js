@@ -14,7 +14,7 @@ export default {
     cleanUrls: true,
 
     // Ignore dead links (will be fixed incrementally)
-    ignoreDeadLinks: true,
+    ignoreDeadLinks: false,
 
     // Head tags
     head: [
@@ -74,7 +74,7 @@ export default {
                         { text: 'iFrame Communication', link: '/guides/iframe-communication' },
                         { text: 'Popup Communication', link: '/guides/popup-communication' },
                         { text: 'Multi-Window Communication', link: '/guides/multi-window-communication' },
-                        { text: 'Worker Communication', link: '/guides/worker-communication' },
+                        { text: 'Workers (not supported)', link: '/guides/worker-communication' },
                         { text: 'Micro-Frontends', link: '/guides/micro-frontends' },
                     ],
                 },

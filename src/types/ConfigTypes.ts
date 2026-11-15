@@ -110,7 +110,8 @@ export interface ParleyConfig {
      * Default retry count
      *
      * Number of times to retry a failed message before giving up.
-     * Retries use exponential backoff.
+     * Each retry re-sends the same message (same id) after another `timeout`
+     * interval; there is no backoff.
      *
      * @default 0
      */
@@ -173,6 +174,18 @@ export interface ParleyConfig {
     heartbeat?: HeartbeatConfig;
 
     /**
+     * Include handler error messages in error responses sent to the remote window
+     *
+     * When a message handler throws, the sender receives an `ERR_HANDLER_ERROR`
+     * response. By default its message is the generic 'Handler error' so that
+     * internal details (stack contents, database errors, etc.) are not
+     * disclosed across origins. Enable only when both sides are trusted.
+     *
+     * @default false
+     */
+    exposeHandlerErrors?: boolean;
+
+    /**
      * Rate limiting configuration
      *
      * Prevents DoS attacks by limiting the number of messages that can be sent
@@ -190,12 +203,6 @@ export interface ParleyConfig {
          * @default 100
          */
         messagesPerSecond?: number;
-
-        /**
-         * Burst size for initial messages without throttling
-         * @default 10
-         */
-        burstSize?: number;
     };
 }
 
@@ -230,23 +237,15 @@ export interface ResolvedConfig {
     /** Heartbeat configuration with defaults applied */
     heartbeat: ResolvedHeartbeatConfig;
 
+    /** Whether handler error messages are sent to the remote window */
+    exposeHandlerErrors: boolean;
+
     /** Rate limit configuration */
     rateLimit?: {
         enabled: boolean;
         messagesPerSecond: number;
-        burstSize: number;
     };
 }
-
-/**
- * Default configuration values
- */
-export const DEFAULT_CONFIG = {
-    timeout: 5000,
-    retries: 0,
-    logLevel: 'none' as LogLevel,
-    analyticsEnabled: false,
-} as const;
 
 /**
  * Validate configuration object
@@ -284,9 +283,31 @@ export function validateConfig(config: ParleyConfig): void {
             throw new Error('Configuration error: allowedOrigins must be an array');
         }
 
+        if (config.allowedOrigins.length === 0) {
+            throw new Error('Configuration error: allowedOrigins must list at least one origin');
+        }
+
         for (const origin of config.allowedOrigins) {
             if (typeof origin !== 'string') {
                 throw new Error('Configuration error: allowedOrigins must contain only strings');
+            }
+
+            const normalized = origin.trim().toLowerCase();
+
+            if (normalized === '') {
+                throw new Error(
+                    'Configuration error: allowedOrigins must not contain empty strings'
+                );
+            }
+
+            // Origins are matched exactly: '*' and patterns like '*.example.com'
+            // would never match (or would suggest wildcard support that does not
+            // exist). 'null' is the opaque origin shared by sandboxed iframes,
+            // data: URLs and file:// pages.
+            if (normalized === 'null' || normalized.includes('*')) {
+                throw new Error(
+                    `Configuration error: allowedOrigins must not contain '${normalized}'; list each trusted http(s) origin`
+                );
             }
         }
     }

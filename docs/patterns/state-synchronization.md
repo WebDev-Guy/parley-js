@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Code Patterns](./index.md) > State Synchronization
+[Home](../index.md) > [Code Patterns](./index.md) > State Synchronization
 Pattern
 
 # State Synchronization Pattern
@@ -63,7 +63,7 @@ synchronization.
 **Shared State Class**:
 
 ```javascript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 class SyncedState {
     constructor(parley, initialState = {}) {
@@ -87,7 +87,7 @@ class SyncedState {
     /**
      * Update state locally and broadcast to other windows
      */
-    async setState(updates) {
+    setState(updates) {
         // Apply locally first
         const oldState = { ...this.state };
         this.state = { ...this.state, ...updates };
@@ -96,7 +96,7 @@ class SyncedState {
         this.notifyListeners(this.state, oldState);
 
         // Broadcast to all connected windows
-        await this.parley.broadcast('state:update', {
+        this.parley.broadcast('state:update', {
             updates,
             timestamp: Date.now(),
         });
@@ -139,6 +139,7 @@ class SyncedState {
 
 // Usage in parent window
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
 });
 
@@ -161,7 +162,7 @@ appState.subscribe((newState, oldState) => {
 });
 
 // Update state (broadcasts to all windows)
-await appState.setState({
+appState.setState({
     theme: 'dark',
 });
 
@@ -200,7 +201,7 @@ class SyncedStore {
         return this.state;
     }
 
-    async dispatch(action) {
+    dispatch(action) {
         // Apply action locally
         const oldState = this.state;
         this.state = this.reducer(this.state, action);
@@ -209,7 +210,7 @@ class SyncedStore {
         this.listeners.forEach((listener) => listener(this.state, action));
 
         // Broadcast action to other windows
-        await this.parley.broadcast('store:action', {
+        this.parley.broadcast('store:action', {
             action,
             timestamp: Date.now(),
         });
@@ -268,12 +269,12 @@ store.subscribe((state, action) => {
 });
 
 // Dispatch actions (synchronized across windows)
-await store.dispatch({
+store.dispatch({
     type: 'SET_USER',
     payload: { id: 123, name: 'John' },
 });
 
-await store.dispatch({
+store.dispatch({
     type: 'SET_THEME',
     payload: 'dark',
 });
@@ -291,9 +292,11 @@ class OptimisticSyncedState {
         this.version = 0;
         this.listeners = new Set();
 
-        // Listen for state updates with version
-        this.parley.on('state:update', (payload) => {
+        // Listen for state updates with version and acknowledge them,
+        // so the sender's send() resolves
+        this.parley.on('state:update', (payload, respond) => {
             this.handleRemoteUpdate(payload);
+            respond({ applied: true });
         });
     }
 
@@ -312,19 +315,30 @@ class OptimisticSyncedState {
         // Notify listeners immediately (optimistic)
         this.notifyListeners(this.state, oldState);
 
-        // Broadcast with version
+        // broadcast() is fire-and-forget and never reports failure, so
+        // confirmed updates use send() with an explicit targetId per target.
+        // send() rejects on timeout, disconnect, or a remote handler error.
+        const message = {
+            updates,
+            version: this.version,
+            timestamp: Date.now(),
+        };
+
         try {
-            await this.parley.broadcast('state:update', {
-                updates,
-                version: this.version,
-                timestamp: Date.now(),
-            });
+            await Promise.all(
+                this.parley
+                    .getConnectedTargets()
+                    .map((targetId) =>
+                        this.parley.send('state:update', message, { targetId })
+                    )
+            );
         } catch (error) {
             // Rollback on failure
             if (options.rollbackOnError) {
+                const failedState = this.state;
                 this.state = oldState;
                 this.version = oldVersion;
-                this.notifyListeners(oldState, this.state);
+                this.notifyListeners(oldState, failedState);
             }
             throw error;
         }
@@ -424,7 +438,7 @@ class SlicedSyncedState {
         return this.state[key];
     }
 
-    async setValue(key, value) {
+    setValue(key, value) {
         const oldValue = this.state[key];
         this.state[key] = value;
 
@@ -434,7 +448,7 @@ class SlicedSyncedState {
 
         // Broadcast if key is synced
         if (this.syncedKeys.has(key)) {
-            await this.parley.broadcast(`state:${key}`, {
+            this.parley.broadcast(`state:${key}`, {
                 value,
                 timestamp: Date.now(),
             });
@@ -488,10 +502,10 @@ state.subscribe('user', (newUser, oldUser) => {
 });
 
 // Update synced state (broadcasts to all windows)
-await state.setValue('theme', 'dark');
+state.setValue('theme', 'dark');
 
 // Update local state (doesn't broadcast)
-await state.setValue('localCache', { data: '...' });
+state.setValue('localCache', { data: '...' });
 ```
 
 ## Explanation
@@ -502,7 +516,10 @@ await state.setValue('localCache', { data: '...' });
    first for immediate UI response.
 
 2. **Broadcast**: The state change is broadcast to all connected windows via
-   ParleyJS.
+   ParleyJS. `broadcast()` returns `void`: it does not wait for, receive, or
+   report delivery. When the sender must know that every window applied the
+   update (for example, to roll back), use `send()` with a `targetId` for each
+   connected target, as in the optimistic-update example above.
 
 3. **Remote Receive**: Other windows receive the state update message.
 
@@ -580,13 +597,13 @@ class DebouncedSyncedState {
         }, this.debounceMs);
     }
 
-    async flushUpdates() {
+    flushUpdates() {
         if (Object.keys(this.pendingUpdates).length === 0) return;
 
         const updates = { ...this.pendingUpdates };
         this.pendingUpdates = {};
 
-        await this.parley.broadcast('state:update', {
+        this.parley.broadcast('state:update', {
             updates,
             timestamp: Date.now(),
         });
@@ -674,7 +691,7 @@ const state = new PersistedSyncedState(
 
 ```javascript
 class DiffSyncedState extends SyncedState {
-    async setState(updates) {
+    setState(updates) {
         // Calculate diff
         const changes = {};
         for (const [key, value] of Object.entries(updates)) {
@@ -694,7 +711,7 @@ class DiffSyncedState extends SyncedState {
         this.notifyListeners(this.state, oldState);
 
         // Broadcast only changed values
-        await this.parley.broadcast('state:update', {
+        this.parley.broadcast('state:update', {
             updates: changes,
             timestamp: Date.now(),
         });
@@ -721,6 +738,7 @@ import { describe, it, expect, vi } from 'vitest';
 describe('State Synchronization', () => {
     it('should update state locally', () => {
         const parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin],
         });
 
@@ -733,6 +751,7 @@ describe('State Synchronization', () => {
 
     it('should notify listeners on state change', () => {
         const parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin],
         });
 
@@ -748,6 +767,7 @@ describe('State Synchronization', () => {
 
     it('should broadcast state updates', async () => {
         const parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin],
         });
 
@@ -755,7 +775,7 @@ describe('State Synchronization', () => {
 
         const state = new SyncedState(parley, { count: 0 });
 
-        await state.setState({ count: 5 });
+        state.setState({ count: 5 });
 
         expect(broadcastSpy).toHaveBeenCalledWith(
             'state:update',
@@ -767,6 +787,7 @@ describe('State Synchronization', () => {
 
     it('should handle remote updates', () => {
         const parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin],
         });
 

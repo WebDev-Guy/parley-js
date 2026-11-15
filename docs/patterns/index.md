@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > Patterns
+[Home](../index.md) > [Documentation](../FRAMEWORK_REFERENCE.md) > Patterns
 
 # Code Patterns
 
@@ -111,7 +111,8 @@ When using these patterns:
 
 ## Contributing Patterns
 
-Have a pattern to share? See [Contributing Guide](../../CONTRIBUTING.md).
+Have a pattern to share? See
+[Contributing Guide](https://github.com/WebDev-Guy/parley-js/blob/main/CONTRIBUTING.md).
 
 ---
 
@@ -128,4 +129,5 @@ Have a pattern to share? See [Contributing Guide](../../CONTRIBUTING.md).
 - [Advanced Patterns](../CODE_PATTERNS.md)
 - [Testing Patterns](../TESTING_PATTERNS.md)
 
-**Back to**: [Documentation Home](./index.md) | [Project Home](../../index.md)
+**Back to**: [Documentation Home](../index.md) |
+[Project Home](https://github.com/WebDev-Guy/parley-js/blob/main/README.md)

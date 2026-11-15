@@ -34,7 +34,9 @@ npx serve .
    other
 3. **Request/Response** - Send messages and receive responses across windows
 4. **Fire-and-Forget** - Send notifications without expecting a response
-5. **Window State Detection** - Detect when the popup is closed
+5. **Window State Detection** - Parley detects a closed popup on its own and
+   emits `system:connection_lost` followed by `system:disconnected` (reason
+   `'connection_lost'`)
 6. **Heartbeat Monitoring** - Monitor connection health between windows
 7. **System Events** - Listen for connection lifecycle events
 
@@ -42,7 +44,7 @@ npx serve .
 
 | Aspect           | Iframe                   | Window-to-Window       |
 | ---------------- | ------------------------ | ---------------------- |
-| Target           | `iframe.contentWindow`   | `window.open()` result |
+| Target           | `<iframe>` element       | `window.open()` result |
 | Parent Reference | `window.parent`          | `window.opener`        |
 | Target Type      | `'iframe'`               | `'window'`             |
 | Lifecycle        | Controlled by parent DOM | Independent window     |
@@ -74,7 +76,7 @@ npx serve .
 ## Security Considerations
 
 - Always configure `allowedOrigins` with specific trusted origins
-- Never use `'*'` wildcard in production for `allowedOrigins`
-- The example uses `'null'` to support local file:// protocol testing
-- When served via HTTP (recommended), the same-origin is used automatically
+- `'*'` and `'null'` are rejected in `allowedOrigins`: serve the example over
+  http(s) (e.g. `npx serve`), not from file://
+- When served via HTTP, the same-origin is used automatically
 - In production, specify the exact popup origin

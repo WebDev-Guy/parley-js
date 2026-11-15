@@ -79,25 +79,6 @@ export function createValidationError(
 }
 
 /**
- * Combine multiple validation results
- *
- * @param results - Array of validation results
- * @returns Combined result
- */
-export function combineResults(...results: ValidationResult[]): ValidationResult {
-    const allErrors: ValidationErrorDetail[] = [];
-
-    for (const result of results) {
-        allErrors.push(...result.errors);
-    }
-
-    return {
-        valid: allErrors.length === 0,
-        errors: allErrors,
-    };
-}
-
-/**
  * Format validation errors as a human-readable string
  *
  * @param result - Validation result

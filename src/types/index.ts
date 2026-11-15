@@ -34,7 +34,7 @@ export type {
     HeartbeatConfig,
     ResolvedHeartbeatConfig,
 } from './ConfigTypes';
-export { DEFAULT_CONFIG, DEFAULT_HEARTBEAT_CONFIG, validateConfig } from './ConfigTypes';
+export { DEFAULT_HEARTBEAT_CONFIG, validateConfig } from './ConfigTypes';
 
 // Channel types
 export type {
@@ -46,4 +46,3 @@ export type {
     WindowReference,
     IframeContentWindow,
 } from './ChannelTypes';
-export { DEFAULT_CHANNEL_OPTIONS } from './ChannelTypes';
