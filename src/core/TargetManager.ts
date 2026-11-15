@@ -66,6 +66,11 @@ export class TargetManager {
     private readonly _aggressiveCleanupIntervalMs = 1000;
 
     /**
+     * Called for each dead target found during cleanup
+     */
+    private _deadTargetHandler: ((id: string) => void) | null = null;
+
+    /**
      * Creates a new TargetManager instance
      *
      * @param logger - Optional logger instance
@@ -394,12 +399,28 @@ export class TargetManager {
     public cleanup(): number {
         let removed = 0;
 
+        const deadIds: string[] = [];
         for (const [id, info] of this._targets) {
             if (!this._checkTargetAlive(info)) {
-                this._targets.delete(id);
-                this._logger.debug('Dead target cleaned up', { id });
-                removed++;
+                deadIds.push(id);
             }
+        }
+
+        for (const id of deadIds) {
+            if (this._deadTargetHandler) {
+                // Let the owner tear down channels, listeners and heartbeats
+                // (it is expected to unregister the target)
+                try {
+                    this._deadTargetHandler(id);
+                } catch (error) {
+                    this._logger.error('Dead target handler failed', { id, error });
+                }
+            }
+
+            // Fallback (no handler, or handler didn't unregister)
+            this._targets.delete(id);
+            this._logger.debug('Dead target cleaned up', { id });
+            removed++;
         }
 
         if (removed > 0) {
@@ -517,6 +538,18 @@ export class TargetManager {
                 this._stopCleanup();
             }
         }, interval);
+    }
+
+    /**
+     * Set the handler invoked for each dead target found by cleanup()
+     *
+     * Without a handler, cleanup() only forgets the target; the owner of the
+     * target's channel and heartbeat would never learn it is gone.
+     *
+     * @param handler - Called with the ID of each dead target
+     */
+    public setDeadTargetHandler(handler: ((id: string) => void) | null): void {
+        this._deadTargetHandler = handler;
     }
 
     /**

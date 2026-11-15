@@ -8,6 +8,8 @@ interface FixtureSetupOptions {
     timeout?: number;
     heartbeat?: Record<string, unknown>;
     childPath?: string;
+    /** Connect only after the iframe's load event, plus this many ms */
+    connectAfterLoad?: number;
 }
 
 interface FixtureDisconnectEvent {

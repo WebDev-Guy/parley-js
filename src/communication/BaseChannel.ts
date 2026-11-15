@@ -308,6 +308,66 @@ export abstract class BaseChannel {
     }
 
     /**
+     * The explicitly configured origin to post to when the target's origin
+     * cannot be read directly (cross-origin targets)
+     *
+     * Never derived from an iframe's src attribute, which can be changed.
+     * Parley.create() already rejects an empty allowedOrigins list; this is a
+     * backstop for channels constructed directly.
+     *
+     * @throws ConnectionError if no allowed origin is configured
+     */
+    protected _configuredTargetOrigin(): string {
+        const origin = this._options.allowedOrigins?.[0];
+        if (!origin) {
+            throw new ConnectionError(
+                'No allowedOrigins configured: list the target origin explicitly',
+                undefined,
+                CONNECTION_ERRORS.FAILED
+            );
+        }
+        return origin;
+    }
+
+    /**
+     * Keep re-running an action until a promise settles
+     *
+     * Used to re-send HANDSHAKE_INIT: a single INIT is lost if the other side
+     * has not attached its listener yet, which used to require arbitrary
+     * setTimeout delays in application code.
+     *
+     * @param action - Action to repeat (errors are logged, not thrown)
+     * @param settled - Promise whose settlement stops the repetition
+     * @param intervalMs - Delay between repetitions
+     */
+    protected _repeatUntilSettled(
+        action: () => void,
+        settled: Promise<unknown>,
+        intervalMs: number
+    ): void {
+        const timer = setInterval(() => {
+            try {
+                action();
+            } catch (error) {
+                this._logger.debug('Repeated action failed', error);
+            }
+        }, intervalMs);
+
+        const stop = (): void => {
+            clearInterval(timer);
+        };
+        settled.then(stop, stop);
+    }
+
+    /**
+     * Interval for re-sending HANDSHAKE_INIT (10% of the handshake timeout,
+     * clamped to 100-500ms)
+     */
+    protected get _handshakeRetryInterval(): number {
+        return Math.min(500, Math.max(100, Math.floor(this._options.handshakeTimeout / 10)));
+    }
+
+    /**
      * Check that a message came from this channel's target window
      *
      * @param source - `event.source` of the incoming message

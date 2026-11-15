@@ -55,6 +55,12 @@ export class MessageRegistry {
     private _types: Map<string, RegisteredMessageType> = new Map();
 
     /**
+     * Types registered implicitly by addHandler() (via on()) rather than by
+     * an explicit register() call
+     */
+    private _autoRegistered: Set<string> = new Set();
+
+    /**
      * Schema validator instance
      */
     private _validator: SchemaValidator;
@@ -98,7 +104,19 @@ export class MessageRegistry {
      * ```
      */
     public register(type: string, options: MessageRegistrationOptions = {}): void {
-        if (this._types.has(type)) {
+        const existing = this._types.get(type);
+
+        // on() auto-registers unknown types without options; an explicit
+        // register() afterwards attaches its schema/timeout/retries instead
+        // of failing (handlers added via on() are kept)
+        if (existing && this._autoRegistered.has(type)) {
+            this._autoRegistered.delete(type);
+            existing.options = options;
+            this._logger.debug('Message type options set after on()', { type });
+            return;
+        }
+
+        if (existing) {
             throw new Error(`Message type "${type}" is already registered`);
         }
 
@@ -120,6 +138,7 @@ export class MessageRegistry {
      * @param type - Message type name to unregister
      */
     public unregister(type: string): void {
+        this._autoRegistered.delete(type);
         if (this._types.delete(type)) {
             this._logger.debug('Message type unregistered', { type });
         }
@@ -209,6 +228,7 @@ export class MessageRegistry {
                 this.registerInternal(type);
             } else {
                 this.register(type);
+                this._autoRegistered.add(type);
             }
             registration = this._types.get(type)!;
         }
@@ -343,6 +363,7 @@ export class MessageRegistry {
      */
     public clear(): void {
         this._types.clear();
+        this._autoRegistered.clear();
         this._logger.debug('All registrations cleared');
     }
 

@@ -258,6 +258,13 @@ export class Parley {
             instanceId: config.instanceId ?? `parley_${generateUUID().slice(0, 8)}`,
             heartbeat: heartbeatConfig,
             exposeHandlerErrors: config.exposeHandlerErrors ?? false,
+            rateLimit: config.rateLimit
+                ? {
+                      enabled: config.rateLimit.enabled ?? false,
+                      messagesPerSecond: config.rateLimit.messagesPerSecond ?? 100,
+                      burstSize: config.rateLimit.burstSize ?? 10,
+                  }
+                : undefined,
         };
 
         return new Parley(resolvedConfig);

@@ -41,6 +41,22 @@
       `pattern` regexes, and `additionalProperties` schemas
     - `DefaultSecurityLayer.sanitizePayload()` throws a `SerializationError` for
       unserializable (e.g. circular) payloads instead of sending `{}`
+- Fixed several connection and delivery bugs:
+    - `retries` now actually re-sends the message on each attempt (previously it
+      only extended the timeout)
+    - The connecting side re-sends `HANDSHAKE_INIT` until acknowledged, so
+      `setTimeout` delays around `connect()` are no longer needed
+    - `connect()` to a cross-origin iframe that has already loaded no longer
+      fails with "Iframe load timeout"
+    - A closed popup/window is reported (`system:connection_lost` +
+      `system:disconnected`) without relying on heartbeats
+    - Dead targets found by periodic cleanup are fully disconnected (channel,
+      listener, heartbeat, pending requests) instead of leaking
+    - `rateLimit` config is now applied; exceeding it throws a `ParleyError`
+      with code `ERR_SECURITY_RATE_LIMITED`
+    - `broadcast()` keeps going when one target fails
+    - `register()` after `on()` attaches the schema instead of throwing
+    - `Parley.create()` rejects an empty `allowedOrigins` list
 - 595cef7: Fixed disconnect notifications tearing down the wrong connection: the
   handler now disconnects the target that actually sent the notification
   (identified via message metadata) instead of the first connected target. With
