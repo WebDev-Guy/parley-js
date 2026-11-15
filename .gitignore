@@ -29,6 +29,10 @@ coverage/
 .env.local
 .env.*.local
 
+# npm config can hold auth tokens - never commit it.
+# Publishing uses npm trusted publishing (OIDC) and needs no .npmrc.
+.npmrc
+
 # TypeScript cache
 *.tsbuildinfo
 

@@ -1,0 +1,13 @@
+# Normalize line endings: LF in the repo and in working copies on every OS.
+# Matches .prettierrc "endOfLine": "lf" (and .editorconfig), so format:check
+# passes on Windows checkouts where core.autocrlf=true would produce CRLF.
+* text=auto eol=lf
+
+# Binary assets - never touch line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

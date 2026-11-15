@@ -30,11 +30,13 @@ export default defineConfig({
                 '**/WindowChannel.ts',
             ],
             // Thresholds track current actuals (ratchet upward as coverage improves).
+            // Ratcheted 2026-11 (#33) to actuals under vitest 4.1.12 (#37):
+            // lines 66.69 / functions 67.3 / branches 62.82 / statements 66.66.
             thresholds: {
-                lines: 65,
-                functions: 65,
-                branches: 60,
-                statements: 65,
+                lines: 66,
+                functions: 67,
+                branches: 62,
+                statements: 66,
             },
         },
 
