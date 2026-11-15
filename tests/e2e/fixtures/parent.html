@@ -24,12 +24,27 @@
                 iframe.id = 'child-frame';
                 iframe.src =
                     childOrigin + (opts.childPath || '/tests/e2e/fixtures/child-iframe.html');
+                // opts.connectAfterLoad (ms): connect only after the cross-origin
+                // iframe has finished loading, plus this delay. Its 'load' event
+                // has then already fired and its first HANDSHAKE_INIT was sent
+                // before the parent was listening.
+                const ready = opts.connectAfterLoad
+                    ? new Promise(function (resolve) {
+                          iframe.addEventListener('load', function () {
+                              setTimeout(resolve, opts.connectAfterLoad);
+                          });
+                      })
+                    : Promise.resolve();
                 document.body.appendChild(iframe);
                 window.childFrame = iframe;
 
-                return window.parley.connect(iframe, 'child').then(function () {
-                    return 'connected';
-                });
+                return ready
+                    .then(function () {
+                        return window.parley.connect(iframe, 'child');
+                    })
+                    .then(function () {
+                        return 'connected';
+                    });
             };
 
             window.sendEcho = function (payload) {

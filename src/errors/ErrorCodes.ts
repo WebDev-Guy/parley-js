@@ -67,6 +67,8 @@ export const SECURITY_ERRORS = {
     DANGEROUS_PAYLOAD: 'ERR_SECURITY_DANGEROUS_PAYLOAD',
     /** Protocol version mismatch */
     VERSION_MISMATCH: 'ERR_SECURITY_VERSION_MISMATCH',
+    /** Outgoing message rate limit exceeded */
+    RATE_LIMITED: 'ERR_SECURITY_RATE_LIMITED',
 } as const;
 
 /**

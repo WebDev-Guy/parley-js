@@ -29,6 +29,7 @@ import {
     TARGET_ERRORS,
     CONNECTION_ERRORS,
     VALIDATION_ERRORS,
+    SECURITY_ERRORS,
     type ErrorCode,
 } from '../errors/ErrorCodes';
 import type { SecurityLayer } from '../security/SecurityLayer';
@@ -278,8 +279,14 @@ export class SendPipeline {
             targetCount: targets.length,
         });
 
+        // One target failing (e.g. origin not yet established) must not stop
+        // the broadcast from reaching the remaining targets
         for (const target of targets) {
-            this._sendToTarget(message, target);
+            try {
+                this._sendToTarget(message, target);
+            } catch (error) {
+                this._logger.error('Broadcast to target failed', { targetId: target.id, error });
+            }
         }
     }
 
@@ -515,7 +522,7 @@ export class SendPipeline {
                 const resolveUnknown = resolve as (value: unknown) => void;
                 const timeoutHandle = setTimeout(() => {
                     this._handleTimeout(
-                        message._id,
+                        message,
                         retries,
                         retries,
                         timeout,
@@ -548,7 +555,7 @@ export class SendPipeline {
      * Handle message timeout
      */
     private _handleTimeout(
-        messageId: string,
+        message: MessageProtocol,
         retriesRemaining: number,
         totalRetries: number,
         timeout: number,
@@ -556,22 +563,26 @@ export class SendPipeline {
         resolve: (value: unknown) => void,
         reject: (error: Error) => void
     ): void {
+        const messageId = message._id;
         const pending = this._pendingRequests.get(messageId);
         if (!pending) {
             return;
         }
 
         if (retriesRemaining > 0) {
-            // Retry
+            // Retry: re-post the same message (same _id, so a late response to
+            // any attempt still resolves the request)
             this._logger.debug('Retrying message', {
                 messageId,
                 retriesRemaining: retriesRemaining - 1,
             });
 
+            this._resend(message, targetId);
+
             // Create new timeout
             const timeoutHandle = setTimeout(() => {
                 this._handleTimeout(
-                    messageId,
+                    message,
                     retriesRemaining - 1,
                     totalRetries,
                     timeout,
@@ -617,6 +628,32 @@ export class SendPipeline {
             });
 
             reject(error);
+        }
+    }
+
+    /**
+     * Re-post a message for a retry attempt
+     *
+     * Send failures are logged rather than thrown: the pending request keeps
+     * its timeout and is rejected normally if no response arrives.
+     */
+    private _resend(message: MessageProtocol, targetId?: string): void {
+        const targets = this._getTargetsForSend(targetId);
+
+        if (targets.length === 0) {
+            this._logger.warn('Retry skipped: no connected target', {
+                messageId: message._id,
+                targetId,
+            });
+            return;
+        }
+
+        for (const target of targets) {
+            try {
+                this._sendToTarget(message, target);
+            } catch (error) {
+                this._logger.error('Retry send failed', { targetId: target.id, error });
+            }
         }
     }
 
@@ -687,9 +724,23 @@ export class SendPipeline {
         const limit = this._config.rateLimit.messagesPerSecond ?? 100;
 
         if (tracker.count >= limit) {
-            throw new Error(`Rate limit exceeded for ${key}: ` + `${limit} messages/sec max`);
+            throw new ParleyError(
+                `Rate limit exceeded for ${key}: ${limit} messages/sec max`,
+                SECURITY_ERRORS.RATE_LIMITED,
+                { key, limit }
+            );
         }
 
         tracker.count++;
+
+        // Drop trackers whose window has expired so per-target entries don't
+        // accumulate for targets that are no longer used
+        if (this._rateLimitTrackers.size > 100) {
+            for (const [trackedKey, entry] of this._rateLimitTrackers) {
+                if (now - entry.windowStart > window) {
+                    this._rateLimitTrackers.delete(trackedKey);
+                }
+            }
+        }
     }
 }

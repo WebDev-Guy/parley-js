@@ -169,6 +169,17 @@ export class ConnectionManager {
 
         // Register internal system message handlers
         this._registerSystemMessageHandlers();
+
+        // Targets found dead by TargetManager's periodic cleanup must be fully
+        // disconnected (channel, listener, heartbeat, pending requests)
+        this._targets.setDeadTargetHandler((targetId) => {
+            this._emitter.emitSync(SYSTEM_EVENTS.CONNECTION_LOST, {
+                targetId,
+                reason: 'cleanup',
+                timestamp: getTimestamp(),
+            });
+            this.performLocalDisconnect(targetId, 'cleanup');
+        });
     }
 
     /**
@@ -213,6 +224,20 @@ export class ConnectionManager {
         // Set up message handler
         channel.setMessageHandler((message, source, origin) => {
             this._onIncomingMessage(message, source, id, origin);
+        });
+
+        // A window closing is detected by the channel's polling; surface it as
+        // a lost connection so Parley state, events and heartbeats follow
+        channel.on('disconnected', (data) => {
+            const reason = (data as { reason?: string } | undefined)?.reason;
+            if (reason === 'closed' && this._channels.get(id) === channel) {
+                this._emitter.emitSync(SYSTEM_EVENTS.CONNECTION_LOST, {
+                    targetId: id,
+                    reason: 'connection_lost',
+                    timestamp: getTimestamp(),
+                });
+                this.performLocalDisconnect(id, 'connection_lost');
+            }
         });
 
         // Store channel
@@ -383,6 +408,12 @@ export class ConnectionManager {
      * @param targetId - Target ID whose heartbeat failed
      */
     public handleHeartbeatFailure(targetId: string, _consecutiveMissed: number): void {
+        if (!this._targets.has(targetId)) {
+            // Target already gone: stop its heartbeat instead of pinging forever
+            this._getHeartbeatManager()?.stop(targetId);
+            return;
+        }
+
         const consecutiveMissed = this._targets.recordMissedHeartbeat(targetId);
 
         // Emit heartbeat missed event

@@ -299,6 +299,10 @@ export function validateConfig(config: ParleyConfig): void {
             throw new Error('Configuration error: allowedOrigins must be an array');
         }
 
+        if (config.allowedOrigins.length === 0) {
+            throw new Error('Configuration error: allowedOrigins must list at least one origin');
+        }
+
         for (const origin of config.allowedOrigins) {
             if (typeof origin !== 'string') {
                 throw new Error('Configuration error: allowedOrigins must contain only strings');
