@@ -56,17 +56,17 @@
     "size-limit": [
         {
             "path": "dist/index.cjs",
-            "limit": "60 KB",
+            "limit": "64 KB",
             "brotli": false
         },
         {
             "path": "dist/index.js",
-            "limit": "60 KB",
+            "limit": "64 KB",
             "brotli": false
         },
         {
             "path": "dist/index.global.js",
-            "limit": "60 KB",
+            "limit": "64 KB",
             "brotli": false
         }
     ],

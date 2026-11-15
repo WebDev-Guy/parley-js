@@ -450,7 +450,7 @@ describe('Parley', () => {
             parley = Parley.create({
                 targetType: 'iframe',
                 timeout: 100, // Short timeout for tests
-                allowedOrigins: ['*'],
+                allowedOrigins: ['https://example.com'],
             });
         });
 

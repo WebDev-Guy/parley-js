@@ -85,16 +85,14 @@ describe('PostMessage Security', () => {
 
     describe('Null origin handling', () => {
         it('should handle null origin by throwing', () => {
-            const p = Parley.create({
-                targetType: 'window',
-                allowedOrigins: ['null'],
-            });
-
-            // null origin (file://) should be rejected
-            // Not silently using wildcard
-
-            expect(p).toBeDefined();
-            p.destroy();
+            // The opaque 'null' origin (file://, sandboxed iframes, data: URLs)
+            // cannot identify a trusted peer, so it is rejected at config time
+            expect(() =>
+                Parley.create({
+                    targetType: 'window',
+                    allowedOrigins: ['null'],
+                })
+            ).toThrow(/must not contain 'null'/);
         });
     });
 
@@ -155,7 +153,7 @@ describe('PostMessage Security', () => {
 
             const payload = {
                 safe: 'string',
-                unsafe: () => { },
+                unsafe: () => {},
             };
 
             const mockWindow = createMockWindow('target');

@@ -55,6 +55,24 @@ export class SchemaValidator {
     private static readonly MAX_DEPTH = 50;
 
     /**
+     * Maximum number of errors collected per nesting level
+     *
+     * Payloads are attacker-controlled: an array with hundreds of thousands
+     * of invalid items must not allocate an error object per item (or blow
+     * the stack via `push(...hugeArray)`).
+     */
+    private static readonly MAX_ERRORS = 100;
+
+    /**
+     * Compiled `pattern` regexes, keyed by pattern source
+     *
+     * Patterns come from developer-supplied schemas, so the set is small;
+     * the cap only guards against pathological schema churn.
+     */
+    private static readonly _regexCache = new Map<string, RegExp | Error>();
+    private static readonly MAX_CACHED_PATTERNS = 256;
+
+    /**
      * Validate data against a JSON Schema
      *
      * @param data - Data to validate
@@ -116,7 +134,7 @@ export class SchemaValidator {
         // Type validation
         if (schema.type !== undefined) {
             const typeErrors = this._validateType(value, schema.type, path);
-            errors.push(...typeErrors);
+            SchemaValidator._append(errors, typeErrors);
 
             // If type is wrong, don't continue with other validations
             if (typeErrors.length > 0) {
@@ -127,25 +145,26 @@ export class SchemaValidator {
         // Enum validation
         if (schema.enum !== undefined) {
             const enumErrors = this._validateEnum(value, schema.enum, path);
-            errors.push(...enumErrors);
+            SchemaValidator._append(errors, enumErrors);
         }
 
         // Type-specific validations
         if (schema.type === 'string' && typeof value === 'string') {
-            errors.push(...this._validateString(value, schema, path));
+            SchemaValidator._append(errors, this._validateString(value, schema, path));
         }
 
         if ((schema.type === 'number' || schema.type === 'integer') && typeof value === 'number') {
-            errors.push(...this._validateNumber(value, schema, path));
+            SchemaValidator._append(errors, this._validateNumber(value, schema, path));
         }
 
         if (schema.type === 'array' && Array.isArray(value)) {
-            errors.push(...this._validateArray(value, schema, path, depth));
+            SchemaValidator._append(errors, this._validateArray(value, schema, path, depth));
         }
 
         if (schema.type === 'object' && value !== null && typeof value === 'object') {
-            errors.push(
-                ...this._validateObject(value as Record<string, unknown>, schema, path, depth)
+            SchemaValidator._append(
+                errors,
+                this._validateObject(value as Record<string, unknown>, schema, path, depth)
             );
         }
 
@@ -296,7 +315,7 @@ export class SchemaValidator {
 
         if (schema.pattern !== undefined) {
             try {
-                const regex = new RegExp(schema.pattern);
+                const regex = SchemaValidator._compilePattern(schema.pattern);
                 if (!regex.test(value)) {
                     errors.push(
                         createValidationError(
@@ -411,9 +430,12 @@ export class SchemaValidator {
         // Validate each item against items schema
         if (schema.items !== undefined) {
             for (let i = 0; i < value.length; i++) {
+                if (errors.length >= SchemaValidator.MAX_ERRORS) {
+                    break;
+                }
                 const itemPath = path ? `${path}[${i}]` : `[${i}]`;
                 const itemResult = this._validateValue(value[i], schema.items, itemPath, depth + 1);
-                errors.push(...itemResult.errors);
+                SchemaValidator._append(errors, itemResult.errors);
             }
         }
 
@@ -440,7 +462,9 @@ export class SchemaValidator {
         // Check required properties
         if (schema.required !== undefined) {
             for (const requiredProp of schema.required) {
-                if (!(requiredProp in value)) {
+                // Own properties only: `in` would also see inherited members, so
+                // e.g. required: ['constructor'] would always pass
+                if (!SchemaValidator._hasOwn(value, requiredProp)) {
                     const propPath = path ? `${path}.${requiredProp}` : requiredProp;
                     errors.push(
                         createValidationError(
@@ -456,7 +480,7 @@ export class SchemaValidator {
         // Validate properties
         if (schema.properties !== undefined) {
             for (const [propName, propSchema] of Object.entries(schema.properties)) {
-                if (propName in value) {
+                if (SchemaValidator._hasOwn(value, propName)) {
                     const propPath = path ? `${path}.${propName}` : propName;
                     const propResult = this._validateValue(
                         value[propName],
@@ -464,8 +488,33 @@ export class SchemaValidator {
                         propPath,
                         depth + 1
                     );
-                    errors.push(...propResult.errors);
+                    SchemaValidator._append(errors, propResult.errors);
                 }
+            }
+        }
+
+        // additionalProperties given as a schema: validate every property not
+        // listed in `properties` against it
+        if (
+            schema.additionalProperties !== undefined &&
+            typeof schema.additionalProperties === 'object'
+        ) {
+            const listed = new Set(Object.keys(schema.properties ?? {}));
+            for (const propName of Object.keys(value)) {
+                if (errors.length >= SchemaValidator.MAX_ERRORS) {
+                    break;
+                }
+                if (listed.has(propName)) {
+                    continue;
+                }
+                const propPath = path ? `${path}.${propName}` : propName;
+                const propResult = this._validateValue(
+                    value[propName],
+                    schema.additionalProperties,
+                    propPath,
+                    depth + 1
+                );
+                SchemaValidator._append(errors, propResult.errors);
             }
         }
 
@@ -487,6 +536,53 @@ export class SchemaValidator {
         }
 
         return errors;
+    }
+
+    /**
+     * Append errors without spread (no argument-count limit) and cap the total
+     */
+    private static _append(target: ValidationErrorDetail[], source: ValidationErrorDetail[]): void {
+        for (const error of source) {
+            if (target.length >= SchemaValidator.MAX_ERRORS) {
+                return;
+            }
+            target.push(error);
+        }
+    }
+
+    /**
+     * Own-property check that works for objects without a prototype
+     */
+    private static _hasOwn(value: object, key: string): boolean {
+        return Object.prototype.hasOwnProperty.call(value, key);
+    }
+
+    /**
+     * Compile (or fetch from cache) a schema `pattern`
+     *
+     * @throws Error if the pattern is not a valid regular expression
+     */
+    private static _compilePattern(pattern: string): RegExp {
+        let cached = SchemaValidator._regexCache.get(pattern);
+
+        if (cached === undefined) {
+            try {
+                cached = new RegExp(pattern);
+            } catch (error) {
+                cached = error instanceof Error ? error : new Error(String(error));
+            }
+
+            if (SchemaValidator._regexCache.size >= SchemaValidator.MAX_CACHED_PATTERNS) {
+                SchemaValidator._regexCache.clear();
+            }
+            SchemaValidator._regexCache.set(pattern, cached);
+        }
+
+        if (cached instanceof Error) {
+            throw cached;
+        }
+
+        return cached;
     }
 }
 

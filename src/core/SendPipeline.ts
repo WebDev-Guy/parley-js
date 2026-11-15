@@ -367,6 +367,18 @@ export class SendPipeline {
             return;
         }
 
+        // Security: a response is only accepted from the target the request
+        // was sent to. (Requests sent without a targetId go to every
+        // connected target, so any of them may answer.)
+        if (pending.targetId !== undefined && pending.targetId !== sourceTargetId) {
+            this._logger.warn('Response from unexpected target ignored', {
+                requestId: response._requestId,
+                expectedTargetId: pending.targetId,
+                sourceTargetId,
+            });
+            return;
+        }
+
         // Clear timeout and remove pending request
         clearTimeout(pending.timeoutHandle);
         this._pendingRequests.delete(response._requestId);

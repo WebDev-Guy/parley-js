@@ -26,6 +26,21 @@
 
 ### Patch Changes
 
+- Security: hardened inbound message handling. Upgrading is recommended for all
+  users; details will be published in a security advisory.
+    - Each connection now only accepts messages from its own target window
+    - `MessageMetadata.origin` is the browser-verified origin of the sender
+    - Custom `SecurityLayer.validateOrigin()` / `validateMessage()` and protocol
+      structure/version checks now apply to every inbound message
+    - Responses are only accepted from the target a request was sent to
+    - `Parley.create()` now validates its configuration and rejects '\*', 'null'
+      and empty entries in `allowedOrigins`
+    - Handler errors are sent to the remote window as a generic 'Handler error';
+      opt back in with the new `exposeHandlerErrors` option
+    - Schema validator: own-property checks, bounded error collection, cached
+      `pattern` regexes, and `additionalProperties` schemas
+    - `DefaultSecurityLayer.sanitizePayload()` throws a `SerializationError` for
+      unserializable (e.g. circular) payloads instead of sending `{}`
 - 595cef7: Fixed disconnect notifications tearing down the wrong connection: the
   handler now disconnects the target that actually sent the notification
   (identified via message metadata) instead of the first connected target. With
