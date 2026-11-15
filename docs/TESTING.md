@@ -842,7 +842,7 @@ the workflow has read-only permissions.
 
 | Job                  | What it runs                                                                                                |
 | -------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `test` (Node 20, 22) | `npm ci`, `format:check`, `typecheck`, `lint:eslint`, `test:coverage` (thresholds enforced), Codecov upload |
+| `test` (Node 22, 24) | `npm ci`, `format:check`, `typecheck`, `lint:eslint`, `test:coverage` (thresholds enforced), Codecov upload |
 | `security`           | `npm audit --omit=dev --audit-level=high`, the security test suite, a security coverage report              |
 | `integration`        | The integration test suite                                                                                  |
 | `e2e`                | Installs Chromium, runs `npm run test:e2e`, uploads the Playwright report on failure                        |
