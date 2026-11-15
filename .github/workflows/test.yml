@@ -158,3 +158,7 @@ jobs:
       
       - name: Check bundle size
         run: npm run size
+
+      - name: Build documentation site
+        # VitePress fails the build on dead links (ignoreDeadLinks: false)
+        run: npm run docs:build

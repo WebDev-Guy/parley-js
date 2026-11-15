@@ -8,9 +8,10 @@ Most apps upgrade without changes. Check these if they apply to you:
 
 - **Configuration is validated.** `Parley.create()` now throws for an invalid
   `targetType`, a non-positive `timeout`, a negative `retries`, an empty
-  `allowedOrigins`, or `'*'`, `'null'` or empty entries in `allowedOrigins`.
-  Serve pages over http(s); `file://` pages have the opaque `'null'` origin and
-  are not supported.
+  `allowedOrigins`, or `'null'`, empty, or wildcard entries (anything containing
+  `*`, such as `'*.example.com'`) in `allowedOrigins`. There is no pattern
+  matching: list every origin exactly. Serve pages over http(s); `file://` pages
+  have the opaque `'null'` origin and are not supported.
 - **Handler errors are no longer sent to the other window.** When a handler
   throws, the sender receives `ERR_HANDLER_ERROR` with the generic message
   `'Handler error'`. Set `exposeHandlerErrors: true` to restore the old behavior
@@ -24,10 +25,11 @@ Most apps upgrade without changes. Check these if they apply to you:
 - **`MessageMetadata.origin` is now trustworthy** (the browser-verified origin).
   If you worked around it being self-reported, you can rely on it now.
 - **Removed types and options** (none of them ever had any runtime effect):
-  `SYSTEM_MESSAGE_TYPES.HEARTBEAT_PONG`, `ChannelOptions.autoReconnect` /
-  `reconnectDelay` / `maxReconnectAttempts`, `rateLimit.burstSize`, and the
-  `'timeout'` / `'error'` values of `DisconnectReason`. TypeScript code that
-  references them needs to drop those references.
+  `SYSTEM_MESSAGE_TYPES.HEARTBEAT_PONG` / `HANDSHAKE_INIT` / `HANDSHAKE_ACK`,
+  `ChannelOptions.autoReconnect` / `reconnectDelay` / `maxReconnectAttempts`,
+  `rateLimit.burstSize`, and the `'timeout'` / `'error'` values of
+  `DisconnectReason`. TypeScript code that references them needs to drop those
+  references.
 
 ### Security
 
@@ -42,7 +44,9 @@ details will be published in a security advisory.
   structure and version checks now run on every inbound message; rejected
   messages emit `system:error`
 - Responses are only accepted from the target a request was sent to
-- `'*'`, `'null'` and empty `allowedOrigins` entries are rejected
+- `'null'`, empty and wildcard (`*`) `allowedOrigins` entries are rejected
+  (wildcard patterns never matched anything, so they silently blocked every
+  message)
 - Handler error details are no longer disclosed to the remote window by default
 - Schema validator: own-property checks for `required` / `properties`, error
   collection capped at 100 entries, cached `pattern` regexes
@@ -83,6 +87,8 @@ details will be published in a security advisory.
   throws a `ParleyError` with code `ERR_SECURITY_RATE_LIMITED`
 - `broadcast()` keeps going when one target fails
 - `register()` after `on()` attaches the options instead of throwing
+- The `ValidationError.validationErrors` type now matches the runtime objects
+  (`ValidationErrorDetail[]` with `path`; it was typed with `field`)
 - `register()`'s `onError` option is called when an inbound message of that type
   fails schema validation or its handler throws (it was accepted but never
   invoked)
@@ -100,6 +106,8 @@ details will be published in a security advisory.
 
 - `SYSTEM_MESSAGE_TYPES.HEARTBEAT_PONG` and its request handler (pongs are the
   response to a ping; the handler only let a peer fake liveness)
+- `SYSTEM_MESSAGE_TYPES.HANDSHAKE_INIT` / `HANDSHAKE_ACK` (never sent; the
+  handshake uses internal message types)
 - `ChannelOptions.autoReconnect` / `reconnectDelay` / `maxReconnectAttempts`
   (automatic reconnection was never implemented)
 - `rateLimit.burstSize`

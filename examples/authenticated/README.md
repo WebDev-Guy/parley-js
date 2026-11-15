@@ -97,7 +97,8 @@ Parent                          Child
 
 ### Token Generation
 ```typescript
-// Generate secure token
+// Generate a demo token. Math.random() is NOT cryptographically secure:
+// use crypto.getRandomValues() (or a real auth service) in production.
 currentToken = 'token_' + Math.random().toString(36).substring(2, 15);
 currentSession = 'session_' + Date.now();
 validTokens.add(currentToken);
@@ -105,9 +106,12 @@ validTokens.add(currentToken);
 
 ### Token Validation
 ```typescript
-// Validate token on every request
+// Validate token on every request and reply with an error value.
+// (If the handler threw instead, the sender would only see a generic
+// 'Handler error' with code ERR_HANDLER_ERROR unless exposeHandlerErrors is on.)
 if (!payload.token || !validTokens.has(payload.token)) {
-    throw new Error('Unauthorized: Invalid token');
+    respond({ success: false, error: 'unauthorized' });
+    return;
 }
 ```
 
@@ -250,8 +254,8 @@ For production use:
 
 4. **Use Schema Validation**
    ```typescript
-   parley.register('auth:request', handler, {
-       requestSchema: {
+   parley.register('auth:request', {
+       schema: {
            type: 'object',
            properties: {
                username: { type: 'string', minLength: 3 },
@@ -260,6 +264,7 @@ For production use:
            required: ['username', 'password']
        }
    });
+   parley.on('auth:request', handler);
    ```
 
 ## Error Handling
@@ -268,15 +273,15 @@ The example demonstrates proper error handling:
 
 ```typescript
 try {
-    await parley.send('data:request', { token }, { targetId: 'child' });
-} catch (error) {
-    if (error.message.includes('Unauthorized')) {
+    const result = await parley.send('data:request', { token }, { targetId: 'child' });
+    if (result?.error === 'unauthorized') {
         // Token invalid - redirect to login
         authenticate();
-    } else {
-        // Other error - show message
-        showError(error.message);
     }
+} catch (error) {
+    // Transport errors (timeout, disconnected target) or ERR_HANDLER_ERROR
+    // if the child's handler threw unexpectedly
+    showError(error.message);
 }
 ```
 

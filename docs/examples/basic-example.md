@@ -1,5 +1,5 @@
-[Home](../../index.md) > [Documentation](./index.md) > [Examples](./index.md) >
-Basic Parent-Child Communication
+[Home](../index.md) > [Documentation](../FRAMEWORK_REFERENCE.md) >
+[Examples](./index.md) > Basic Parent-Child Communication
 
 # Basic Parent-Child Communication Example
 
@@ -93,8 +93,14 @@ project/
 ### parent.ts
 
 ```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
-import type { TimeoutError, ValidationError } from 'parley-js';
+// Error classes are imported as values because they are used with instanceof
+import {
+    Parley,
+    SYSTEM_EVENTS,
+    TimeoutError,
+    ValidationError,
+    ParleyError,
+} from 'ignite-parleyjs';
 
 // Define message types for type safety
 interface DataRequest {
@@ -112,9 +118,10 @@ interface DataResponse {
 
 // Create ParleyJS instance with origin validation
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
     timeout: 5000,
-    debug: true,
+    logLevel: 'debug',
 });
 
 // Get DOM elements
@@ -122,22 +129,7 @@ const iframe = document.getElementById('child-frame') as HTMLIFrameElement;
 const sendButton = document.getElementById('send-message') as HTMLButtonElement;
 const responseDiv = document.getElementById('response') as HTMLDivElement;
 
-// Wait for iframe to load before connecting
-iframe.addEventListener('load', async () => {
-    try {
-        // Connect to the iframe
-        await parley.connect(iframe.contentWindow!, 'child-iframe');
-        console.log('Connected to child iframe');
-
-        // Enable the send button
-        sendButton.disabled = false;
-    } catch (error) {
-        console.error('Failed to connect to iframe:', error);
-        responseDiv.textContent = 'Connection failed';
-    }
-});
-
-// Listen for connection events
+// Listen for connection events (registered before connecting)
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
     console.log('Child connected:', event.targetId);
     responseDiv.textContent = 'Ready to send messages';
@@ -148,6 +140,18 @@ parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
     responseDiv.textContent = 'Child disconnected';
     sendButton.disabled = true;
 });
+
+// Connect to the iframe. No 'load' listener is needed: the child re-sends
+// its handshake until the parent acknowledges it.
+sendButton.disabled = true;
+try {
+    await parley.connect(iframe, 'child-iframe');
+    console.log('Connected to child iframe');
+    sendButton.disabled = false;
+} catch (error) {
+    console.error('Failed to connect to iframe:', error);
+    responseDiv.textContent = 'Connection failed';
+}
 
 // Handle send button click
 sendButton.addEventListener('click', async () => {
@@ -166,14 +170,12 @@ sendButton.addEventListener('click', async () => {
             }
         );
 
-        // Handle successful response
-        if (response.success) {
-            responseDiv.innerHTML = `
-                <h3>User Data Received:</h3>
-                <p>ID: ${response.user.id}</p>
-                <p>Name: ${response.user.name}</p>
-                <p>Email: ${response.user.email}</p>
-            `;
+        // Handle successful response. Render received data with
+        // textContent, never innerHTML (ParleyJS does not escape HTML).
+        if (response?.success) {
+            responseDiv.textContent =
+                `User: ${response.user.id} - ${response.user.name} ` +
+                `(${response.user.email})`;
         } else {
             responseDiv.textContent = 'Failed to retrieve user data';
         }
@@ -184,8 +186,15 @@ sendButton.addEventListener('click', async () => {
                 'Request timed out. Child may be unresponsive.';
             console.error('Timeout error:', error);
         } else if (error instanceof ValidationError) {
-            responseDiv.textContent = 'Invalid response from child.';
-            console.error('Validation error:', error);
+            responseDiv.textContent = 'Payload failed schema validation.';
+            console.error('Validation error:', error.validationErrors);
+        } else if (
+            error instanceof ParleyError &&
+            error.code === 'ERR_HANDLER_ERROR'
+        ) {
+            // The child's handler threw; the message is 'Handler error'
+            // unless the child set exposeHandlerErrors: true
+            responseDiv.textContent = 'The child failed to handle the request.';
         } else {
             responseDiv.textContent =
                 'Request failed. See console for details.';
@@ -228,8 +237,8 @@ window.addEventListener('beforeunload', () => {
 ### child.ts
 
 ```typescript
-import { Parley, SYSTEM_EVENTS } from 'parley-js';
-import type { MessageMetadata, ResponseFunction } from 'parley-js';
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
+import type { MessageMetadata, ResponseFunction } from 'ignite-parleyjs';
 
 // Define message types
 interface DataRequest {
@@ -247,8 +256,9 @@ interface DataResponse {
 
 // Create ParleyJS instance
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
-    debug: true,
+    logLevel: 'debug',
 });
 
 const statusDiv = document.getElementById('status') as HTMLDivElement;
@@ -343,15 +353,16 @@ For more on origin validation, see
 
 ### Connection Establishment
 
-The parent waits for the iframe to load before connecting:
+Both sides call `connect()`. The parent passes the iframe element; it does not
+need to wait for the iframe's `load` event:
 
 ```typescript
-iframe.addEventListener('load', async () => {
-    await parley.connect(iframe.contentWindow!, 'child-iframe');
-});
+await parley.connect(iframe, 'child-iframe');
 ```
 
-The child connects to the parent immediately:
+The child connects to the parent immediately. Because the child re-sends its
+handshake until the parent acknowledges it, it does not matter which side starts
+first:
 
 ```typescript
 await parley.connect(window.parent, 'parent-window');
@@ -376,10 +387,12 @@ The compiler ensures request and response types match your interfaces.
 
 ### Error Handling
 
-The example handles three error types:
+The example handles these error types:
 
 - **TimeoutError**: Request took too long
-- **ValidationError**: Response failed schema validation
+- **ValidationError**: The payload failed schema validation (locally or on the
+  child)
+- **ParleyError `ERR_HANDLER_ERROR`**: The child's handler threw
 - **Generic errors**: Other communication failures
 
 For comprehensive error handling patterns, see
@@ -437,15 +450,19 @@ Navigate to `http://localhost:8000/parent.html`
 
 **Symptom**: "Failed to connect to iframe" error
 
-**Solution**: Ensure the iframe has fully loaded before connecting. Use the
-`load` event listener as shown in the example.
+**Solution**: Make sure both pages call `connect()`, the parent passes the
+iframe element (not `iframe.contentWindow`) to an instance created with
+`targetType: 'iframe'`, and both pages are served over http(s) from origins
+listed in `allowedOrigins`. A `load` listener is not needed (and one attached
+after the iframe already loaded never fires).
 
 For more timeout troubleshooting, see
 [Timeout Errors](../troubleshooting/common-errors.md#timeout-errors).
 
 ### Issue: Origin Mismatch
 
-**Symptom**: Messages not received, console shows origin errors
+**Symptom**: Messages not received; with `logLevel: 'debug'` the console shows
+"Message from disallowed origin blocked"
 
 **Solution**: Verify `allowedOrigins` matches the actual origin. Use
 `window.location.origin` for same-origin communication.
@@ -488,7 +505,8 @@ Now that you understand the basics:
 
 **API Reference**:
 
-- [Parley.create()](../api-reference/methods.md#create) - Instance creation
+- [Parley.create()](../api-reference/methods.md#parleycreate) - Instance
+  creation
 - [connect()](../api-reference/methods.md#connect) - Establish connections
 - [send()](../api-reference/methods.md#send) - Send messages
 - [on()](../api-reference/methods.md#on) - Register handlers

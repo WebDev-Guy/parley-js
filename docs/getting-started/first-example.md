@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Getting Started](./index.md) > First Example
+[Home](../index.md) > [Getting Started](./index.md) > First Example
 
 # Your First ParleyJS Example
 
@@ -30,7 +30,9 @@ send messages.
 
 Before starting, you need:
 
-- ParleyJS installed (`npm install ignite-parleyjs` or use CDN)
+- An internet connection (the pages below load ParleyJS from the unpkg CDN via
+  an import map; with a bundler such as Vite you can
+  `npm install ignite-parleyjs` and drop the import map)
 - Basic HTML and JavaScript knowledge
 - A local web server (ParleyJS requires HTTP/HTTPS, not `file://`)
 
@@ -46,6 +48,13 @@ Create a file called `parent.html`:
     <head>
         <meta charset="UTF-8" />
         <title>ParleyJS Parent</title>
+        <script type="importmap">
+            {
+                "imports": {
+                    "ignite-parleyjs": "https://unpkg.com/ignite-parleyjs/dist/index.js"
+                }
+            }
+        </script>
     </head>
     <body>
         <h1>Parent Window</h1>
@@ -57,37 +66,34 @@ Create a file called `parent.html`:
         ></iframe>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley } from 'ignite-parleyjs';
 
             // Create Parley instance for parent
             const parley = Parley.create({
+                targetType: 'iframe',
                 allowedOrigins: [window.location.origin],
             });
 
-            // Register handler for child responses
-            parley.on('greeting-response', (payload, respond, metadata) => {
-                console.log('Child says:', payload.message);
-            });
-
-            // Wait for iframe to load, then connect
+            // Connect to the iframe element. No need to wait for the
+            // iframe's load event: connect() resolves once the child
+            // page has loaded and completed the handshake.
             const iframe = document.getElementById('child-iframe');
-            iframe.addEventListener('load', async () => {
-                // Connect to the iframe
-                await parley.connect(iframe, 'child');
-                console.log('Connected to child iframe');
+            await parley.connect(iframe, 'child');
+            console.log('Connected to child iframe');
 
-                // Send greeting message to child
-                const response = await parley.send(
-                    'greeting',
-                    {
-                        name: 'Parent',
-                        timestamp: Date.now(),
-                    },
-                    { targetId: 'child' }
-                );
+            // Send greeting message to child and wait for its reply
+            const response = await parley.send(
+                'greeting',
+                {
+                    name: 'Parent',
+                    timestamp: Date.now(),
+                },
+                { targetId: 'child' }
+            );
 
-                console.log('Child responded:', response);
-            });
+            // The child's respond() value is the result of send()
+            console.log('Child says:', response.message);
+            console.log('Child responded:', response);
         </script>
     </body>
 </html>
@@ -95,11 +101,12 @@ Create a file called `parent.html`:
 
 **What this code does:**
 
-- `Parley.create()` initializes a ParleyJS instance with origin validation
-- `parley.on()` registers a handler for incoming messages of type
-  `greeting-response`
+- `Parley.create()` initializes a ParleyJS instance for talking to iframes
+  (`targetType: 'iframe'`) with origin validation
 - `parley.connect()` establishes the communication channel with the iframe
-- `parley.send()` sends a message and waits for a response
+  element
+- `parley.send()` sends a message and returns a Promise that resolves with the
+  value the child passes to `respond()`
 
 For complete configuration options, see
 [Parley.create() API reference](../api-reference/methods.md#parleycreate). For
@@ -116,16 +123,24 @@ Create a file called `child.html`:
     <head>
         <meta charset="UTF-8" />
         <title>ParleyJS Child</title>
+        <script type="importmap">
+            {
+                "imports": {
+                    "ignite-parleyjs": "https://unpkg.com/ignite-parleyjs/dist/index.js"
+                }
+            }
+        </script>
     </head>
     <body>
         <h1>Child Window (Iframe)</h1>
         <p>Waiting for messages from parent...</p>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley } from 'ignite-parleyjs';
 
             // Create Parley instance for child
             const parley = Parley.create({
+                targetType: 'iframe',
                 allowedOrigins: [window.location.origin],
             });
 
@@ -163,7 +178,7 @@ Message handlers in ParleyJS follow this pattern:
 parley.on('message-type', (payload, respond, metadata) => {
     // payload: The data sent with the message
     // respond: Function to send a response back
-    // metadata: Information about the message (origin, targetId, etc.)
+    // metadata: Information about the message (origin, senderId, etc.)
 
     // Process the message
     console.log('Received:', payload);
@@ -178,10 +193,12 @@ The handler receives three parameters:
 1. **payload** - The message data
 2. **respond** - Callback to send a response (only needed for request-response
    pattern)
-3. **metadata** - Message metadata including origin, targetId, and messageId
+3. **metadata** - Message metadata: `messageId`, `senderId`, `origin`,
+   `timestamp`, and `expectsResponse`
 
-For fire-and-forget messages (no response needed), simply don't call
-`respond()`.
+For fire-and-forget messages (sent with `{ expectsResponse: false }` or with
+`broadcast()`), simply don't call `respond()`. If a handler throws, the sender's
+`send()` rejects with an `ERR_HANDLER_ERROR` error.
 
 For detailed comparison of fire-and-forget vs request-response patterns, see
 [Request-Response Pattern](../patterns/request-response.md#when-to-use-it). For
@@ -207,6 +224,10 @@ Child says: Hello Parent! I'm the child iframe.
 Child responded: { message: "Hello Parent! I'm the child iframe.", receivedAt: 1234567890 }
 ```
 
+Messages logged inside the iframe appear in the same DevTools console (Chrome
+labels them with the iframe's context; you can also pick the iframe in the
+console's context drop-down).
+
 The parent sends a greeting, the child receives it, responds, and the parent
 logs the response.
 
@@ -223,8 +244,8 @@ Child responded: { message: "Hello Parent! I'm the child iframe.", receivedAt: 1
 **In Child Console (iframe):**
 
 ```
-Parent says hello! Received: { name: "Parent", timestamp: 1234567890 }
 Child connected to parent
+Parent says hello! Received: { name: "Parent", timestamp: 1234567890 }
 ```
 
 If you see these messages, congratulations! Your ParleyJS communication is
@@ -243,28 +264,30 @@ working.
 For troubleshooting origin errors in development, see
 [Common Errors: Origin Mismatch](../troubleshooting/common-errors.md#origin-mismatch-errors).
 
-### Mistake 2: Connecting Before Iframe Loads
+### Mistake 2: Waiting for the Iframe's `load` Event
 
-**Problem:** Calling `parley.connect()` before the iframe is ready causes
-connection failures.
+**Problem:** Wrapping `connect()` in a `load` listener or a `setTimeout`. A
+`load` listener attached after the iframe has already loaded never fires, so the
+connection is never made.
 
 **Wrong:**
 
 ```javascript
-const iframe = document.getElementById('child-iframe');
-await parley.connect(iframe, 'child'); // Iframe might not be loaded yet
-```
-
-**Correct:**
-
-```javascript
 iframe.addEventListener('load', async () => {
-    await parley.connect(iframe, 'child');
+    await parley.connect(iframe, 'child'); // May never run
 });
 ```
 
-For more iframe timing issues, see
-[Dead Window References](../troubleshooting/common-errors.md#dead-window-references).
+**Correct:** Call `connect()` directly on both sides. The child keeps re-sending
+its handshake until the parent answers, so the order in which the pages load
+does not matter:
+
+```javascript
+await parley.connect(iframe, 'child');
+```
+
+Also make sure you pass the iframe **element** to `connect()`, not
+`iframe.contentWindow`.
 
 ### Mistake 3: Mismatched Origins
 
@@ -351,7 +374,7 @@ Now that you have basic communication working, explore these topics:
   failures gracefully
 - [Schema Validation](../EXAMPLES.md#schema-validation) - Validate message
   structure with JSON Schema
-- [System Events](../api-reference/README.md#system-events) - Monitor connection
+- [System Events](../api-reference/index.md#system-events) - Monitor connection
   state and heartbeats
 
 **Explore Use Cases:**
@@ -385,7 +408,8 @@ Now that you have basic communication working, explore these topics:
 ## Complete Working Example
 
 For a full working example with UI and logging, see the
-[Basic Example](../../examples/basic/) in the repository.
+[Basic Example](https://github.com/WebDev-Guy/parley-js/tree/main/examples/basic)
+in the repository.
 
 To run it:
 

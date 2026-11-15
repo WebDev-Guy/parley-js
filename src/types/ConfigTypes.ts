@@ -300,9 +300,11 @@ export function validateConfig(config: ParleyConfig): void {
                 );
             }
 
-            // '*' would accept any sender; 'null' is the opaque origin shared by
-            // sandboxed iframes, data: URLs and file:// pages
-            if (normalized === '*' || normalized === 'null') {
+            // Origins are matched exactly: '*' and patterns like '*.example.com'
+            // would never match (or would suggest wildcard support that does not
+            // exist). 'null' is the opaque origin shared by sandboxed iframes,
+            // data: URLs and file:// pages.
+            if (normalized === 'null' || normalized.includes('*')) {
                 throw new Error(
                     `Configuration error: allowedOrigins must not contain '${normalized}'; list each trusted http(s) origin`
                 );

@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Guides](./index.md) > iFrame Communication
+[Home](../index.md) > [Guides](./index.md) > iFrame Communication
 
 # iFrame Communication Guide
 
@@ -36,6 +36,9 @@ Before starting this guide:
 - Understand [Core Concepts](../getting-started/concepts.md)
 - Basic knowledge of iframes and postMessage API
 - Local web server (ParleyJS requires HTTP/HTTPS, not file://)
+- A way to resolve `import ... from 'ignite-parleyjs'` in the browser: a
+  bundler/dev server such as Vite, or an import map as shown in
+  [Your First ParleyJS Example](../getting-started/first-example.md)
 
 If you need help with setup, see
 [Installation](../getting-started/installation.md).
@@ -48,7 +51,7 @@ child page embedded in an iframe.
 ### Minimal Parent Setup
 
 ```javascript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 // Create Parley instance
 const parley = Parley.create({
@@ -59,17 +62,15 @@ const parley = Parley.create({
 // Get iframe element
 const iframe = document.getElementById('my-iframe');
 
-// Wait for iframe to load, then connect
-iframe.addEventListener('load', async () => {
-    await parley.connect(iframe, 'child');
-    console.log('Connected to iframe');
-});
+// Connect to the iframe element (no need to wait for its load event)
+await parley.connect(iframe, 'child');
+console.log('Connected to iframe');
 ```
 
 ### Minimal Child Setup
 
 ```javascript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 // Create Parley instance
 const parley = Parley.create({
@@ -110,7 +111,7 @@ Create `parent.html` with ParleyJS initialization:
         ></iframe>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley } from 'ignite-parleyjs';
 
             const parley = Parley.create({
                 targetType: 'iframe',
@@ -130,21 +131,20 @@ Create `parent.html` with ParleyJS initialization:
                 respond({ status: 'acknowledged' });
             });
 
-            // Connect when iframe loads
+            // Connect to the iframe element. connect() resolves once the
+            // child page has loaded and answered the handshake.
             const iframe = document.getElementById('child-iframe');
-            iframe.addEventListener('load', async () => {
-                await parley.connect(iframe, 'child');
+            await parley.connect(iframe, 'child');
 
-                // Send initial configuration
-                await parley.send(
-                    'config:initialize',
-                    {
-                        theme: 'dark',
-                        apiKey: 'abc123',
-                    },
-                    { targetId: 'child' }
-                );
-            });
+            // Send initial configuration
+            await parley.send(
+                'config:initialize',
+                {
+                    theme: 'dark',
+                    locale: 'en-US',
+                },
+                { targetId: 'child' }
+            );
         </script>
     </body>
 </html>
@@ -165,7 +165,7 @@ Create `child.html` that runs inside the iframe:
         <h2>Child Widget</h2>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley } from 'ignite-parleyjs';
 
             const parley = Parley.create({
                 targetType: 'iframe',
@@ -228,7 +228,7 @@ async function notifyParent(eventType, data) {
 }
 
 // Example: Notify parent of user click
-document.addEventListener('click', () => {
+document.addEventListener('click', (event) => {
     notifyParent('user-click', { x: event.clientX, y: event.clientY });
 });
 ```
@@ -246,7 +246,7 @@ try {
     // Show error UI to user
 }
 
-// Parent: Handle message timeouts
+// Parent: Handle message timeouts and remote failures
 try {
     const response = await parley.send(
         'data:request',
@@ -259,13 +259,21 @@ try {
 } catch (error) {
     if (error.code === 'ERR_TIMEOUT_NO_RESPONSE') {
         console.error('Iframe did not respond in time');
+    } else if (error.code === 'ERR_NO_HANDLER') {
+        console.error('Iframe has no handler for data:request');
+    } else if (error.code === 'ERR_HANDLER_ERROR') {
+        // The iframe's handler threw. The message is 'Handler error' unless
+        // the iframe's instance was created with exposeHandlerErrors: true.
+        console.error('Iframe handler failed:', error.message);
     }
 }
 
 // Child: Handle disconnection
-parley.onSystem(Parley.SYSTEM_EVENTS.DISCONNECTED, (event) => {
+// (requires: import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';)
+parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
     console.log('Disconnected from parent:', event.reason);
-    // Attempt reconnection or show offline state
+    // Show an offline state. ParleyJS does not reconnect automatically;
+    // call parley.connect(window.parent, 'parent') again if you want to retry.
 });
 ```
 
@@ -289,7 +297,7 @@ event handling, and error recovery.
         <iframe id="widget" src="widget.html" width="800" height="600"></iframe>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
             const parley = Parley.create({
                 targetType: 'iframe',
@@ -313,12 +321,12 @@ event handling, and error recovery.
             });
 
             // System event handlers
-            parley.onSystem(Parley.SYSTEM_EVENTS.CONNECTED, () => {
+            parley.onSystem(SYSTEM_EVENTS.CONNECTED, () => {
                 statusEl.textContent = 'Connected';
                 initializeWidget();
             });
 
-            parley.onSystem(Parley.SYSTEM_EVENTS.CONNECTION_LOST, () => {
+            parley.onSystem(SYSTEM_EVENTS.CONNECTION_LOST, () => {
                 statusEl.textContent = 'Connection Lost';
             });
 
@@ -342,16 +350,14 @@ event handling, and error recovery.
                 }
             }
 
-            // Connect when iframe loads
+            // Connect to the iframe element (no load listener needed)
             const iframe = document.getElementById('widget');
-            iframe.addEventListener('load', async () => {
-                try {
-                    await parley.connect(iframe, 'widget');
-                } catch (error) {
-                    console.error('Connection failed:', error);
-                    statusEl.textContent = 'Connection Failed';
-                }
-            });
+            try {
+                await parley.connect(iframe, 'widget');
+            } catch (error) {
+                console.error('Connection failed:', error);
+                statusEl.textContent = 'Connection Failed';
+            }
         </script>
     </body>
 </html>
@@ -371,7 +377,7 @@ event handling, and error recovery.
         <div id="content">Loading...</div>
 
         <script type="module">
-            import { Parley } from 'parley-js';
+            import { Parley } from 'ignite-parleyjs';
 
             const parley = Parley.create({
                 targetType: 'iframe',
@@ -449,13 +455,14 @@ event handling, and error recovery.
 
 1. Parent creates Parley instance with iframe target type and allowed origins.
 2. Child creates Parley instance with matching origin configuration.
-3. Parent waits for iframe load event to ensure child is ready.
-4. Parent calls connect() with iframe element and target ID.
-5. Child calls connect() with window.parent reference.
-6. Handshake completes and both sides can send messages.
+3. Parent calls connect() with the iframe element and a target ID.
+4. Child calls connect() with the window.parent reference.
+5. Handshake completes and both sides can send messages.
 
-The handshake happens automatically when both sides call connect(). ParleyJS
-handles the protocol internally.
+The handshake happens automatically when both sides call connect(), in either
+order. The child re-sends its handshake until the parent answers, so neither
+side needs to wait for a load event or add a delay. If no handshake completes
+within `timeout`, connect() rejects with `ERR_CONNECTION_HANDSHAKE_FAILED`.
 
 ### Origin Validation
 
@@ -471,48 +478,55 @@ origin errors, see
 ### Message Routing
 
 Messages sent with targetId are routed to that specific connection. Use
-broadcast() to send to all connected targets. Each message includes metadata
-with origin, targetId, and messageId for tracking.
+broadcast() to send a fire-and-forget message to all connected targets (it
+returns nothing and receives no responses). Handlers receive metadata with
+`messageId`, `senderId` (the ID of the connection the message arrived on),
+`origin`, `timestamp`, and `expectsResponse`.
 
 See [send() in API Reference](../api-reference/methods.md#send) for complete
 send options.
 
 ### Heartbeat Monitoring
 
-The heartbeat configuration monitors connection health. If the iframe becomes
-unresponsive (browser tab suspended), ParleyJS detects it and emits
-SYSTEM_EVENTS.CONNECTION_LOST. You can then show an offline indicator or attempt
-reconnection.
+The heartbeat configuration monitors connection health. If the iframe stops
+answering heartbeat pings (for example, it was removed from the page or
+navigated away) for `maxMissed` consecutive intervals, ParleyJS emits
+SYSTEM_EVENTS.CONNECTION_LOST followed by SYSTEM_EVENTS.DISCONNECTED. You can
+then show an offline indicator. Reconnection is not automatic: call connect()
+again from your application code if you want to retry.
 
-See [System Events in API Reference](../api-reference/README.md#system-events)
+See [System Events in API Reference](../api-reference/index.md#system-events)
 for all available events.
 
 ## Common Mistakes
 
-### Mistake 1: Connecting Before Iframe Loads
+### Mistake 1: Waiting for the Load Event or Passing contentWindow
 
-**Problem**: Calling parley.connect() before the iframe is fully loaded causes
-connection failures.
+**Problem**: Wrapping connect() in an iframe `load` listener or a `setTimeout`,
+or passing `iframe.contentWindow` instead of the iframe element. A `load`
+listener attached after the iframe has already loaded never fires, so connect()
+is never called. An iframe instance given `contentWindow` rejects with
+`ERR_CONNECTION_FAILED`.
 
 **Wrong**:
 
 ```javascript
 const iframe = document.getElementById('my-iframe');
-await parley.connect(iframe, 'child'); // iframe might not be loaded yet
+iframe.addEventListener('load', async () => {
+    // May never run, and contentWindow is the wrong target
+    await parley.connect(iframe.contentWindow, 'child');
+});
 ```
 
 **Correct**:
 
 ```javascript
 const iframe = document.getElementById('my-iframe');
-iframe.addEventListener('load', async () => {
-    await parley.connect(iframe, 'child');
-});
+await parley.connect(iframe, 'child');
 ```
 
-Wait for the load event to ensure the iframe's window object is ready. For more
-iframe timing issues, see
-[Dead Window References](../troubleshooting/common-errors.md#dead-window-references).
+Both sides simply call connect(); the handshake is retried until the child page
+is ready.
 
 ### Mistake 2: Mismatched Origins
 
@@ -695,23 +709,25 @@ async function addIframe(id, src) {
     iframe.src = src;
     document.body.appendChild(iframe);
 
-    await new Promise((resolve) => {
-        iframe.addEventListener('load', resolve);
-    });
-
+    // The page inside each iframe must call parley.connect(window.parent)
     await parley.connect(iframe, id);
     iframes.set(id, iframe);
 }
 
-// Broadcast to all iframes
-await parley.broadcast('global:update', {
+await addIframe('iframe-1', '/widgets/one.html');
+await addIframe('iframe-2', '/widgets/two.html');
+
+// Broadcast to all iframes (fire-and-forget, returns nothing)
+parley.broadcast('global:update', {
     timestamp: Date.now(),
 });
 
 // Send to specific iframe
-await parley.send('specific:update', data, {
-    targetId: 'iframe-2',
-});
+await parley.send(
+    'specific:update',
+    { theme: 'light' },
+    { targetId: 'iframe-2' }
+);
 ```
 
 For state synchronization across multiple iframes, see

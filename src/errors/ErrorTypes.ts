@@ -7,6 +7,7 @@
  * Each error class includes a specific error code for programmatic handling.
  */
 
+import type { ValidationErrorDetail } from '../validation/ValidationError';
 import {
     ErrorCode,
     VALIDATION_ERRORS,
@@ -96,12 +97,7 @@ export class ParleyError extends Error {
  */
 export class ValidationError extends ParleyError {
     /** Validation errors array for detailed feedback */
-    public readonly validationErrors?: Array<{
-        field: string;
-        message: string;
-        expected?: string;
-        received?: string;
-    }>;
+    public readonly validationErrors?: ValidationErrorDetail[];
 
     /**
      * Creates a new ValidationError

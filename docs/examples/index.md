@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > Examples
+[Home](../index.md) > [Documentation](../FRAMEWORK_REFERENCE.md) > Examples
 
 # Code Examples
 
@@ -7,7 +7,7 @@ Complete, working examples demonstrating ParleyJS in real-world scenarios.
 ## Overview
 
 This section provides full code examples you can run and learn from. Each
-example is complete, tested, and demonstrates best practices.
+example is complete and demonstrates best practices.
 
 For reusable patterns, see [Patterns](../patterns/index.md). For use-case
 guides, see [Guides](../guides/index.md).
@@ -31,12 +31,14 @@ guides, see [Guides](../guides/index.md).
 
 Working examples in the repository:
 
-- **[Basic Example](../../examples/basic/)** - Simple parent-child communication
-- **[Authenticated Example](../../examples/authenticated/)** - Authentication
-  flow
-- **[React Integration](../../examples/react-integration/)** - React
-  implementation
-- **[Window-to-Window](../../examples/window-to-window/)** - Popup communication
+- **[Basic Example](https://github.com/WebDev-Guy/parley-js/tree/main/examples/basic)** -
+  Simple parent-child communication
+- **[Authenticated Example](https://github.com/WebDev-Guy/parley-js/tree/main/examples/authenticated)** -
+  Authentication flow
+- **[React Integration](https://github.com/WebDev-Guy/parley-js/tree/main/examples/react-integration)** -
+  React implementation
+- **[Window-to-Window](https://github.com/WebDev-Guy/parley-js/tree/main/examples/window-to-window)** -
+  Popup communication
 
 ## Example Categories
 
@@ -124,7 +126,8 @@ Each example includes:
 **Recommended order**:
 
 1. Start with [Basic Communication](../EXAMPLES.md#basic-communication)
-2. Try [Live Basic Example](../../examples/basic/)
+2. Try
+   [Live Basic Example](https://github.com/WebDev-Guy/parley-js/tree/main/examples/basic)
 3. Study use-case specific examples
 4. Adapt examples to your needs
 
@@ -133,7 +136,8 @@ Each example includes:
 - **[EXAMPLES.md](../EXAMPLES.md)** - Complete examples documentation
 - **[Guides](../guides/index.md)** - Step-by-step tutorials
 - **[Patterns](../patterns/index.md)** - Reusable code patterns
-- **[Live Examples](../../examples/)** - Working code in repository
+- **[Live Examples](https://github.com/WebDev-Guy/parley-js/tree/main/examples)** -
+  Working code in repository
 
 ## Example vs Guide vs Pattern
 
@@ -162,7 +166,8 @@ Use examples to learn, guides to implement, patterns to optimize.
 
 ## Contributing Examples
 
-Have an example to share? See [Contributing Guide](../../CONTRIBUTING.md).
+Have an example to share? See
+[Contributing Guide](https://github.com/WebDev-Guy/parley-js/blob/main/CONTRIBUTING.md).
 
 Good examples:
 
@@ -179,11 +184,12 @@ Good examples:
 **Documentation**:
 
 - [Complete Examples](../EXAMPLES.md)
-- [Live Examples](../../examples/)
+- [Live Examples](https://github.com/WebDev-Guy/parley-js/tree/main/examples)
 
 **Related**:
 
 - [Guides](../guides/index.md)
 - [Patterns](../patterns/index.md)
 
-**Back to**: [Documentation Home](./index.md) | [Project Home](../../index.md)
+**Back to**: [Documentation Home](../index.md) |
+[Project Home](https://github.com/WebDev-Guy/parley-js/blob/main/README.md)

@@ -23,30 +23,37 @@ Common issues, debugging strategies, and solutions for ParleyJS.
 
 **Symptoms**:
 
-- `connect()` never resolves
-- Connection timeout errors
+- `connect()` rejects with `ERR_CONNECTION_HANDSHAKE_FAILED` after the timeout
+- `connect()` rejects with `ERR_CONNECTION_FAILED`
 - No handshake received
+
+You do NOT need to wait for the iframe's `load` event or add a delay before
+`connect()`. The connecting side (the page inside the iframe, or the popup)
+re-sends its handshake until the other side acknowledges it. A `load` listener
+attached after the iframe already loaded never fires and would prevent
+connecting.
 
 **Common Causes**:
 
-1. **Window not ready yet**
+1. **Wrong target or targetType**
 
 ```javascript
-// Wrong - iframe might not be loaded
-const parley = Parley.create({ allowedOrigins: ['https://child.com'] });
-await parley.connect(iframe.contentWindow, 'child');
-
-// Correct - wait for iframe to load
-const iframe = document.querySelector('#child-iframe');
-await new Promise((resolve) => {
-    if (iframe.contentDocument?.readyState === 'complete') {
-        resolve();
-    } else {
-        iframe.addEventListener('load', resolve, { once: true });
-    }
+// Wrong - an iframe instance needs the iframe ELEMENT
+const parley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.com'],
 });
+await parley.connect(iframe.contentWindow, 'child'); // ERR_CONNECTION_FAILED
 
-await parley.connect(iframe.contentWindow, 'child');
+// Correct
+await parley.connect(iframe, 'child');
+
+// Popups need a separate instance with targetType: 'window'
+const popupParley = Parley.create({
+    targetType: 'window',
+    allowedOrigins: ['https://popup.com'],
+});
+await popupParley.connect(popupWindow, 'popup');
 ```
 
 2. **Both sides not calling connect()**
@@ -55,7 +62,7 @@ await parley.connect(iframe.contentWindow, 'child');
 // Both parent and child must call connect()
 
 // Parent
-await parley.connect(iframe.contentWindow, 'child');
+await parley.connect(iframe, 'child');
 
 // Child (in iframe)
 await parley.connect(window.parent, 'parent');
@@ -69,12 +76,19 @@ await parley.connect(window.parent, 'parent');
 // Child is actually: http://child.example.com (wrong protocol!)
 ```
 
+4. **Page opened from `file://`**
+
+`file://` pages have the `'null'` origin, which ParleyJS does not support. Serve
+both pages over http(s), for example with a local dev server.
+
 **Solution Checklist**:
 
 - [ ] Both windows call `connect()`
-- [ ] Wait for iframe/window to fully load before connecting
+- [ ] `targetType` matches the target (`'iframe'` + iframe element, `'window'` +
+      popup / `window.opener`)
 - [ ] Origins are configured correctly on both sides
-- [ ] No CORS or security policy blocking communication
+- [ ] Pages are served over http(s)
+- [ ] No CSP or security policy blocking the frame
 
 ---
 
@@ -84,23 +98,28 @@ await parley.connect(window.parent, 'parent');
 
 **Symptoms**:
 
-- `send()` completes without error
 - No handler is invoked
-- Silent failure
+- `send()` rejects with `ERR_NO_HANDLER` (the receiver has no handler for that
+  type)
+- Fire-and-forget `send()` or `broadcast()` completes with no feedback
 
 **Common Causes**:
 
-1. **Handler registered after message sent**
+1. **Handler registered (on the receiving side) after the message arrived**
 
 ```javascript
-// Wrong - race condition
-await parley.send('hello', {}, { targetId: 'child' });
-parley.on('hello', (payload) => console.log(payload)); // Registered too late!
+// Wrong - child registers its handler too late
+// child:
+await childParley.connect(window.parent, 'parent');
+// ...parent sends 'hello' now: parent's send() rejects with ERR_NO_HANDLER
+childParley.on('hello', (payload) => console.log(payload));
 
-// Correct - register handler first
-parley.on('hello', (payload) => console.log(payload));
-await parley.connect(iframe.contentWindow, 'child');
-await parley.send('hello', {}, { targetId: 'child' });
+// Correct - register handlers before connecting
+childParley.on('hello', (payload, respond) => {
+    console.log(payload);
+    respond({ ok: true });
+});
+await childParley.connect(window.parent, 'parent');
 ```
 
 2. **Wrong message type**
@@ -121,6 +140,7 @@ parley.on('user-login', (data) => {}); // Matches sender
 ```javascript
 // Parent configured origin
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.example.com'],
 });
 
@@ -138,10 +158,11 @@ const parley = Parley.create({
 **Debugging**:
 
 ```javascript
-// Enable debug mode to see all messages
+// Enable debug logging to see messages and blocked origins
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.com'],
-    debug: true, // Logs all messages to console
+    logLevel: 'debug', // Logs messages, rejections and errors
 });
 
 // Listen for system events
@@ -154,13 +175,16 @@ parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
 
 ## Origin Validation Errors
 
-### Problem: SecurityError - Origin validation failed
+### Problem: Messages from the other window are rejected
 
 **Symptoms**:
 
-- `SecurityError: Origin mismatch` errors
-- Messages silently dropped
-- Connection fails
+- Messages silently dropped (the channel drops messages from origins not in
+  `allowedOrigins`; with `logLevel: 'warn'` or `'debug'` you see "Message from
+  disallowed origin blocked")
+- `connect()` rejects with `ERR_CONNECTION_HANDSHAKE_FAILED`
+- `system:error` with `ERR_SECURITY_ORIGIN_MISMATCH` (only when a custom
+  `SecurityLayer.validateOrigin()` rejects a message)
 
 **Common Causes**:
 
@@ -168,13 +192,13 @@ parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
 
 ```javascript
 // Parent expects
-allowedOrigins: ['https://child.com:443'];
+allowedOrigins: ['http://localhost'];
 
-// But browser normalizes to
-('https://child.com'); // Port 443 is default for HTTPS
+// But child is on
+('http://localhost:3000'); // Non-default port is part of the origin
 
-// Solution: Don't specify default ports
-allowedOrigins: ['https://child.com']; // Correct
+// Solution: include non-default ports (default ports 80/443 may be omitted)
+allowedOrigins: ['http://localhost:3000']; // Correct
 ```
 
 2. **Protocol mismatch**
@@ -199,7 +223,7 @@ allowedOrigins: ['https://child.example.com'];
 // But child is on
 ('https://www.child.example.com'); // Different subdomain!
 
-// Solution: Add all subdomains
+// Solution: List every origin (entries containing '*' are rejected)
 allowedOrigins: ['https://child.example.com', 'https://www.child.example.com'];
 ```
 
@@ -226,6 +250,7 @@ window.addEventListener('message', (event) => {
 
 // Then configure ParleyJS with the exact origin
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://exact-origin.com'], // Use exact origin from log
 });
 ```
@@ -238,9 +263,9 @@ const parley = Parley.create({
 
 **Symptoms**:
 
-- `TimeoutError` thrown
-- Requests never resolve
-- Long wait before error
+- `TimeoutError` (`ERR_TIMEOUT_NO_RESPONSE`) thrown
+- Long wait before error (the full `timeout` for every attempt, including
+  `retries`)
 
 **Common Causes**:
 
@@ -260,15 +285,18 @@ parley.on('get-data', async (payload, respond) => {
 });
 ```
 
-2. **Handler throws error**
+2. **Not a timeout: handler throws error**
 
 ```javascript
-// If handler throws, no response is sent
+// If the handler throws, ParleyJS sends an error response automatically.
+// The sender's send() rejects with ERR_HANDLER_ERROR and the generic
+// message 'Handler error' (the real message only if the receiver was
+// created with exposeHandlerErrors: true).
 parley.on('get-data', async (payload, respond) => {
-    throw new Error('Something went wrong'); // Causes timeout!
+    throw new Error('Something went wrong'); // Sender gets ERR_HANDLER_ERROR
 });
 
-// Correct - catch errors and respond
+// To return a structured error instead, catch and respond
 parley.on('get-data', async (payload, respond) => {
     try {
         const data = await fetchData(payload.id);
@@ -305,10 +333,12 @@ await parley.send(
 
 **Solution Checklist**:
 
-- [ ] Handler always calls `respond()`
-- [ ] Handler catches errors and responds with error
-- [ ] Timeout is long enough for operation
-- [ ] Handler is actually registered
+- [ ] Handler always calls `respond()` (return values are ignored)
+- [ ] Timeout is long enough for operation (or use `retries`)
+- [ ] The message reaches the receiver (origins, both sides connected)
+
+A missing handler does not time out either: `send()` rejects with
+`ERR_NO_HANDLER`.
 
 ---
 
@@ -370,9 +400,9 @@ parley.on<GetUserRequest>('get-user', (payload) => {
 1. **Large payloads**
 
 ```javascript
-// Wrong - sending huge object
+// Wrong - sending huge object (over 10 MB serialized is rejected)
 await parley.send('update', {
-    data: hugeArray, // 10MB of data!
+    data: hugeArray, // Several MB of data!
     timestamp: Date.now(),
 });
 
@@ -404,14 +434,14 @@ await parley.send('batch-update', { items: batch });
 ```javascript
 // Wrong - blocking operation in handler
 parley.on('process', (payload, respond) => {
-  const result = expensiveSync Operation(); // Blocks!
-  respond({ result });
+    const result = expensiveSyncOperation(); // Blocks!
+    respond({ result });
 });
 
 // Correct - use async operations
 parley.on('process', async (payload, respond) => {
-  const result = await expensiveAsyncOperation();
-  respond({ result });
+    const result = await expensiveAsyncOperation();
+    respond({ result });
 });
 ```
 
@@ -425,25 +455,26 @@ parley.on('process', async (payload, respond) => {
 For more details, see
 [Performance Best Practices](./ARCHITECTURE.md#performance-considerations). For
 batching messages in request-response pattern, see
-[Batch Request-Response](./patterns/request-response.md#batch-request-response).
+[Batch Request-Response](./patterns/request-response.md#variation-3-batch-request-response).
 
 ---
 
 ## Debugging Strategies
 
-### Enable Debug Mode
+### Enable Debug Logging
 
 ```javascript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://child.com'],
-    debug: true, // Enables detailed logging
+    logLevel: 'debug', // Logs messages, rejections and errors
 });
 ```
 
 ### Monitor System Events
 
 ```javascript
-import { SYSTEM_EVENTS } from 'parley-js';
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 // Connection events
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
@@ -455,21 +486,28 @@ parley.onSystem(SYSTEM_EVENTS.DISCONNECTED, (event) => {
 });
 
 // Message events
+// (system events do not include payloads)
 parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
-    console.log('Sent message:', event.messageType, event.payload);
+    console.log('Sent message:', event.messageType, event.messageId);
 });
 
 parley.onSystem(SYSTEM_EVENTS.MESSAGE_RECEIVED, (event) => {
-    console.log('Received message:', event.messageType, event.payload);
+    console.log('Received message:', event.messageType, 'from', event.origin);
 });
 
 // Error events
 parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
-    console.log('Timeout:', event.messageId);
+    console.log('Timeout:', event.messageType, event.timeoutMs);
 });
 
+// Local handler errors and rejected inbound messages
 parley.onSystem(SYSTEM_EVENTS.ERROR, (event) => {
-    console.error('Error:', event.error);
+    console.error('Error:', event.code, event.message);
+});
+
+// Handshake progress (1.1.0)
+parley.onSystem(SYSTEM_EVENTS.HANDSHAKE_FAILED, (event) => {
+    console.error('Handshake failed:', event.targetId, event.error);
 });
 ```
 
@@ -491,10 +529,12 @@ window.addEventListener('message', (event) => {
 ```javascript
 // Check if connected
 console.log('Connected targets:', parley.getConnectedTargets());
-
-// Check registered handlers
-console.log('Registered handlers:', parley.getRegisteredHandlers());
+console.log('Child connected:', parley.isConnected('child'));
+console.log('Child state:', parley.getConnectionState('child'));
 ```
+
+There is no API for listing registered handlers. A request whose type has no
+handler on the receiving side rejects with `ERR_NO_HANDLER`.
 
 ---
 
@@ -503,18 +543,22 @@ console.log('Registered handlers:', parley.getRegisteredHandlers());
 ### Mistake: Using wildcard origin
 
 ```javascript
-// DANGEROUS - accepts messages from ANY origin
+// REJECTED - throws Error('Configuration error: ...')
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['*'],
 });
 ```
 
-**Why it's wrong**: Security vulnerability - malicious sites can send messages
+**Why it's wrong**: Accepting any origin would let any site send messages, so
+`Parley.create()` rejects any entry containing `'*'` (including patterns such as
+`'*.example.com'`), as well as `'null'`, empty strings, and an empty list.
 
 **Correct approach**: Always specify exact origins
 
 ```javascript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted-domain.com'],
 });
 ```
@@ -523,12 +567,15 @@ const parley = Parley.create({
 
 ```javascript
 // Wrong - send before connected
-const parley = Parley.create({ allowedOrigins: ['https://child.com'] });
-parley.connect(iframe.contentWindow, 'child'); // No await!
-await parley.send('hello', {}); // Might fail!
+const parley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.com'],
+});
+parley.connect(iframe, 'child'); // No await!
+await parley.send('hello', {}, { targetId: 'child' }); // ERR_TARGET_NOT_CONNECTED
 
 // Correct - wait for connection
-await parley.connect(iframe.contentWindow, 'child');
+await parley.connect(iframe, 'child');
 await parley.send('hello', {}, { targetId: 'child' });
 ```
 
@@ -551,10 +598,18 @@ parley.on('get-data', (payload, respond) => {
 ### Mistake: Sending non-serializable data
 
 ```javascript
-// Wrong - functions aren't serializable
+// Wrong - functions are silently dropped by the JSON clone
 await parley.send('update', {
-    callback: () => console.log('done'), // Error!
+    callback: () => console.log('done'), // Arrives as missing
 });
+
+// Wrong - circular references make send() reject with a SerializationError
+// (ERR_SERIALIZATION_CIRCULAR_REFERENCE)
+const node = { name: 'a' };
+node.self = node;
+await parley.send('update', node);
+
+// Wrong - File, Blob, ArrayBuffer, Map and Set arrive as {}
 
 // Correct - only send plain data
 await parley.send('update', {
@@ -567,14 +622,20 @@ await parley.send('update', {
 ```javascript
 // Wrong - memory leak
 function setupParley() {
-    const parley = Parley.create({ allowedOrigins: ['https://child.com'] });
+    const parley = Parley.create({
+        targetType: 'iframe',
+        allowedOrigins: ['https://child.com'],
+    });
     parley.on('message', handleMessage);
     // Never cleaned up!
 }
 
 // Correct - clean up when done
 function setupParley() {
-    const parley = Parley.create({ allowedOrigins: ['https://child.com'] });
+    const parley = Parley.create({
+        targetType: 'iframe',
+        allowedOrigins: ['https://child.com'],
+    });
     parley.on('message', handleMessage);
 
     // Cleanup function
@@ -594,7 +655,8 @@ cleanup();
 
 If you're still experiencing problems:
 
-1. **Check the examples**: See [examples/](../examples/) for working code
+1. **Check the examples**: See the `examples/` folder in the repository and
+   [Examples](./EXAMPLES.md) for working code
 2. **Review the API docs**: See [API Reference](./API.md) for complete
    documentation
 3. **Search existing issues**: Check
@@ -604,7 +666,7 @@ If you're still experiencing problems:
     - Browser and version
     - Minimal reproduction code
     - Error messages
-    - Debug logs (with `debug: true`)
+    - Debug logs (with `logLevel: 'debug'`)
 
 ---
 

@@ -291,11 +291,14 @@ describe('Inbound message hardening', () => {
     });
 
     describe('configuration validation', () => {
-        it.each([['*'], ['null'], ['NULL'], ['']])('rejects allowedOrigins entry %j', (origin) => {
-            expect(() => Parley.create({ targetType: 'window', allowedOrigins: [origin] })).toThrow(
-                /Configuration error/
-            );
-        });
+        it.each([['*'], ['*.example.com'], ['https://*.example.com'], ['null'], ['NULL'], ['']])(
+            'rejects allowedOrigins entry %j',
+            (origin) => {
+                expect(() =>
+                    Parley.create({ targetType: 'window', allowedOrigins: [origin] })
+                ).toThrow(/Configuration error/);
+            }
+        );
 
         it('rejects an invalid timeout', () => {
             expect(() => Parley.create({ targetType: 'window', timeout: -1 })).toThrow(

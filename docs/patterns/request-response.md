@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Code Patterns](./index.md) > Request-Response Pattern
+[Home](../index.md) > [Code Patterns](./index.md) > Request-Response Pattern
 
 # Request-Response Pattern
 
@@ -53,8 +53,8 @@ Avoid request-response when:
 
 - Sending notifications that don't require acknowledgment (use fire-and-forget
   instead)
-- Broadcasting events to multiple listeners (use broadcast() with
-  expectsResponse: false)
+- Broadcasting events to every connected target (use broadcast(), which never
+  waits for or receives responses)
 - The response time might be very long (consider polling or event-based
   approaches)
 - You don't care if the message was received (use expectsResponse: false)
@@ -70,39 +70,45 @@ waiting.
 **Requester Side (Parent Window)**:
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
 });
 
-// Connect to iframe
+// Connect to iframe. No 'load' listener is needed: the child re-sends the
+// handshake until the parent acknowledges it.
 const iframe = document.getElementById('child-iframe');
-iframe.addEventListener('load', async () => {
-    await parley.connect(iframe, 'child');
+await parley.connect(iframe, 'child');
 
-    // Send request and wait for response
-    try {
-        const response = await parley.send(
-            'getUserData',
-            {
-                userId: 123,
-            },
-            {
-                targetId: 'child',
-                timeout: 5000,
-            }
-        );
-
-        console.log('User data:', response.user);
-    } catch (error) {
-        if (error.code === 'ERR_TIMEOUT_NO_RESPONSE') {
-            console.error('Request timed out');
-        } else {
-            console.error('Request failed:', error.message);
+// Send request and wait for response
+try {
+    const response = await parley.send(
+        'getUserData',
+        {
+            userId: 123,
+        },
+        {
+            targetId: 'child',
+            timeout: 5000,
         }
+    );
+
+    console.log('User data:', response.user);
+} catch (error) {
+    if (error.code === 'ERR_TIMEOUT_NO_RESPONSE') {
+        console.error('Request timed out');
+    } else if (error.code === 'ERR_HANDLER_ERROR') {
+        // The child's handler threw. The message is 'Handler error' unless
+        // the child was created with exposeHandlerErrors: true.
+        console.error('Remote handler failed:', error.message);
+    } else if (error.code === 'ERR_NO_HANDLER') {
+        console.error('Child has no handler for getUserData');
+    } else {
+        console.error('Request failed:', error.message);
     }
-});
+}
 ```
 
 For complete send() options and error codes, see
@@ -113,9 +119,10 @@ timeout errors, see
 **Responder Side (Child Iframe)**:
 
 ```typescript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: [window.location.origin],
 });
 
@@ -287,14 +294,16 @@ if (response.success && response.user) {
 parley.on<GetUserRequest>('getUserData', async (payload, respond) => {
     const user = await fetchUser(payload.userId);
 
-    respond<GetUserResponse>({
+    // respond() is not generic; annotate the value instead
+    const response: GetUserResponse = {
         success: true,
         user: {
             id: user.id,
             name: user.name,
             email: user.email,
         },
-    });
+    };
+    respond(response);
 });
 ```
 
@@ -324,7 +333,16 @@ For schema registration, see
    data.
 
 If the responder doesn't call respond() within the timeout period (default
-5000ms), the Promise rejects with a TimeoutError.
+5000ms) and all configured `retries` are used up, the Promise rejects with a
+TimeoutError (`ERR_TIMEOUT_NO_RESPONSE`).
+
+If the responder's handler throws (or returns a rejected Promise), ParleyJS
+sends an error response automatically and the requester's `send()` rejects with
+a ParleyError whose code is `ERR_HANDLER_ERROR`. The message is the generic
+`'Handler error'` unless the responder was created with
+`exposeHandlerErrors: true`. If the responder has no handler for the type at
+all, `send()` rejects with `ERR_NO_HANDLER`. A handler's return value is
+ignored; only `respond()` sends data back.
 
 ### Why This Pattern Works
 
@@ -334,8 +352,9 @@ The request-response pattern simplifies cross-window RPC by:
 - **Promise-based API**: Natural async/await syntax instead of callback hell
 - **Timeout handling**: Built-in timeout detection prevents hanging requests
 - **Type safety**: TypeScript generics provide compile-time type checking
-- **Error propagation**: Errors in the handler can be caught and returned as
-  responses
+- **Error propagation**: Errors thrown in the handler reject the requester's
+  Promise with `ERR_HANDLER_ERROR`; errors you catch can be returned as
+  structured responses
 
 This eliminates the boilerplate of manually tracking pending requests,
 generating IDs, and managing timeouts.
@@ -451,15 +470,22 @@ parley.on('progress', (payload) => {
     updateProgressBar(payload.percent);
 });
 
-// Parent: Start long operation
+// Parent: Start long operation.
+// Payloads are JSON-cloned, so a File or Blob would arrive as {}.
+// Convert it to a serializable form (text, base64 string, plain array) first.
+const fileText = await largeFile.text();
 const result = await parley.send(
     'processLargeFile',
     {
-        file: largeFile,
+        file: { name: largeFile.name, content: fileText },
     },
     { targetId: 'child', timeout: 60000 }
 );
 ```
+
+Keep the serialized payload under the fixed 10 MB limit; larger payloads are
+rejected by `send()` with a ValidationError. Split very large data into several
+messages.
 
 ### Variation 3: Batch Request-Response
 
@@ -497,7 +523,21 @@ For performance considerations when sending many messages, see
 
 ### Variation 4: Request-Response with Retry
 
-Add automatic retry logic for failed requests:
+ParleyJS has built-in retries for timeouts: set `retries` in `Parley.create()`,
+in `register(type, { retries })`, or per call in `send()`. Each retry re-sends
+the same message (same message id) after another `timeout` period. There is no
+backoff, and only timeouts are retried:
+
+```typescript
+const response = await parley.send(
+    'getData',
+    { id: 123 },
+    { targetId: 'child', timeout: 3000, retries: 2 } // up to 3 attempts
+);
+```
+
+If you need a growing delay between attempts, or want to retry other failures,
+wrap `send()` in your own helper. This is optional application code:
 
 ```typescript
 async function sendWithRetry(type, payload, options = {}) {
@@ -514,7 +554,7 @@ async function sendWithRetry(type, payload, options = {}) {
             console.warn(`Attempt ${attempt} failed:`, error.message);
 
             if (attempt < maxRetries) {
-                // Wait before retry with exponential backoff
+                // Wait before retry with a linearly growing delay
                 await new Promise((resolve) =>
                     setTimeout(resolve, retryDelay * attempt)
                 );
@@ -553,6 +593,7 @@ import { describe, it, expect, vi } from 'vitest';
 describe('Request-Response Requester', () => {
     it('should send request and receive response', async () => {
         const parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin],
         });
 
@@ -582,6 +623,7 @@ describe('Request-Response Requester', () => {
 
     it('should handle timeout errors', async () => {
         const parley = Parley.create({
+            targetType: 'iframe',
             allowedOrigins: [window.location.origin],
         });
 
@@ -598,61 +640,61 @@ describe('Request-Response Requester', () => {
 
 ### Testing the Responder
 
+The simplest way to unit test a responder is to define the handler as a named
+function and call it directly with a mock `respond`. Register the same function
+with `parley.on()` in production code.
+
 ```typescript
+import { describe, it, expect, vi } from 'vitest';
+import type { MessageMetadata } from 'ignite-parleyjs';
+
+// Production code: parley.on('createUser', handleCreateUser);
+export async function handleCreateUser(
+    payload: { email?: string },
+    respond: (response: unknown) => void,
+    _metadata: MessageMetadata
+) {
+    if (!payload.email) {
+        respond({ success: false, error: 'Email required' });
+        return;
+    }
+    respond({ success: true });
+}
+
+const metadata: MessageMetadata = {
+    messageId: 'msg-1',
+    senderId: 'parent',
+    origin: 'https://app.example.com',
+    timestamp: Date.now(),
+    expectsResponse: true,
+};
+
 describe('Request-Response Responder', () => {
-    it('should respond to requests', async () => {
-        const parley = Parley.create({
-            allowedOrigins: [window.location.origin],
-        });
-
-        let respondCalled = false;
-        let responseData = null;
-
-        parley.on('getUser', async (payload, respond) => {
-            const user = await fetchUser(payload.userId);
-            responseData = { success: true, user };
-            respond(responseData);
-            respondCalled = true;
-        });
-
-        // Simulate receiving message
-        // (In actual tests, you'd trigger this through the message handler)
-
-        expect(respondCalled).toBe(true);
-        expect(responseData.success).toBe(true);
+    it('should respond to valid requests', async () => {
+        const respond = vi.fn();
+        await handleCreateUser({ email: 'a@example.com' }, respond, metadata);
+        expect(respond).toHaveBeenCalledWith({ success: true });
     });
 
     it('should validate input and respond with error', async () => {
-        const parley = Parley.create({
-            allowedOrigins: [window.location.origin],
+        const respond = vi.fn();
+        await handleCreateUser({}, respond, metadata);
+        expect(respond).toHaveBeenCalledWith({
+            success: false,
+            error: 'Email required',
         });
-
-        let responseData = null;
-
-        parley.on('createUser', (payload, respond) => {
-            if (!payload.email) {
-                responseData = { success: false, error: 'Email required' };
-                respond(responseData);
-                return;
-            }
-
-            responseData = { success: true };
-            respond(responseData);
-        });
-
-        // Test with invalid input
-        // responseData should contain error
-
-        expect(responseData.success).toBe(false);
-        expect(responseData.error).toBe('Email required');
     });
 });
 ```
 
+To exercise the full message path (handshake, protocol messages, responses), see
+the integration-test helpers described in
+[Testing Patterns](../TESTING_PATTERNS.md).
+
 For comprehensive testing strategies, see
 [Testing Patterns](../TESTING_PATTERNS.md) and [Testing Guide](../TESTING.md).
 For mocking request-response in tests, see
-[Testing Request-Response](../TESTING_PATTERNS.md#request-response).
+[Testing Request-Response](../TESTING_PATTERNS.md#testing-request-response).
 
 ## Related Patterns
 

@@ -1,68 +1,99 @@
 # Performance Optimization
 
-[Home](../../index.md) > [Documentation](./index.md) >
+[Home](../index.md) > [Documentation](../FRAMEWORK_REFERENCE.md) >
 [Performance](./index.md) > Optimization
 
 ## Overview
 
-ParleyJS is designed for high-performance inter-context communication. This
-guide covers optimization techniques to maximize throughput, minimize latency,
-and reduce memory usage in your applications.
+ParleyJS is designed for low-overhead communication between windows and iframes.
+This guide covers techniques to maximize throughput, minimize latency, and
+reduce memory usage in your applications.
+
+The code samples in this guide that are not ParleyJS API calls (batchers,
+debouncers, queues, wrappers) are application code you can adapt. Any
+"slow"/"fast" comparisons describe the general direction of the effect, not
+measured numbers; measure your own application before and after a change.
 
 ## Table of Contents
 
-1. [Message Batching](#message-batching)
-2. [Payload Size Optimization](#payload-size-optimization)
-3. [Connection Pooling](#connection-pooling)
-4. [Memory Management](#memory-management)
-5. [Debouncing and Throttling](#debouncing-and-throttling)
-6. [Transferable Objects](#transferable-objects)
-7. [Performance Profiling](#performance-profiling)
-8. [Benchmarking](#benchmarking)
-9. [Optimization Checklist](#optimization-checklist)
+1. [What ParleyJS Already Does](#what-parleyjs-already-does)
+2. [Message Batching](#message-batching)
+3. [Payload Size Optimization](#payload-size-optimization)
+4. [Instance and Connection Reuse](#instance-and-connection-reuse)
+5. [Memory Management](#memory-management)
+6. [Debouncing and Throttling](#debouncing-and-throttling)
+7. [Binary Data and Large Payloads](#binary-data-and-large-payloads)
+8. [Performance Profiling](#performance-profiling)
+9. [Benchmarking](#benchmarking)
+10. [Optimization Checklist](#optimization-checklist)
+
+---
+
+## What ParleyJS Already Does
+
+Version 1.1.0 includes several hot-path improvements you get without any code
+changes:
+
+- **Single serialization pass**: each `send()` serializes the payload once
+  (earlier versions serialized it three times). Measured with `npm run bench`,
+  `send()` with a 1 KB payload went from about 43,000 to about 90,000
+  operations/second, and a 1 MB payload from about 21 ms to about 9 ms.
+- **Non-blocking system listeners**: listeners for `system:message_sent` and
+  `system:message_received` are not awaited, so monitoring code never delays
+  delivery or your handlers.
+- **Optional payload cloning in low-level helpers**: `createMessage()` and
+  `createResponse()` accept `clonePayload: false` to skip the defensive copy
+  when you build protocol messages yourself from an already-sanitized payload.
+  `send()` does not need this option.
 
 ---
 
 ## Message Batching
 
-Batching multiple operations into single messages reduces overhead and improves
-throughput.
+Batching multiple operations into a single message reduces per-message overhead
+(serialization, validation, postMessage dispatch, and response tracking).
 
 ### Problem: High Message Frequency
 
 ```typescript
-// SLOW - 1000 individual messages
+// SLOWER - 1000 individual round trips
 for (let i = 0; i < 1000; i++) {
-    await parley.send('process-item', { id: i, data: items[i] });
+    await parley.send(
+        'process-item',
+        { id: i, data: items[i] },
+        { targetId: 'child' }
+    );
 }
 ```
 
 ### Solution: Batch Processing
 
 ```typescript
-// FAST - Single batched message
-await parley.send('process-batch', {
-    items: items.map((data, id) => ({ id, data })),
-});
+// FASTER - Single batched message
+await parley.send(
+    'process-batch',
+    { items: items.map((data, id) => ({ id, data })) },
+    { targetId: 'child' }
+);
 ```
 
 ### Implementation
 
 ```typescript
-// Sender: Accumulate items and send in batches
+// Sender: Accumulate items and send in batches (application code)
 class BatchProcessor {
-    private batch: any[] = [];
+    private batch: unknown[] = [];
     private batchSize = 100;
-    private timeout: NodeJS.Timeout | null = null;
+    private timer: ReturnType<typeof setTimeout> | null = null;
 
-    async addItem(item: any) {
+    async addItem(item: unknown) {
         this.batch.push(item);
 
         if (this.batch.length >= this.batchSize) {
             await this.flush();
-        } else if (!this.timeout) {
+        } else if (!this.timer) {
             // Auto-flush after 100ms of inactivity
-            this.timeout = setTimeout(() => this.flush(), 100);
+            this.timer = setTimeout(() => this.flush(), 100);
         }
     }
 
@@ -71,12 +102,12 @@ class BatchProcessor {
 
         const items = this.batch.splice(0, this.batch.length);
 
-        if (this.timeout) {
-            clearTimeout(this.timeout);
-            this.timeout = null;
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
         }
 
-        await parley.send('process-batch', { items });
+        await parley.send('process-batch', { items }, { targetId: 'child' });
     }
 }
 
@@ -100,65 +131,74 @@ parley.on('process-batch', async (payload, respond) => {
 });
 ```
 
-**Performance Gain**: 10-50x throughput improvement for high-frequency
-operations.
+Keep each batch well under the 10 MB serialized payload limit.
 
 ---
 
 ## Payload Size Optimization
 
-Minimize payload size to reduce serialization overhead and network transfer
-time.
+Smaller payloads reduce serialization and structured-clone cost on both sides.
 
 ### Technique 1: Send Only What's Needed
 
 ```typescript
-// SLOW - Sending entire user object (5KB)
-await parley.send('update-name', {
-    user: {
-        id: 123,
-        username: 'alice',
-        email: 'alice@example.com',
-        profile: {
-            /* large nested object */
+// SLOWER - Sending the entire user object
+await parley.send(
+    'update-name',
+    {
+        user: {
+            id: 123,
+            username: 'alice',
+            email: 'alice@example.com',
+            profile: {
+                /* large nested object */
+            },
+            settings: {
+                /* large nested object */
+            },
         },
-        settings: {
-            /* large nested object */
-        },
+        newName: 'Alice Smith',
     },
-    newName: 'Alice Smith',
-});
+    { targetId: 'child' }
+);
 
-// FAST - Send only required fields (200 bytes)
-await parley.send('update-name', {
-    userId: 123,
-    newName: 'Alice Smith',
-});
+// FASTER - Send only required fields
+await parley.send(
+    'update-name',
+    { userId: 123, newName: 'Alice Smith' },
+    { targetId: 'child' }
+);
 ```
 
 ### Technique 2: Compress Large Payloads
+
+Payloads are JSON-cloned, so binary output (such as a `Uint8Array`) must be
+converted to a JSON-friendly form before sending. A base64 string is more
+compact than a number array.
 
 ```typescript
 import pako from 'pako';
 
 // Compress before sending
-async function sendCompressed(channel: string, data: any) {
-    const json = JSON.stringify(data);
-    const compressed = pako.deflate(json);
+async function sendCompressed(type: string, data: unknown, targetId: string) {
+    const compressed = pako.deflate(JSON.stringify(data));
+    let binary = '';
+    for (const byte of compressed) binary += String.fromCharCode(byte);
 
-    await parley.send(channel, {
-        compressed: true,
-        data: Array.from(compressed), // Convert to regular array
-    });
+    await parley.send(
+        type,
+        { compressed: true, data: btoa(binary) },
+        { targetId }
+    );
 }
 
 // Decompress on receive
 parley.on('data-channel', (payload, respond) => {
     if (payload.compressed) {
-        const decompressed = pako.inflate(new Uint8Array(payload.data), {
-            to: 'string',
-        });
-        const data = JSON.parse(decompressed);
+        const bytes = Uint8Array.from(atob(payload.data), (c) =>
+            c.charCodeAt(0)
+        );
+        const data = JSON.parse(pako.inflate(bytes, { to: 'string' }));
         processData(data);
     } else {
         processData(payload.data);
@@ -168,17 +208,19 @@ parley.on('data-channel', (payload, respond) => {
 });
 ```
 
-### Technique 3: Use Efficient Data Structures
+Compression costs CPU time; it pays off only for large, repetitive payloads.
+
+### Technique 3: Use Compact Data Structures
 
 ```typescript
-// SLOW - Array of objects (verbose JSON)
+// Array of objects (keys repeated per row)
 const data = [
     { id: 1, name: 'Alice', score: 95 },
     { id: 2, name: 'Bob', score: 87 },
     { id: 3, name: 'Carol', score: 92 },
 ];
 
-// FAST - Columnar format (50% smaller)
+// Columnar format (keys sent once) - smaller for large row counts
 const optimized = {
     ids: [1, 2, 3],
     names: ['Alice', 'Bob', 'Carol'],
@@ -186,33 +228,43 @@ const optimized = {
 };
 ```
 
-**Performance Gain**: 2-5x reduction in serialization time for large payloads.
-
 ---
 
-## Connection Pooling
+## Instance and Connection Reuse
 
-Reuse Parley instances and connections instead of creating new ones.
+Create one Parley instance per target type and keep connections open for as long
+as you need them. Each `connect()` performs a handshake, and each connection
+runs its own heartbeat.
 
 ### Anti-Pattern: Creating New Instances
 
 ```typescript
-// SLOW - Creates new connection every time
-async function sendMessage(data: any) {
-    const parley = new Parley({ target: worker });
-    await parley.send('process', data);
-    parley.destroy(); // Tears down connection
+// SLOWER - New instance and handshake for every message
+async function sendMessage(data: unknown) {
+    const parley = Parley.create({ targetType: 'iframe' });
+    await parley.connect(iframe, 'child');
+    await parley.send('process', data, { targetId: 'child' });
+    parley.destroy(); // Tears down the connection
 }
 ```
+
+The other side would also have to accept a new handshake for each instance, so
+this pattern is fragile as well as slow.
 
 ### Best Practice: Reuse Instances
 
 ```typescript
-// FAST - Single reusable connection
-const parley = new Parley({ target: worker });
+import { Parley } from 'ignite-parleyjs';
 
-async function sendMessage(data: any) {
-    return parley.send('process', data);
+// One instance, one connection
+const parley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: ['https://child.example.com'],
+});
+await parley.connect(iframe, 'child');
+
+async function sendMessage(data: unknown) {
+    return parley.send('process', data, { targetId: 'child' });
 }
 
 // Cleanup on app shutdown
@@ -221,47 +273,35 @@ window.addEventListener('beforeunload', () => {
 });
 ```
 
-### Worker Pool Pattern
+### Distributing Work Across Several Iframes
+
+One instance can connect to several iframes. To spread work across them, pick a
+`targetId` per request. ParleyJS does not support Web Workers; use iframes (or
+popups with a `targetType: 'window'` instance).
 
 ```typescript
-class WorkerPool {
-    private workers: Parley[] = [];
-    private currentIndex = 0;
+// Round-robin over connected iframes (application code)
+let next = 0;
 
-    constructor(size: number = 4) {
-        for (let i = 0; i < size; i++) {
-            const worker = new Worker('/worker.js');
-            this.workers.push(new Parley({ target: worker }));
-        }
-    }
+async function sendToNextFrame(type: string, payload: unknown) {
+    const targets = parley.getConnectedTargets();
+    if (targets.length === 0) throw new Error('No connected frames');
 
-    async send(channel: string, payload: any) {
-        // Round-robin distribution
-        const parley = this.workers[this.currentIndex];
-        this.currentIndex = (this.currentIndex + 1) % this.workers.length;
-
-        return parley.send(channel, payload);
-    }
-
-    destroy() {
-        this.workers.forEach((p) => p.destroy());
-    }
+    const targetId = targets[next % targets.length];
+    next++;
+    return parley.send(type, payload, { targetId });
 }
 
-// Usage
-const pool = new WorkerPool(4); // 4 workers
-
 await Promise.all([
-    pool.send('task', data1), // Worker 0
-    pool.send('task', data2), // Worker 1
-    pool.send('task', data3), // Worker 2
-    pool.send('task', data4), // Worker 3
-    pool.send('task', data5), // Worker 0 (round-robin)
+    sendToNextFrame('task', data1),
+    sendToNextFrame('task', data2),
+    sendToNextFrame('task', data3),
 ]);
 ```
 
-**Performance Gain**: Eliminates connection setup overhead (10-100ms per
-connection).
+Note that `send()` without a `targetId` goes to every connected target and
+resolves with the first response, which duplicates the work. Always pass a
+`targetId` when you want exactly one target to handle a request.
 
 ---
 
@@ -282,73 +322,75 @@ const unsubscribe = parley.on('temporary-event', handler);
 unsubscribe();
 ```
 
-### Technique 2: Clear References to Large Objects
+`onSystem()` and `onAnalyticsEvent()` also return unsubscribe functions.
+
+### Technique 2: Disconnect and Destroy
+
+```typescript
+// Close a single connection (notifies the peer, stops its heartbeat)
+await parley.disconnect('child');
+
+// Tear down everything: rejects pending requests, removes listeners,
+// emits system:disconnected (reason 'destroyed') per target
+parley.destroy();
+```
+
+### Technique 3: Don't Hold on to Large Payloads
 
 ```typescript
 parley.on('process-image', async (payload, respond) => {
-    // Process large image data
-    const processed = await processImage(payload.imageData);
-
-    respond({ success: true });
-
-    // Clear reference to allow garbage collection
-    payload.imageData = null;
-    processed = null;
+    const result = await processImage(payload.imageData);
+    respond({ success: true, width: result.width, height: result.height });
+    // Avoid storing payload or result in long-lived structures
 });
 ```
 
-### Technique 3: Use WeakMap for Caching
+### Technique 4: Bound Your Caches
 
 ```typescript
-// BAD - Prevents garbage collection
-const cache = new Map<string, any>();
+// BAD - Grows forever
+const cache = new Map<string, unknown>();
 
-parley.on('get-data', (payload, respond) => {
-    if (cache.has(payload.key)) {
-        respond(cache.get(payload.key));
-    } else {
-        const data = fetchData(payload.key);
-        cache.set(payload.key, data);
-        respond(data);
+// BETTER - Simple size-bounded cache (application code)
+const MAX_ENTRIES = 500;
+
+parley.on('get-data', async (payload, respond) => {
+    if (!cache.has(payload.key)) {
+        if (cache.size >= MAX_ENTRIES) {
+            const oldestKey = cache.keys().next().value;
+            cache.delete(oldestKey);
+        }
+        cache.set(payload.key, await fetchData(payload.key));
     }
-});
-
-// GOOD - Allows garbage collection
-const cache = new WeakMap<object, any>();
-
-parley.on('get-data', (payload, respond) => {
-    const keyObj = { key: payload.key };
-
-    if (cache.has(keyObj)) {
-        respond(cache.get(keyObj));
-    } else {
-        const data = fetchData(payload.key);
-        cache.set(keyObj, data);
-        respond(data);
-    }
+    respond(cache.get(payload.key));
 });
 ```
 
-### Technique 4: Implement Message Queue Limits
+### Technique 5: Limit Concurrent Requests
+
+ParleyJS has an opt-in outgoing rate limit
+(`rateLimit: { enabled: true, messagesPerSecond }`). When it is exceeded,
+`send()` rejects with `ERR_SECURITY_RATE_LIMITED` instead of queueing. If you
+would rather queue, wrap `send()` yourself:
 
 ```typescript
-class RateLimitedParley {
+// Concurrency-limited queue (application code)
+class QueuedSender {
     private queue: Array<() => Promise<void>> = [];
     private maxQueue = 100;
     private processing = 0;
     private maxConcurrent = 10;
 
-    async send(channel: string, payload: any) {
+    send(type: string, payload: unknown, targetId: string) {
         if (this.queue.length >= this.maxQueue) {
-            throw new Error('Queue full - message dropped');
+            return Promise.reject(new Error('Queue full - message dropped'));
         }
 
         return new Promise((resolve, reject) => {
             this.queue.push(async () => {
                 try {
                     this.processing++;
-                    const result = await parley.send(channel, payload);
-                    resolve(result);
+                    resolve(await parley.send(type, payload, { targetId }));
                 } catch (error) {
                     reject(error);
                 } finally {
@@ -370,29 +412,29 @@ class RateLimitedParley {
 }
 ```
 
-**Performance Gain**: Prevents memory leaks and reduces GC pauses.
-
 ---
 
 ## Debouncing and Throttling
 
-Control message frequency for events that fire rapidly.
+Control message frequency for events that fire rapidly. For notifications that
+need no reply, use `send()` with `expectsResponse: false` (one target or all
+targets) or `broadcast()` (all targets, returns `void`).
 
 ### Debouncing: Send After Inactivity
 
 ```typescript
 class DebouncedSender {
-    private timeout: NodeJS.Timeout | null = null;
+    private timer: ReturnType<typeof setTimeout> | null = null;
     private delay = 300;
 
-    send(channel: string, payload: any) {
-        if (this.timeout) {
-            clearTimeout(this.timeout);
+    send(type: string, payload: unknown) {
+        if (this.timer) {
+            clearTimeout(this.timer);
         }
 
-        this.timeout = setTimeout(() => {
-            parley.emit(channel, payload);
-            this.timeout = null;
+        this.timer = setTimeout(() => {
+            parley.broadcast(type, payload);
+            this.timer = null;
         }, this.delay);
     }
 }
@@ -412,11 +454,14 @@ class ThrottledSender {
     private lastSent = 0;
     private interval = 100; // Max 10 messages per second
 
-    send(channel: string, payload: any) {
+    send(type: string, payload: unknown) {
         const now = Date.now();
 
         if (now - this.lastSent >= this.interval) {
-            parley.emit(channel, payload);
+            parley.send(type, payload, {
+                targetId: 'child',
+                expectsResponse: false,
+            });
             this.lastSent = now;
         }
     }
@@ -434,110 +479,89 @@ document.addEventListener('mousemove', (e) => {
 
 ```typescript
 class SmartSender {
-    private timeout: NodeJS.Timeout | null = null;
+    private timer: ReturnType<typeof setTimeout> | null = null;
     private lastSent = 0;
     private throttleMs = 100;
     private debounceMs = 300;
 
-    send(channel: string, payload: any) {
+    send(type: string, payload: unknown) {
         const now = Date.now();
 
-        // Clear existing debounce
-        if (this.timeout) {
-            clearTimeout(this.timeout);
+        if (this.timer) {
+            clearTimeout(this.timer);
         }
 
-        // Throttle: Send immediately if enough time has passed
         if (now - this.lastSent >= this.throttleMs) {
-            parley.emit(channel, payload);
+            // Throttle: send immediately if enough time has passed
+            parley.broadcast(type, payload);
             this.lastSent = now;
         } else {
-            // Debounce: Schedule send
-            this.timeout = setTimeout(() => {
-                parley.emit(channel, payload);
+            // Debounce: make sure the last value is still delivered
+            this.timer = setTimeout(() => {
+                parley.broadcast(type, payload);
                 this.lastSent = Date.now();
-                this.timeout = null;
+                this.timer = null;
             }, this.debounceMs);
         }
     }
 }
 ```
 
-**Performance Gain**: 10-100x reduction in message frequency for high-rate
-events.
+ParleyJS also exports small `debounce` and `throttle` utilities you can use
+instead of writing your own.
 
 ---
 
-## Transferable Objects
+## Binary Data and Large Payloads
 
-Transfer ownership of ArrayBuffers and other transferable objects for zero-copy
-performance.
+ParleyJS does not support Transferable objects or zero-copy transfer. Every
+payload is sanitized with a JSON round-trip before it is posted, so:
 
-### Without Transfer (Copy)
+- `ArrayBuffer`, typed arrays, `Blob`, `File`, `ImageBitmap`, `Map` and `Set`
+  arrive as empty objects (`{}`)
+- `Date` values arrive as strings
+- functions, `undefined` and symbols are dropped
+- circular references and `BigInt` values make `send()` reject with a
+  `SerializationError`
+- payloads larger than 10 MB serialized are rejected with a `ValidationError`
+  (`ERR_VALIDATION_SCHEMA_MISMATCH`); the limit is fixed
+
+### Converting Binary Data
+
+Convert binary data to a JSON-friendly form before sending:
 
 ```typescript
-// SLOW - Copies 10MB of data
-const buffer = new ArrayBuffer(10 * 1024 * 1024);
-await parley.send('process-buffer', { buffer });
+// Sender: encode bytes as base64
+function toBase64(bytes: Uint8Array): string {
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+}
 
-// Original buffer is still accessible (data was copied)
-console.log(buffer.byteLength); // 10485760
-```
-
-### With Transfer (Zero-Copy)
-
-```typescript
-// FAST - Transfers ownership (zero-copy)
-const buffer = new ArrayBuffer(10 * 1024 * 1024);
+const bytes = new Uint8Array(await file.arrayBuffer());
 await parley.send(
-    'process-buffer',
-    { buffer },
-    {
-        transfer: [buffer],
-    }
+    'upload-chunk',
+    { name: file.name, data: toBase64(bytes) },
+    { targetId: 'uploader' }
 );
 
-// Original buffer is now detached
-console.log(buffer.byteLength); // 0 (neutered)
-```
-
-### Receiver Side
-
-```typescript
-parley.on('process-buffer', (payload, respond) => {
-    // Received buffer without copying
-    const { buffer } = payload;
-
-    const view = new Uint8Array(buffer);
-    // Process buffer...
-
-    // Transfer back if needed
-    respond({ result: 'done', buffer }, { transfer: [buffer] });
+// Receiver: decode back to bytes
+parley.on('upload-chunk', (payload, respond) => {
+    const bytes = Uint8Array.from(atob(payload.data), (c) => c.charCodeAt(0));
+    storeChunk(payload.name, bytes);
+    respond({ received: bytes.length });
 });
 ```
 
-### Transferable Types
+Base64 adds about 33% to the size. For large files, split the data into chunks
+that stay well under the 10 MB limit, or upload the file to your server and send
+only an ID or URL.
 
-```typescript
-// All transferable types
-const transferables = [
-    new ArrayBuffer(1024),
-    new MessagePort(),
-    new ImageBitmap(),
-    new OffscreenCanvas(100, 100),
-];
+### Keep Payloads Small
 
-await parley.send(
-    'process',
-    { data: transferables },
-    {
-        transfer: transferables,
-    }
-);
-```
-
-**Performance Gain**: 100-1000x faster for large binary data (no copying
-overhead).
+Large payloads cost time on both sides (serialization, cloning, parsing). Where
+possible, send references (IDs, URLs) and let the receiver fetch the data it
+needs.
 
 ---
 
@@ -545,37 +569,50 @@ overhead).
 
 Measure and identify bottlenecks in your ParleyJS usage.
 
-### Built-in Performance Monitoring
+### Built-in Timing Events
 
 ```typescript
-const parley = new Parley({ debug: true });
+import { Parley, SYSTEM_EVENTS } from 'ignite-parleyjs';
 
-// Enable performance marks
-parley.on('message:sent', (event) => {
-    performance.mark(`parley-send-${event.messageId}`);
+const parley = Parley.create({
+    targetType: 'iframe',
+    logLevel: 'debug', // development only
 });
 
-parley.on('message:received', (event) => {
-    performance.mark(`parley-receive-${event.messageId}`);
-    performance.measure(
-        `parley-roundtrip-${event.messageId}`,
-        `parley-send-${event.messageId}`,
-        `parley-receive-${event.messageId}`
+const latencies: number[] = [];
+
+// Round-trip time for every request that received a response
+parley.onSystem(SYSTEM_EVENTS.RESPONSE_RECEIVED, (event) => {
+    latencies.push(event.duration);
+});
+
+// Count messages by type
+parley.onSystem(SYSTEM_EVENTS.MESSAGE_SENT, (event) => {
+    performance.mark(`parley-send-${event.messageType}`);
+});
+
+parley.onSystem(SYSTEM_EVENTS.TIMEOUT, (event) => {
+    console.warn(
+        `${event.messageType} timed out after ${event.timeoutMs}ms ` +
+            `(${event.retriesAttempted} retries)`
     );
 });
 
-// Analyze measurements
-const measures = performance.getEntriesByType('measure');
-const avgLatency =
-    measures.reduce((sum, m) => sum + m.duration, 0) / measures.length;
-console.log('Average round-trip latency:', avgLatency, 'ms');
+// Later
+const avg = latencies.reduce((sum, d) => sum + d, 0) / latencies.length;
+console.log('Average round-trip latency:', avg, 'ms');
 ```
+
+With `analyticsEnabled: true`, `onAnalyticsEvent()` delivers the same
+information as analytics events (`response_received` events include `duration`).
 
 ### Custom Performance Wrapper
 
 ```typescript
+import { Parley } from 'ignite-parleyjs';
+
+// Application code that wraps an existing instance
 class PerformanceParley {
-    private parley: Parley;
     private stats = {
         messagesSent: 0,
         messagesReceived: 0,
@@ -583,16 +620,18 @@ class PerformanceParley {
         errors: 0,
     };
 
-    constructor(config: ParleyConfig) {
-        this.parley = new Parley(config);
-    }
+    constructor(private parley: Parley) {}
 
-    async send(channel: string, payload: any, options?: SendOptions) {
+    async send(
+        type: string,
+        payload: unknown,
+        options?: { targetId?: string; timeout?: number }
+    ) {
         const start = performance.now();
 
         try {
             this.stats.messagesSent++;
-            const result = await this.parley.send(channel, payload, options);
+            const result = await this.parley.send(type, payload, options);
             this.stats.messagesReceived++;
             this.stats.totalLatency += performance.now() - start;
             return result;
@@ -609,38 +648,43 @@ class PerformanceParley {
             errorRate: this.stats.errors / this.stats.messagesSent,
         };
     }
-
-    resetStats() {
-        this.stats = {
-            messagesSent: 0,
-            messagesReceived: 0,
-            totalLatency: 0,
-            errors: 0,
-        };
-    }
 }
 
 // Usage
-const parley = new PerformanceParley({ target: worker });
+const parley = Parley.create({ targetType: 'iframe' });
+await parley.connect(iframe, 'child');
 
-await parley.send('task', data);
-console.log(parley.getStats());
-// { messagesSent: 1, messagesReceived: 1, avgLatency: 15.2, errorRate: 0 }
+const monitored = new PerformanceParley(parley);
+await monitored.send('task', data, { targetId: 'child' });
+console.log(monitored.getStats());
 ```
 
 ---
 
 ## Benchmarking
 
-Compare different optimization strategies.
+### Library Benchmarks
 
-### Benchmark Framework
+The repository ships micro-benchmarks for the message hot path in
+`tests/bench/hot-path.bench.ts` (fire-and-forget `send()` with 1 KB and 1 MB
+payloads, and inbound dispatch to one and five targets):
+
+```bash
+npm run bench
+```
+
+Measured for 1.1.0: `send()` with a 1 KB payload runs at about 90,000
+operations/second, and with a 1 MB payload takes about 9 ms. These run in
+happy-dom rather than a real browser, so use them to compare versions and
+payload sizes, not as absolute browser numbers.
+
+### Benchmarking Your Own Message Paths
 
 ```typescript
 async function benchmark(
     name: string,
     fn: () => Promise<void>,
-    iterations = 1000
+    iterations = 10
 ) {
     const start = performance.now();
 
@@ -650,49 +694,29 @@ async function benchmark(
 
     const duration = performance.now() - start;
     const avgTime = duration / iterations;
-    const opsPerSec = 1000 / avgTime;
 
-    console.log(`${name}:
-        Total: ${duration.toFixed(2)}ms
-        Average: ${avgTime.toFixed(2)}ms
-        Throughput: ${opsPerSec.toFixed(0)} ops/sec
-    `);
+    console.log(
+        `${name}: total ${duration.toFixed(2)}ms, ` +
+            `average ${avgTime.toFixed(2)}ms, ` +
+            `${(1000 / avgTime).toFixed(0)} ops/sec`
+    );
 }
 
 // Compare batched vs individual sends
-await benchmark(
-    'Individual sends',
-    async () => {
-        for (let i = 0; i < 100; i++) {
-            await parley.send('process', { id: i });
-        }
-    },
-    10
-);
+await benchmark('Individual sends', async () => {
+    for (let i = 0; i < 100; i++) {
+        await parley.send('process', { id: i }, { targetId: 'child' });
+    }
+});
 
-await benchmark(
-    'Batched sends',
-    async () => {
-        const items = Array.from({ length: 100 }, (_, i) => ({ id: i }));
-        await parley.send('process-batch', { items });
-    },
-    10
-);
+await benchmark('Batched sends', async () => {
+    const items = Array.from({ length: 100 }, (_, i) => ({ id: i }));
+    await parley.send('process-batch', { items }, { targetId: 'child' });
+});
 ```
 
-### Output Example
-
-```
-Individual sends:
-    Total: 1523.45ms
-    Average: 152.35ms
-    Throughput: 7 ops/sec
-
-Batched sends:
-    Total: 85.23ms
-    Average: 8.52ms
-    Throughput: 117 ops/sec
-```
+Run benchmarks in the browsers you support, with realistic payloads, and compare
+results rather than relying on absolute numbers.
 
 ---
 
@@ -702,54 +726,54 @@ Use this checklist to optimize your ParleyJS implementation:
 
 ### Message Optimization
 
-- [ ] Batch high-frequency operations (>10 messages/sec)
+- [ ] Batch high-frequency operations
 - [ ] Send only required fields, not entire objects
 - [ ] Use columnar or compressed formats for large payloads
 - [ ] Implement debouncing for user input events
 - [ ] Implement throttling for high-rate events (mouse, scroll)
+- [ ] Use `expectsResponse: false` or `broadcast()` for notifications
 
 ### Connection Management
 
 - [ ] Reuse Parley instances instead of creating new ones
-- [ ] Use worker pools for parallel processing
-- [ ] Close/destroy connections when no longer needed
-- [ ] Implement connection retry logic with exponential backoff
+- [ ] Pass a `targetId` when only one target should handle a request
+- [ ] Disconnect or destroy connections when no longer needed
+- [ ] Reconnect in your own code on `system:connection_lost` if needed (there is
+      no automatic reconnection)
 
 ### Memory Management
 
-- [ ] Unsubscribe from event handlers when done
-- [ ] Clear references to large objects after processing
-- [ ] Implement message queue limits to prevent overflow
-- [ ] Use WeakMap for caches that should allow GC
-- [ ] Monitor memory usage with Chrome DevTools
+- [ ] Unsubscribe from handlers and system listeners when done
+- [ ] Avoid keeping large payloads in long-lived structures
+- [ ] Bound caches and queues
+- [ ] Monitor memory usage with browser DevTools
 
 ### Data Transfer
 
-- [ ] Use transferable objects for ArrayBuffers >1MB
-- [ ] Transfer ImageBitmap instead of canvas data
-- [ ] Avoid transferring the same buffer multiple times
+- [ ] Convert binary data (ArrayBuffer, Blob, File) to base64 or text first
+- [ ] Keep serialized payloads well under the 10 MB limit
+- [ ] Send references (IDs, URLs) instead of large data where possible
 
 ### Performance Monitoring
 
-- [ ] Enable debug mode during development
-- [ ] Use Performance API to measure latency
-- [ ] Track error rates and timeout frequency
+- [ ] Use `logLevel: 'debug'` during development only
+- [ ] Track latency with `system:response_received` (`duration`)
+- [ ] Track timeouts with `system:timeout`
 - [ ] Benchmark critical message paths
-- [ ] Set up monitoring for production
 
 ### Configuration
 
 - [ ] Set appropriate timeout values per operation
-- [ ] Enable heartbeat monitoring for long-lived connections
+- [ ] Use the built-in `retries` option for timeouts (fixed interval, no
+      backoff)
+- [ ] Keep heartbeat monitoring enabled for long-lived connections
 - [ ] Configure allowed origins for security
 - [ ] Use schemas for validation to catch errors early
 
 ### Code Quality
 
 - [ ] Use TypeScript for type safety
-- [ ] Implement error handling for all sends
-- [ ] Add retry logic for transient failures
-- [ ] Use async/await instead of promise chains
+- [ ] Handle errors for every `send()`
 - [ ] Follow single responsibility principle in handlers
 
 ---
@@ -761,7 +785,7 @@ Use this checklist to optimize your ParleyJS implementation:
 **Related**:
 
 - [Request-Response Pattern](../patterns/request-response.md)
-- [Worker Communication Guide](../guides/worker-communication.md)
+- [Multi-Window Communication Guide](../guides/multi-window-communication.md)
 - [Message Validation](../security/message-validation.md)
 
 **Back to**: [Performance](./index.md)

@@ -302,13 +302,24 @@
                 receivedMessagesEl.innerHTML = '';
             }
 
+            // Build with textContent, never innerHTML: received payloads are
+            // untrusted and Parley does not escape HTML
             const messageEl = document.createElement('div');
             messageEl.className = 'received-message';
-            messageEl.innerHTML = `
-                <span class="sender">${sender}</span>
-                <span class="time">${new Date().toLocaleTimeString()}</span>
-                <div class="text">${text}</div>
-            `;
+
+            const senderEl = document.createElement('span');
+            senderEl.className = 'sender';
+            senderEl.textContent = sender;
+
+            const timeEl = document.createElement('span');
+            timeEl.className = 'time';
+            timeEl.textContent = new Date().toLocaleTimeString();
+
+            const textEl = document.createElement('div');
+            textEl.className = 'text';
+            textEl.textContent = text;
+
+            messageEl.append(senderEl, timeEl, textEl);
             receivedMessagesEl.appendChild(messageEl);
             receivedMessagesEl.scrollTop = receivedMessagesEl.scrollHeight;
         }
@@ -370,7 +381,9 @@
                 });
             });
 
-            parley.on('ping', async (payload, respond, metadata) => {
+            // ping is sent fire-and-forget (expectsResponse: false), so the
+            // handler does not call respond(); it sends a separate pong instead
+            parley.on('ping', async (payload) => {
                 log('Received ping, sending pong...', 'info');
                 displayReceivedMessage('system', 'Ping received');
 
@@ -383,10 +396,8 @@
                         targetId: 'opener',
                         expectsResponse: false
                     });
-                    respond({ received: true });
                 } catch (error) {
                     log(`Pong send failed: ${error.message}`, 'error');
-                    respond({ error: error.message });
                 }
             });
 
@@ -410,16 +421,16 @@
                 });
             });
 
-            parley.on('announcement', (payload, respond, metadata) => {
+            // Broadcasts never expect a response
+            parley.on('announcement', (payload) => {
                 log(`Announcement: ${payload.message}`, 'info');
                 displayReceivedMessage('broadcast', payload.message);
-                respond({ received: true });
             });
 
-            parley.on('close', (payload, respond, metadata) => {
+            // 'close' is sent fire-and-forget, so no respond() call
+            parley.on('close', () => {
                 log('Close request received, shutting down...', 'warn');
                 // The main window will close us, but we can do cleanup here
-                respond({ acknowledged: true });
             });
 
             // Use SYSTEM_EVENTS constant for type safety
@@ -511,16 +522,11 @@
             }
         }
 
-        // Initialize on page load
-        window.addEventListener('load', () => {
-            log('Popup window loaded', 'info');
-            updateUI();
-
-            // Small delay to ensure opener is ready
-            setTimeout(() => {
-                initParley();
-            }, 300);
-        });
+        // Initialize and connect right away. No load listener or delay is
+        // needed: connect() re-sends the handshake until the opener answers.
+        log('Popup window loaded', 'info');
+        updateUI();
+        initParley();
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {

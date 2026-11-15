@@ -67,7 +67,7 @@
     <div class="log" id="log"></div>
 
     <script type="module">
-        import { Parley, SYSTEM_EVENTS } from '../../dist/index.mjs';
+        import { Parley, SYSTEM_EVENTS } from '../../dist/index.js';
 
         let currentToken = null;
         let currentSession = null;
@@ -91,9 +91,9 @@
             }
         }
 
-        // Delay connection slightly to ensure parent iframe.onload has fired
-        // and parent has started listening for handshake
-        setTimeout(connectToParent, 100);
+        // Connect right away: connect() re-sends the handshake until the
+        // parent answers, so no delay is needed
+        connectToParent();
 
         // Handle authentication requests
         parley.on('auth:request', async (payload, respond, metadata) => {
@@ -103,7 +103,8 @@
             try {
                 // Simulate authentication
                 if (payload.username === 'demo_user' && payload.password === 'demo_pass') {
-                    // Generate token
+                    // Generate token (demo only: Math.random is not secure;
+                    // use crypto.getRandomValues() or a real auth service)
                     currentToken = 'token_' + Math.random().toString(36).substring(2, 15);
                     currentSession = 'session_' + Date.now();
                     validTokens.add(currentToken);
@@ -133,10 +134,13 @@
         parley.on('data:request', async (payload, respond, metadata) => {
             log('Data request received');
 
-            // Validate token
+            // Validate token. Reply with an error value instead of throwing:
+            // a thrown error reaches the sender only as 'Handler error'
+            // (ERR_HANDLER_ERROR) unless exposeHandlerErrors is enabled.
             if (!payload.token || !validTokens.has(payload.token)) {
                 log('Invalid or missing token', 'error');
-                throw new Error('Unauthorized: Invalid token');
+                respond({ success: false, error: 'unauthorized' });
+                return;
             }
 
             log('Token validated', 'success');
@@ -168,7 +172,8 @@
             // Validate token
             if (!payload.token || !validTokens.has(payload.token)) {
                 log('Invalid or missing token', 'error');
-                throw new Error('Unauthorized: Invalid token');
+                respond({ success: false, error: 'unauthorized' });
+                return;
             }
 
             log('Token validated', 'success');
@@ -190,7 +195,8 @@
             // Validate token
             if (!payload.token || !validTokens.has(payload.token)) {
                 log('Invalid or missing token', 'error');
-                throw new Error('Unauthorized: Invalid token');
+                respond({ success: false, error: 'unauthorized' });
+                return;
             }
 
             // Invalidate token

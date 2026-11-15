@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Documentation](./index.md) > Security
+[Home](../index.md) > [Documentation](./index.md) > Security
 
 # Security Guide
 
@@ -9,8 +9,10 @@ Security best practices for cross-window communication with ParleyJS.
 Cross-window communication has inherent security risks. This section covers
 ParleyJS security features, best practices, and common security pitfalls.
 
-ParleyJS implements security-first design with origin validation, payload
-sanitization, and DoS prevention built-in.
+ParleyJS implements security-first design with exact-match origin validation,
+source-bound connections, protocol and schema validation, and size limits built
+in. It does not escape HTML or protect against replayed messages; those remain
+your application's responsibility.
 
 ## Contents
 
@@ -24,8 +26,8 @@ sanitization, and DoS prevention built-in.
 
 - **[Message Validation](./message-validation.md)** - Validating message content
     - Schema validation
-    - Input sanitization
-    - XSS prevention
+    - Supported JSON Schema keywords
+    - Input sanitization and safe rendering (your responsibility)
     - Data type checking
 
 ### Complete Security Guide
@@ -40,28 +42,29 @@ sanitization, and DoS prevention built-in.
 
 **Always**:
 
-1. Validate origins explicitly (never use `*`)
+1. List every allowed origin explicitly (`*` and patterns are not supported)
 2. Validate message content before processing
 3. Use HTTPS in production
-4. Sanitize data before displaying
+4. Render received strings with `textContent` (or sanitize HTML) before
+   displaying
 5. Never send sensitive data through postMessage
 
 **Never**:
 
-1. Use wildcard origins in production
+1. Use wildcard patterns such as `'*.example.com'` (rejected: list each origin)
 2. Trust message content without validation
 3. Send passwords or tokens
 4. Execute code from messages
-5. Disable origin checking
+5. Write a custom `validateOrigin()` that accepts more than you intend
 
 ## Quick Security Checklist
 
 Before deploying:
 
-- [ ] Origins are explicitly configured (not `*`)
+- [ ] Origins are explicitly configured (every origin listed exactly)
 - [ ] HTTPS is used in production
 - [ ] Message content is validated
-- [ ] Error messages don't leak sensitive data
+- [ ] `exposeHandlerErrors` is off in production (the default)
 - [ ] Security tests pass
 - [ ] Code reviewed for security issues
 
@@ -70,8 +73,9 @@ Before deploying:
 **Mistake 1: Wildcard origins**
 
 ```javascript
-// DANGEROUS
+// REJECTED: Parley.create() throws 'Configuration error: ...'
 allowedOrigins: ['*'];
+allowedOrigins: ['*.trusted-domain.com']; // any entry containing '*' is rejected
 
 // CORRECT
 allowedOrigins: ['https://trusted-domain.com'];
@@ -105,12 +109,24 @@ await parley.send('login', { sessionToken: token });
 
 ParleyJS provides:
 
-- **Automatic origin validation** - Messages from unauthorized origins are
-  rejected
-- **Payload sanitization** - Dangerous content is removed automatically
-- **DoS prevention** - Size limits and rate limiting
-- **Protocol validation** - Message structure is verified
-- **Error safety** - No sensitive data in error messages
+- **Automatic origin validation** - Exact-match allowlist; messages from other
+  origins are dropped. `'*'`, `'null'` and empty lists are rejected at
+  `create()` (1.1.0)
+- **Source binding** - Each connection only accepts messages from its own target
+  window, and responses only from the target that was asked (1.1.0)
+- **Verified origin** - `metadata.origin` is the browser-supplied `event.origin`
+  (1.1.0)
+- **Protocol validation** - Structure and version of every inbound message are
+  verified, and your `SecurityLayer` is invoked on every inbound message (1.1.0)
+- **Schema validation** - Optional, per message type via `register()`
+- **Payload cloning** - Outgoing payloads are JSON-cloned (functions and
+  `undefined` dropped; circular references throw). This is **not** XSS
+  protection: strings are delivered unchanged
+- **Size limit** - Outgoing payloads over 10 MB are rejected
+- **Rate limiting (opt-in)** - `rateLimit: { enabled: true }` limits your own
+  outgoing `send()` calls; inbound messages are not rate-limited
+- **Error safety** - Handler error messages are replaced with `'Handler error'`
+  unless `exposeHandlerErrors: true` (1.1.0)
 
 For details, see [SECURITY.md](../SECURITY.md).
 
@@ -119,16 +135,23 @@ For details, see [SECURITY.md](../SECURITY.md).
 Security must be tested:
 
 ```javascript
-// Test origin validation
-it('should reject messages from wrong origin', async () => {
-    const handler = vi.fn();
-    parley.on('message', handler);
+import { DefaultSecurityLayer } from 'ignite-parleyjs';
 
-    await simulateMessageFrom('https://evil.com');
+// Test the origin rules directly
+it('should reject messages from wrong origin', () => {
+    const security = new DefaultSecurityLayer();
+    const allowed = ['https://trusted-domain.com'];
 
-    expect(handler).not.toHaveBeenCalled();
+    expect(security.validateOrigin('https://trusted-domain.com', allowed)).toBe(
+        true
+    );
+    expect(security.validateOrigin('https://evil.com', allowed)).toBe(false);
 });
 ```
+
+Hand-dispatched `MessageEvent`s are not a meaningful test: they are dropped for
+not coming from the connected window regardless of origin. Use end-to-end tests
+with real cross-origin pages for the full flow.
 
 For more testing patterns, see [Testing Patterns](../TESTING_PATTERNS.md).
 
@@ -161,4 +184,4 @@ Do not open public issues for security vulnerabilities.
 - [Complete Security Guide](../SECURITY.md)
 - [Testing Security](../TESTING_PATTERNS.md)
 
-**Back to**: [Documentation Home](./index.md) | [Project Home](../../index.md)
+**Back to**: [Documentation Home](./index.md) | [Project Home](../index.md)

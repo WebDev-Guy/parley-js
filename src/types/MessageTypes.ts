@@ -11,10 +11,6 @@ import type { DisconnectReason } from './ConnectionTypes';
  * System message types for internal communication
  */
 export const SYSTEM_MESSAGE_TYPES = {
-    /** Initial handshake message */
-    HANDSHAKE_INIT: '__parley_handshake_init',
-    /** Handshake acknowledgment */
-    HANDSHAKE_ACK: '__parley_handshake_ack',
     /** Disconnect notification */
     DISCONNECT: '__parley_disconnect',
     /** Heartbeat ping */

@@ -1,5 +1,5 @@
-[Home](./index.md) > [Documentation](./index.md) > Documentation Navigation
-Strategy
+[Home](./index.md) > [Documentation](./FRAMEWORK_REFERENCE.md) > Documentation
+Navigation Strategy
 
 # ParleyJS Documentation Navigation Strategy
 
@@ -49,7 +49,7 @@ Home > Getting Started > Basic Concepts > Message Handlers
 Each markdown file starts with breadcrumb navigation:
 
 ```markdown
-[Home](./index.md) > [Getting Started](./getting-started.md) > Basic Concepts
+[Home](../index.md) > [Getting Started](./index.md) > Basic Concepts
 
 # Message Handlers
 ```
@@ -92,7 +92,7 @@ Every major document has a table of contents at the top showing all sections.
 ## Table of Contents
 
 1. [Introduction](#introduction)
-2. [Creating Channels](#creating-channels)
+2. [Connecting to a Target](#connecting-to-a-target)
 3. [Sending Messages](#sending-messages)
 4. [Error Handling](#error-handling)
 5. [Common Patterns](#common-patterns)
@@ -119,12 +119,12 @@ Different types of references use different linking approaches:
 
 When referring to related information that helps complete the current task:
 
-**Pattern**: "For more details about X, see [Link Text](../path/to/doc.md)."
+**Pattern**: "For more details about X, see `[Link Text](../path/to/doc.md)`."
 
 **Approach**: External link in same tab (user's browser history captures it)
 
 **Example**: "To understand origin validation requirements, see
-[Security: Origin Validation](../security/origin-validation.md)."
+`[Security: Origin Validation](../security/origin-validation.md)`."
 
 **Why same tab**: User is pursuing the same goal (learning about the current
 feature)
@@ -134,7 +134,7 @@ feature)
 When referring to complete API documentation:
 
 **Pattern**: "The complete method reference is available in
-[API Reference: channel.send()](../api-reference.md#channelsend)"
+`[API Reference: send()](../api-reference/methods.md#send)`"
 
 **Approach**: External link in same tab with anchor to specific method
 
@@ -145,7 +145,7 @@ When referring to complete API documentation:
 When referring to advanced/optional information not required for current task:
 
 **Pattern**:
-"[Advanced: Performance Optimization for High-Frequency Messages](../advanced/performance.md)
+"`[Advanced: Performance Optimization for High-Frequency Messages](../advanced/performance.md)`
 {target='\_blank'}"
 
 **Approach**: Link that opens in new tab (preserves original context)
@@ -159,9 +159,9 @@ When showing different ways to accomplish the same thing:
 
 **Pattern**: "Alternative approaches:
 
-- [Pattern: Request-Response](../patterns/request-response.md)
-- [Pattern: Event Emitter](../patterns/event-emitter.md)
-- [Pattern: State Synchronization](../patterns/state-sync.md)"
+- `[Pattern: Request-Response](../patterns/request-response.md)`
+- `[Pattern: Event Emitter](../patterns/event-emitter.md)`
+- `[Pattern: State Synchronization](../patterns/state-sync.md)`"
 
 **Approach**: Links in same tab, but within a clearly marked "alternatives"
 section
@@ -293,75 +293,70 @@ Organize documentation in a clear hierarchy to support navigation:
 
 ```
 docs/
-├── README.md (landing page with TOC)
+├── index.md (landing page with TOC)
 ├── getting-started/
-│   ├── README.md (overview)
+│   ├── index.md (overview)
 │   ├── installation.md
 │   ├── first-example.md
 │   └── concepts.md
 ├── api-reference/
-│   ├── README.md (index of all methods)
-│   ├── channel.md
-│   ├── message-types.md
+│   ├── index.md (index of all methods)
+│   ├── methods.md
+│   ├── system-events.md
+│   ├── types.md
 │   └── error-codes.md
 ├── guides/
-│   ├── README.md (list of all guides)
+│   ├── index.md (list of all guides)
 │   ├── iframe-communication.md
-│   ├── worker-communication.md
-│   └── popup-communication.md
+│   ├── popup-communication.md
+│   ├── multi-window-communication.md
+│   └── micro-frontends.md
 ├── patterns/
-│   ├── README.md (pattern overview)
+│   ├── index.md (pattern overview)
 │   ├── request-response.md
-│   ├── event-emitter.md
 │   ├── error-handling.md
 │   └── state-synchronization.md
 ├── security/
-│   ├── README.md (security overview)
+│   ├── index.md (security overview)
 │   ├── origin-validation.md
-│   ├── message-validation.md
-│   └── best-practices.md
+│   └── message-validation.md
 ├── performance/
-│   ├── README.md (performance overview)
-│   ├── optimization.md
-│   └── profiling.md
+│   ├── index.md (performance overview)
+│   └── optimization.md
 ├── troubleshooting/
-│   ├── README.md (FAQ index)
-│   ├── common-errors.md
-│   ├── debugging.md
-│   └── performance-issues.md
+│   ├── index.md (FAQ index)
+│   └── common-errors.md
 └── examples/
-    ├── README.md (example index)
-    ├── basic-setup/
-    ├── advanced-patterns/
-    └── integration-scenarios/
+    ├── index.md (example index)
+    └── basic-example.md
 ```
 
-**Key principle**: Each directory has a README.md that indexes its contents
+**Key principle**: Each directory has an index.md that indexes its contents
 
 ## Breadcrumb Examples by Page Type
 
 ### Getting Started Page
 
 ```
-[Home](../../index.md) > [Getting Started](./index.md) > Installation
+[Home](../index.md) > [Getting Started](./index.md) > Installation
 ```
 
 ### API Reference Page
 
 ```
-[Home](../../index.md) > [API Reference](./index.md) > Channel Methods > send()
+[Home](../index.md) > [API Reference](./index.md) > [Methods](./methods.md) > send()
 ```
 
 ### Pattern Page
 
 ```
-[Home](../../index.md) > [Code Patterns](./index.md) > Error Handling
+[Home](../index.md) > [Code Patterns](./index.md) > Error Handling
 ```
 
 ### Nested Example
 
 ```
-[Home](../../index.md) > [Examples](./index.md) > [Basic Setup](./basic-setup/index.md) > Parent-Child Communication
+[Home](../../index.md) > [Examples](../index.md) > [Basic Setup](./index.md) > Parent-Child Communication
 ```
 
 ## Footer Navigation Template
@@ -376,9 +371,9 @@ Every documentation page should include appropriate footer navigation:
 ### Navigation
 
 **Previous Section**: [Basic Concepts](./concepts.md) **Next Section**:
-[Creating Your First Channel](./first-channel.md) **Parent Guide**:
+[Your First Example](./first-example.md) **Parent Guide**:
 [Getting Started](./index.md) **API Reference**:
-[See API Docs](../api-reference/channel.md)
+[See API Docs](../api-reference/methods.md)
 ```
 
 ### For Reference Pages (API docs)
@@ -388,7 +383,7 @@ Every documentation page should include appropriate footer navigation:
 
 ### Related References
 
-- [Message Types](./message-types.md)
+- [System Events](./system-events.md)
 - [Error Codes](./error-codes.md)
 - [Type Definitions](./types.md)
 
@@ -403,12 +398,12 @@ Every documentation page should include appropriate footer navigation:
 ### Similar Patterns
 
 - [Request-Response Pattern](./request-response.md)
-- [Event Emitter Pattern](./event-emitter.md)
+- [State Synchronization Pattern](./state-synchronization.md)
 
 ### See Also
 
-- [Testing Pattern](../../testing/patterns.md)
-- [Error Handling Guide](../../guides/error-handling.md)
+- [Testing Patterns](../TESTING_PATTERNS.md)
+- [Error Handling Pattern](./error-handling.md)
 
 **Back to**: [Code Patterns](./index.md)
 ```
@@ -421,7 +416,7 @@ Every documentation page should include appropriate footer navigation:
 ### Related Guides
 
 - [iFrame Communication](./iframe-communication.md)
-- [Worker Communication](./worker-communication.md)
+- [Popup Communication](./popup-communication.md)
 
 ### Related Patterns
 
@@ -438,22 +433,22 @@ When creating a cross-reference link, ensure it points to:
 1. **The most specific relevant section** (not generic parent)
     - Wrong: "See the API reference"
     - Correct: "See
-      [channel.send() in API Reference](../api-reference/channel.md#send)"
+      `[send() in API Reference](../api-reference/methods.md#send)`"
 
 2. **A section that answers the user's question** (not just "related")
     - Wrong: "For more information, see Security"
     - Correct: "To validate incoming messages, see
-      [Message Validation](../security/message-validation.md)"
+      `[Message Validation](../security/message-validation.md)`"
 
 3. **Anchor to specific subsection** when possible
-    - Wrong: `[Link](../api-reference.md)`
-    - Correct: `[Link](../api-reference.md#error-codes)`
+    - Wrong: `[Link](../api-reference/index.md)`
+    - Correct: `[Link](../api-reference/error-codes.md#error-class-hierarchy)`
 
 4. **With descriptive link text** that indicates where it goes
     - Wrong: "click here"
     - Wrong: "../security.md"
     - Correct:
-      "[Origin Validation Best Practices](../security/origin-validation.md)"
+      "`[Origin Validation Best Practices](../security/origin-validation.md)`"
 
 ## Navigation for Different Documentation Types
 
@@ -524,7 +519,7 @@ When users navigate to a document 3+ levels deep, provide multiple return paths:
 **Example - Deep Page**:
 
 ```
-[Home](../../index.md) > [Security](./index.md) > [Best Practices](./index.md) > Origin Validation
+[Home](../index.md) > [Security](./index.md) > Origin Validation
 
 # Origin Validation
 
@@ -534,10 +529,9 @@ When users navigate to a document 3+ levels deep, provide multiple return paths:
 
 ### Quick Navigation
 
-- Back to: [Security Best Practices](./index.md)
-- Up to: [Security Guide](./index.md)
+- Back to: [Security Guide](./index.md)
 - Related: [Message Validation](./message-validation.md)
-- API: [channel.on() Origin Check](../../api-reference/channel.md#origin-check)
+- API: [Parley.create() allowedOrigins](../api-reference/methods.md#parleycreate)
 ```
 
 ## Special Navigation Cases
@@ -557,8 +551,8 @@ For more about the postMessage API, see
 When referencing deprecated features:
 
 ```markdown
-**Note**: This approach is deprecated in ParleyJS 2.0+. For the current method,
-see [Modern Approach](./modern-approach.md).
+**Note**: This approach is deprecated as of ParleyJS 1.1.0. For the current
+method, see [Modern Approach](./modern-approach.md).
 ```
 
 ### Version-Specific Content
@@ -566,8 +560,8 @@ see [Modern Approach](./modern-approach.md).
 When content varies by version:
 
 ```markdown
-This feature requires ParleyJS 1.5 or later. For version compatibility, see
-[Version Guide](../../version-compatibility.md).
+This feature requires ParleyJS 1.1.0 or later. For version history, see the
+[Changelog](https://github.com/WebDev-Guy/parley-js/blob/main/CHANGELOG.md).
 ```
 
 ## Navigation in Code Examples
@@ -577,8 +571,8 @@ When documentation includes code examples, provide context navigation:
 ```markdown
 ### Example: Basic Message Sending
 
-[View complete example in repository](https://github.com/WebDev-Guy/parley-js/tree/main/examples/basic-message-sending)
-[View related example: Error Handling](./error-handling-example.md)
+[View complete example in repository](https://github.com/WebDev-Guy/parley-js/tree/main/examples/basic)
+[View related pattern: Error Handling](../patterns/error-handling.md)
 
 [See relevant API methods](#api-reference)
 
@@ -781,6 +775,7 @@ professional documentation.
 - [Documentation Style Guide](./DOCUMENTATION_STYLE_GUIDE.md) - Writing
   standards and style
 - [Architecture](./ARCHITECTURE.md) - Documentation architecture
-- [Contributing Guide](../CONTRIBUTING.md) - How to contribute
+- [Contributing Guide](https://github.com/WebDev-Guy/parley-js/blob/main/CONTRIBUTING.md) -
+  How to contribute
 
 **Back to**: [Documentation Home](./index.md)

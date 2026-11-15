@@ -203,7 +203,7 @@ export function createTestConfig(overrides: Partial<ParleyConfig> = {}): ParleyC
             'https://child.example.com',
         ],
         timeout: 5000,
-        logLevel: 'silent',
+        logLevel: 'none',
         heartbeat: {
             enabled: false,
             interval: 30000,

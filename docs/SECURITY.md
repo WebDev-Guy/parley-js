@@ -3,29 +3,42 @@
 # Security Guide
 
 Parley-js implements **security-first design** for cross-window communication.
-This document outlines security features, best practices, and testing
-strategies.
+This document describes what Parley protects against, what it does not, and what
+your application still has to do itself.
 
 ## Overview
 
 Cross-window communication via `postMessage` has inherent security risks.
-Parley-js is designed with security as a primary concern, implementing multiple
+Parley-js is designed with security as a primary concern and provides these
 layers of protection:
 
-- **Origin Validation** - Strict origin whitelist enforcement
-- **Payload Sanitization** - XSS/injection prevention
-- **DoS Prevention** - Size limits, rate limiting, deep nesting protection
-- **Message Validation** - Protocol structure validation
-- **Error Safety** - No sensitive information disclosure
+- **Origin Validation** - Exact-match origin allowlist; `'*'` and `'null'` are
+  rejected
+- **Source Binding** - Each connection only accepts messages from its own target
+  window
+- **Message Validation** - Protocol structure and version checks, plus your JSON
+  Schemas
+- **Payload Cloning** - Outgoing payloads are JSON-cloned (functions and other
+  non-JSON values are dropped; circular references throw)
+- **Limits** - Fixed 10 MB outgoing payload limit, optional outgoing rate
+  limiting, listener limits
+- **Error Safety** - Handler error messages are not sent to the other window by
+  default
+
+Parley does **not** escape HTML, prevent XSS in your rendering code, sign or
+encrypt messages, or protect against replayed messages. See
+[What Your Application Must Do](#what-your-application-must-do).
 
 ## Table of Contents
 
 1. [Threat Model](#threat-model)
-2. [Core Security Features](#core-security-features)
-3. [Security Best Practices](#security-best-practices)
-4. [Security Testing](#security-testing)
-5. [Attack Prevention](#attack-prevention)
-6. [Reporting Security Issues](#reporting-security-issues)
+2. [1.1.0 Security Hardening](#110-security-hardening)
+3. [Core Security Features](#core-security-features)
+4. [What Your Application Must Do](#what-your-application-must-do)
+5. [Security Best Practices](#security-best-practices)
+6. [Security Testing](#security-testing)
+7. [Attack Prevention](#attack-prevention)
+8. [Reporting Security Issues](#reporting-security-issues)
 
 ---
 
@@ -41,6 +54,38 @@ layers of protection:
 6. **Denial of Service** - Flooding with messages, resource exhaustion
 7. **Information Disclosure** - Leaking sensitive data through error messages
 
+Parley addresses origin spoofing (origin allowlist + source binding),
+information disclosure through handler errors, and some resource exhaustion
+(outgoing size limit, optional outgoing rate limit). Message injection,
+clickjacking and replay attacks must be handled by your application and your
+HTTP headers (see below).
+
+## 1.1.0 Security Hardening
+
+Version 1.1.0 tightened several defaults. If you are upgrading, review these:
+
+- **Source-bound connections** - Each connection only accepts messages
+  (including the handshake) whose `event.source` is its own target window. A
+  different window that happens to share an allowed origin can no longer talk to
+  that connection.
+- **Browser-verified origin** - `metadata.origin` (and the `origin` in
+  `system:message_received`) is the browser-supplied `event.origin`, not a value
+  reported by the sender.
+- **SecurityLayer enforced on inbound messages** - Every inbound message is
+  checked with `securityLayer.validateOrigin()`, protocol structure and major
+  version, and (for requests) `securityLayer.validateMessage()`. Custom security
+  layers are now actually invoked on every message.
+- **Responses bound to the requested target** - A response is only accepted from
+  the target the request was sent to.
+- **Stricter configuration** - `Parley.create()` throws if `allowedOrigins` is
+  empty or contains `'*'`, `'null'` or an empty string.
+- **Handler errors hidden by default** - When a handler throws, the remote side
+  receives `'Handler error'` unless the receiving instance sets
+  `exposeHandlerErrors: true`.
+- **No silent payload replacement** - Payloads that cannot be serialized
+  (circular references, BigInt) now throw a `SerializationError` instead of
+  being sent as `{}`.
+
 ## Core Security Features
 
 For secure coding patterns, see [Code Patterns](./CODE_PATTERNS.md). For
@@ -48,133 +93,151 @@ security testing, see [Testing Patterns](./TESTING_PATTERNS.md).
 
 ### 1. Origin Validation
 
-**Always configure allowed origins:**
+**Always configure allowed origins explicitly:**
 
 ```typescript
+import { Parley } from 'ignite-parleyjs';
+
 const parley = Parley.create({
+    targetType: 'iframe',
     // Good: Explicit allowlist
     allowedOrigins: ['https://app.example.com', 'https://admin.example.com'],
 });
 ```
 
-**Never use wildcards in production:**
+If you omit `allowedOrigins`, it defaults to `[window.location.origin]`
+(same-origin only).
+
+**Wildcards are not supported:**
 
 ```typescript
-// DANGEROUS: Allows any origin
+// Throws at Parley.create(): 'Configuration error: ...'
 allowedOrigins: ['*'];
+allowedOrigins: ['*.example.com']; // no pattern matching: any '*' is rejected
+allowedOrigins: ['null'];
+allowedOrigins: [];
 
-// DANGEROUS: Too broad
-allowedOrigins: ['*.com'];
-
-// CAREFUL: Only if you trust all subdomains
-allowedOrigins: ['*.example.com'];
+// Correct: list every origin explicitly
+allowedOrigins: ['https://a.example.com', 'https://b.example.com'];
 ```
 
-**Origin validation features:**
+**How origins are compared:**
 
-- Protocol matching (https:// vs http://)
-- Port number validation
-- Subdomain bypass prevention
-- Null origin rejection
+- Each configured origin is normalized to its URL origin (scheme, host, port)
+  and lowercased, then compared to `event.origin` with an **exact match**
+- Protocol must match (`https://` vs `http://`)
+- Port must match (`https://example.com` vs `https://example.com:8443`)
+- No subdomain or suffix matching (`https://evil-example.com` does not match
+  `https://example.com`)
+- The opaque `'null'` origin (sandboxed iframes, `data:` URLs, `file://`) is
+  never accepted
 
-### 2. Payload Sanitization
+Messages from origins that are not allowed are dropped silently by the channel
+(logged at `warn` level when `logLevel` allows it). See
+[Origin Validation](./security/origin-validation.md) for details.
 
-Parley automatically sanitizes all payloads:
+### 2. Source Binding
+
+Origin checks alone cannot distinguish two windows from the same origin. Since
+1.1.0, every connection also checks `event.source`: a message is only accepted
+if it comes from the exact window object the connection was made with
+(`connect(iframe)` / `connect(window.parent)` / `connect(popup)` /
+`connect(window.opener)`). Responses are additionally only accepted from the
+target the original request was sent to.
+
+### 3. Payload Sanitization (JSON Cloning)
+
+The default security layer (`DefaultSecurityLayer`) "sanitizes" every
+**outgoing** payload and response with a JSON round-trip clone:
 
 ```typescript
-// Removes dangerous content:
-// - Functions
-// - Symbols
-// - Circular references
-// - __proto__ and constructor properties
-
-const sanitized = sanitizePayload({
-    data: 'safe',
-    dangerous: function () {
-        /* removed */
-    },
-    circular: obj, // handled safely
+await parley.send('save', {
+    name: 'Ada',
+    callback: () => {}, // dropped (functions are not JSON)
+    missing: undefined, // dropped
+    when: new Date(), // becomes an ISO string
+    tags: new Set(['a']), // becomes {}
 });
+
+const obj: any = {};
+obj.self = obj;
+await parley.send('save', obj); // rejects with SerializationError
+// (ERR_SERIALIZATION_CIRCULAR_REFERENCE); BigInt values also throw
 ```
 
-### 3. Protocol Enforcement
+What this does **not** do:
 
-By default, Parley validates message structure:
+- It does **not** escape or strip HTML, `<script>` tags or `javascript:` URLs.
+  Strings arrive exactly as they were sent.
+- It does **not** remove `__proto__` or `constructor` keys. (After `JSON.parse`
+  they are ordinary own properties and do not change any prototype, but your
+  code must not copy them onto other objects blindly.)
+- It does **not** limit nesting depth.
+- Inbound payloads are delivered to handlers as received from `postMessage`
+  (structured clone); they are not sanitized again.
+
+### 4. Protocol Enforcement
+
+Every inbound message must match Parley's protocol structure (enforced
+internally):
 
 ```typescript
-// Valid message structure (enforced internally)
+// Valid message structure
 {
+    _parley: '__parley__',
     _v: '1.0.0',
     _id: 'uuid-string',
     _type: 'message-type',
     _timestamp: 1234567890,
-    _origin: 'https://trusted.com',
+    _origin: 'https://trusted.com', // self-reported, never trusted
     _expectsResponse: true,
     payload: { /* user data */ }
 }
 ```
 
-Any message not matching this structure is rejected.
+Messages that are not Parley-shaped are ignored. Parley-shaped messages with an
+invalid structure or an incompatible major protocol version are rejected and
+reported via `system:error` (`ERR_VALIDATION_INVALID_PROTOCOL` /
+`ERR_SECURITY_VERSION_MISMATCH`).
 
-### 4. DoS Prevention
+### 5. Resource Limits
 
-**Size Limits:**
+**Payload size:** outgoing payloads larger than **10 MB** (serialized) are
+rejected with a `ValidationError` before sending. This limit is fixed and not
+configurable.
 
-```typescript
-const parley = Parley.create({
-    allowedOrigins: ['https://trusted.com'],
-    maxPayloadSize: 1024 * 1024, // 1MB limit
-});
-```
-
-**Deep Nesting Protection:**
-
-```typescript
-// Automatically rejects deeply nested objects
-const rejected = {
-    a: {
-        b: {
-            c: {
-                d: {
-                    e: {
-                        f: {
-                            /* too deep */
-                        },
-                    },
-                },
-            },
-        },
-    },
-};
-```
-
-**Listener Limits:**
-
-```typescript
-// Prevents memory leaks from excessive listeners
-const MAX_LISTENERS = 100;
-emitter.setMaxListeners(MAX_LISTENERS);
-```
-
-### 5. Timestamp Validation
-
-Parley can reject stale messages:
+**Rate limiting (opt-in):**
 
 ```typescript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted.com'],
-    // Reject messages older than 30 seconds
-    maxMessageAge: 30000,
+    rateLimit: { enabled: true, messagesPerSecond: 50 },
 });
+
+// send() rejects with ParleyError ERR_SECURITY_RATE_LIMITED when exceeded
 ```
+
+The built-in rate limiter applies to **outgoing `send()` calls only** (not
+`broadcast()`, not inbound messages), using a fixed one-second window per
+`targetId`. It protects the other side from a runaway sender in your own code;
+it does not protect you from a peer that floods you.
+
+**Schema depth:** when a schema is registered, validation stops at a nesting
+depth of 50 and reports an error.
+
+**Listener limits:** the internal event emitter allows at most 100 listeners per
+system event and throws when the limit is exceeded, which surfaces listener
+leaks early.
 
 ### 6. Schema Validation
 
-Validate payloads against JSON Schema:
+Validate payloads against a JSON Schema by registering the type, then handle it
+with `on()`:
 
 ```typescript
-parley.register('sensitive-action', handler, {
-    requestSchema: {
+parley.register('sensitive-action', {
+    schema: {
         type: 'object',
         properties: {
             userId: { type: 'string', pattern: '^[a-z0-9]{24}$' },
@@ -183,22 +246,62 @@ parley.register('sensitive-action', handler, {
         required: ['userId', 'action'],
         additionalProperties: false, // Reject unknown properties
     },
+    onError: (error, metadata) => {
+        securityLog.warn('Rejected sensitive-action', {
+            code: error.code,
+            origin: metadata.origin,
+        });
+    },
+});
+
+parley.on('sensitive-action', async (payload, respond, metadata) => {
+    respond(await performAction(payload));
 });
 ```
 
+Schemas are checked on send (locally) and on receive (by the receiver's
+registered schema). Only a subset of JSON Schema is supported; unsupported
+keywords such as `format`, `minItems` and `maxItems` are silently ignored. See
+[Message Validation](./security/message-validation.md).
+
 ### 7. Error Information Disclosure Prevention
 
-Parley sanitizes error messages to prevent information leakage:
+When a handler throws, the sender receives a `ParleyError` with code
+`ERR_HANDLER_ERROR` and the generic message `'Handler error'`. The real error
+message is only sent if the **receiving** instance opts in:
 
 ```typescript
-// Production mode: Generic error messages
-try {
-    await parley.send('action', data);
-} catch (error) {
-    // User sees: "Validation failed"
-    // Logs contain: Full details for debugging
-}
+const parley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: ['https://trusted.com'],
+    exposeHandlerErrors: false, // default; set true only for debugging
+});
 ```
+
+Locally, the full error is still available via `system:error` and the type's
+`onError` callback, so you can log it without leaking it.
+
+## What Your Application Must Do
+
+Parley moves data safely between windows you trust. It cannot decide what that
+data means. Your application is responsible for:
+
+- **Rendering safely** - Display received strings with `textContent`, not
+  `innerHTML`. If you must render HTML, sanitize it with a library such as
+  DOMPurify.
+- **Business validation and authorization** - Schemas check shape, not
+  permission. Check that the sender is allowed to perform the action.
+- **Never executing received data** - No `eval()`, `new Function()`, or dynamic
+  `import()` with received strings.
+- **Replay protection, if needed** - Parley does not check message age or
+  uniqueness. For sensitive operations, include a nonce or one-time token in the
+  payload and verify it in your handler.
+- **Inbound rate limiting, if needed** - The built-in limiter only covers your
+  own `send()` calls.
+- **Sensitive data handling** - Messages are not encrypted or signed. Do not
+  send secrets to a window you do not fully trust.
+- **HTTP headers** - Configure CSP `frame-ancestors` / `X-Frame-Options` against
+  clickjacking.
 
 ## Security Best Practices
 
@@ -233,25 +336,28 @@ allowedOrigins: [
 
 ### 3. Validate All Incoming Data
 
-Never trust incoming payloads:
+Never trust incoming payloads, even from allowed origins:
 
 ```typescript
-parley.register('update-user', async (payload, metadata) => {
-    // Always validate
+parley.register('update-user', { schema: updateUserSchema });
+
+parley.on('update-user', async (payload, respond, metadata) => {
+    // Business rules the schema cannot express
     if (!isValidUserId(payload.userId)) {
-        throw new ValidationError('Invalid user ID');
+        respond({ success: false, error: 'Invalid user ID' });
+        return;
     }
 
-    // Sanitize input
-    const sanitizedName = sanitizeString(payload.name);
-
-    // Check permissions
+    // Authorization (metadata.origin is browser-verified)
     if (!canUserUpdate(metadata.origin, payload.userId)) {
-        throw new SecurityError('Unauthorized');
+        respond({ success: false, error: 'Unauthorized' });
+        return;
     }
 
-    // Now safe to process
-    return updateUser(payload.userId, sanitizedName);
+    respond({
+        success: true,
+        user: await updateUser(payload.userId, payload.name),
+    });
 });
 ```
 
@@ -261,31 +367,40 @@ Don't expose dangerous operations via postMessage:
 
 ```typescript
 // DANGEROUS: Direct database access
-parley.register('execute-query', (payload) => {
-    return db.query(payload.sql); // SQL injection risk!
+parley.on('execute-query', async (payload, respond) => {
+    respond(await db.query(payload.sql)); // SQL injection risk!
 });
 
 // SAFE: Predefined operations only
-parley.register('get-user', (payload) => {
-    return db.users.findById(payload.userId);
+parley.on('get-user', async (payload, respond) => {
+    respond(await db.users.findById(payload.userId));
 });
 ```
 
 ### 5. Rate Limiting
 
-Implement rate limiting for sensitive operations:
+For your own outgoing traffic, enable the built-in limiter:
 
 ```typescript
-const rateLimiter = new RateLimiter({
-    windowMs: 60000, // 1 minute
-    maxRequests: 100,
+const parley = Parley.create({
+    targetType: 'iframe',
+    allowedOrigins: ['https://trusted.com'],
+    rateLimit: { enabled: true, messagesPerSecond: 100 },
 });
+```
 
-parley.register('api-call', async (payload, metadata) => {
-    if (!rateLimiter.allow(metadata.origin)) {
-        throw new Error('Rate limit exceeded');
+Parley does not rate-limit **inbound** messages. If a peer could flood an
+expensive handler, add your own limiter in the handler:
+
+```typescript
+const rateLimiter = new MyRateLimiter({ windowMs: 60000, maxRequests: 100 });
+
+parley.on('api-call', async (payload, respond, metadata) => {
+    if (!rateLimiter.allow(metadata.senderId)) {
+        respond({ success: false, error: 'Rate limit exceeded' });
+        return;
     }
-    return makeApiCall(payload);
+    respond(await makeApiCall(payload));
 });
 ```
 
@@ -294,35 +409,44 @@ parley.register('api-call', async (payload, metadata) => {
 Log security-relevant events:
 
 ```typescript
-parley.onSystem('error:security', (event) => {
-    securityLog.warn('Security violation', {
-        origin: event.origin,
-        reason: event.reason,
-        timestamp: Date.now(),
-    });
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
 
-    // Alert on repeated violations
-    if (getViolationCount(event.origin) > 10) {
-        alertSecurityTeam(event);
+parley.onSystem(SYSTEM_EVENTS.ERROR, (data) => {
+    const event = data as { code: string; message: string; targetId?: string };
+
+    switch (event.code) {
+        case 'ERR_SECURITY_ORIGIN_MISMATCH': // custom validateOrigin() rejected
+        case 'ERR_VALIDATION_INVALID_PROTOCOL': // malformed / rejected message
+        case 'ERR_SECURITY_VERSION_MISMATCH': // incompatible protocol version
+            securityLog.warn('Inbound message rejected', event);
+            break;
+        case 'ERR_HANDLER_ERROR': // one of your handlers threw
+            errorLog.error('Handler failed', event);
+            break;
     }
 });
 
-parley.onAnalytics((event) => {
-    // Track all cross-origin communication
+// Requires analyticsEnabled: true
+parley.onAnalyticsEvent((event) => {
     auditLog.info('Cross-origin message', event);
 });
 ```
+
+Note: messages from disallowed origins are dropped silently by the channel and
+do **not** emit `system:error`; use `logLevel: 'warn'` (or lower) to see them in
+the console.
 
 ## Security Checklist
 
 Before deploying to production:
 
 - [ ] **HTTPS only** - All allowed origins use HTTPS
-- [ ] **Explicit origins** - No wildcards or `*`
-- [ ] **Schema validation** - All handlers validate input
-- [ ] **Error handling** - Errors don't leak sensitive info
-- [ ] **Rate limiting** - Implemented for sensitive operations
-- [ ] **Logging** - Security events are logged
+- [ ] **Explicit origins** - Every origin listed exactly (no patterns)
+- [ ] **Schema validation** - Sensitive types registered with a schema
+- [ ] **Error handling** - `exposeHandlerErrors` left off in production
+- [ ] **Safe rendering** - Received strings rendered with `textContent`
+- [ ] **Rate limiting** - Implemented for expensive inbound operations
+- [ ] **Logging** - `system:error` events are logged
 - [ ] **Monitoring** - Alerts for suspicious activity
 - [ ] **CSP headers** - Content Security Policy configured
 - [ ] **X-Frame-Options** - Clickjacking protection
@@ -332,8 +456,8 @@ Before deploying to production:
 
 ## Security Testing
 
-Parley-js includes **comprehensive security tests** to validate protection
-mechanisms. See [TESTING.md](./TESTING.md) for complete testing documentation.
+Parley-js includes security tests that validate its protection mechanisms. See
+[TESTING.md](./TESTING.md) for complete testing documentation.
 
 ### Security Test Suite
 
@@ -341,15 +465,13 @@ Located in `tests/security/`, these tests verify:
 
 1. **Origin Validation** (`origin-validation.test.ts`)
     - Unauthorized origin rejection
-    - Protocol matching enforcement
+    - Protocol and port matching
     - Subdomain bypass prevention
     - Null origin handling
 
 2. **Payload Sanitization** (`payload-sanitization.test.ts`)
-    - XSS prevention
-    - Code injection prevention
-    - Circular reference handling
-    - Function/symbol removal
+    - JSON-clone behaviour (functions/symbols/undefined dropped)
+    - Circular references and BigInt raise `SerializationError`
 
 3. **PostMessage Security** (`postmessage-security.test.ts`)
     - Wildcard prevention in targetOrigin
@@ -357,13 +479,12 @@ Located in `tests/security/`, these tests verify:
     - Null origin handling
 
 4. **Schema Validation DoS** (`schema-validation-dos.test.ts`)
-    - Deep nesting protection
-    - Regex DoS prevention
+    - Schema depth limit
+    - Error collection limits
     - Resource exhaustion prevention
 
 5. **Payload Size Limits** (`payload-size-limits.test.ts`)
-    - Size limit enforcement
-    - Nested payload calculation
+    - 10 MB limit enforcement
     - Clear error messaging
 
 6. **Listener Limits** (`listener-limits.test.ts`)
@@ -374,89 +495,76 @@ Located in `tests/security/`, these tests verify:
 7. **Message Validation** (`message-validation.test.ts`)
     - Required field validation
     - Field type validation
-    - Timestamp validation
 
 8. **Error Info Disclosure** (`error-info-disclosure.test.ts`)
-    - Stack trace sanitization
+    - Generic handler error messages by default
     - Error code usage
-    - Sensitive information filtering
+
+9. **Inbound Hardening** (`inbound-hardening.test.ts`)
+    - Source binding and response binding
+    - SecurityLayer enforcement on inbound messages
 
 ### Running Security Tests
 
 ```bash
 # Run all security tests
-npm test tests/security/
+npx vitest run tests/security/
 
 # Run specific security test
-npm test tests/security/origin-validation.test.ts
+npx vitest run tests/security/origin-validation.test.ts
 
 # Run with coverage
 npm run test:coverage -- tests/security/
 ```
 
-### Coverage Requirements
-
-Security layer tests maintain **95%+ coverage** to ensure comprehensive
-protection.
-
 ---
 
 ## Attack Prevention
 
-### Tested Attack Scenarios
+### What Parley Handles
 
-Parley-js has been tested against:
-
-1. **XSS Attacks**
+1. **Origin Spoofing**
 
     ```typescript
-    // Automatically sanitized
-    const payload = {
-        xss: '<script>alert("XSS")</script>',
-        dangerous: 'javascript:void(0)',
-    };
+    // The browser-supplied event.origin is checked against allowedOrigins,
+    // and event.source must be the connected target window.
+    // metadata.origin in handlers is that verified origin.
     ```
 
-2. **Code Injection**
+2. **Code Injection via Functions**
 
     ```typescript
-    // Functions are removed
+    // Functions cannot cross postMessage; outgoing payloads are JSON-cloned
+    // and functions are dropped.
     const payload = {
         callback: function () {
             maliciousCode();
         },
-    };
+    }; // sent as {}
     ```
 
-3. **Prototype Pollution**
+3. **DoS via Large Outgoing Payloads**
 
     ```typescript
-    // __proto__ and constructor are blocked
-    const payload = {
-        __proto__: { admin: true },
-        constructor: { prototype: { isAdmin: true } },
-    };
+    // Rejected before sending: exceeds the fixed 10 MB limit
+    const payload = { data: 'x'.repeat(11_000_000) };
     ```
 
-4. **DoS via Deep Nesting**
+### What Your Application Handles
 
-    ```typescript
-    // Rejected if exceeds max depth
-    const payload = createDeeplyNested(1000);
-    ```
+1. **XSS** - Strings such as `'<script>alert("XSS")</script>'` or
+   `'javascript:void(0)'` are delivered unchanged. Never insert them with
+   `innerHTML` or use them as URLs without validation.
 
-5. **DoS via Large Payloads**
+2. **Prototype Pollution** - Payloads may contain keys like `__proto__` or
+   `constructor`. Don't merge payloads into other objects with `Object.assign` /
+   deep-merge helpers; copy only known keys.
 
-    ```typescript
-    // Rejected if exceeds size limit
-    const payload = { data: 'x'.repeat(10_000_000) };
-    ```
+3. **Deep Nesting / Large Inbound Payloads** - Parley does not limit the depth
+   or size of inbound payloads. Use a schema with `additionalProperties: false`
+   and `maxLength` to constrain what you accept.
 
-6. **Origin Spoofing**
-    ```typescript
-    // Origin validation prevents spoofing
-    event.origin; // validated against allowedOrigins
-    ```
+4. **Replay** - Parley has no timestamp-freshness or nonce checks.
 
 ---
 
@@ -468,13 +576,8 @@ Configure CSP to restrict iframe sources:
 Content-Security-Policy: frame-ancestors 'self' https://trusted-parent.com
 ```
 
-```html
-<!-- Or via meta tag -->
-<meta
-    http-equiv="Content-Security-Policy"
-    content="frame-ancestors 'self' https://trusted-parent.com"
-/>
-```
+Note: `frame-ancestors` is ignored when delivered via a `<meta>` tag; send it as
+an HTTP response header.
 
 ## Clickjacking Protection
 
@@ -493,88 +596,121 @@ Content-Security-Policy: frame-ancestors 'self'
 
 ## Custom Security Layer
 
-For advanced use cases, implement a custom security layer:
+For advanced use cases, provide a custom security layer. `SecurityLayer` is an
+abstract **class** with three methods; the easiest approach is to extend
+`DefaultSecurityLayer` and override only what you need:
 
 ```typescript
-import { SecurityLayer, Parley } from 'parley-js';
+import {
+    Parley,
+    DefaultSecurityLayer,
+    type MessageProtocol,
+} from 'ignite-parleyjs';
 
-class EnterpriseSecurityLayer implements SecurityLayer {
-    private allowedOrigins: Set<string>;
-    private blockedOrigins: Set<string>;
-
-    constructor(config: SecurityConfig) {
-        this.allowedOrigins = new Set(config.allowedOrigins);
-        this.blockedOrigins = new Set(config.blockedOrigins || []);
+class EnterpriseSecurityLayer extends DefaultSecurityLayer {
+    constructor(private readonly blockedOrigins: Set<string>) {
+        super();
     }
 
-    validateOrigin(origin: string): boolean {
-        // Check blocklist first
+    validateOrigin(origin: string, allowedOrigins: string[]): boolean {
         if (this.blockedOrigins.has(origin)) {
-            this.logViolation('blocked_origin', origin);
             return false;
         }
-
-        // Check allowlist
-        if (!this.allowedOrigins.has(origin)) {
-            this.logViolation('unknown_origin', origin);
-            return false;
-        }
-
-        return true;
+        return super.validateOrigin(origin, allowedOrigins);
     }
 
-    validateMessage(message: unknown, origin: string): boolean {
-        // Custom validation logic
-        if (!this.isValidStructure(message)) {
+    validateMessage(message: MessageProtocol): boolean {
+        if (!super.validateMessage(message)) {
             return false;
         }
-
-        // Check for suspicious patterns
-        if (this.containsSuspiciousContent(message)) {
-            this.logViolation('suspicious_content', origin);
-            return false;
-        }
-
-        return true;
+        // Custom checks, e.g. only allow known message types
+        return ALLOWED_TYPES.has(message._type);
     }
 
-    private logViolation(type: string, origin: string): void {
-        // Log to security monitoring
-    }
+    // sanitizePayload<T>(payload: T): T is inherited (JSON clone)
 }
 
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted.com'],
-    securityLayer: new EnterpriseSecurityLayer({
-        allowedOrigins: ['https://trusted.com'],
-        blockedOrigins: ['https://known-bad.com'],
-    }),
+    securityLayer: new EnterpriseSecurityLayer(
+        new Set(['https://known-bad.com'])
+    ),
 });
 ```
+
+If you extend `SecurityLayer` directly, implement all three:
+`validateOrigin(origin, allowedOrigins): boolean`,
+`sanitizePayload<T>(payload: T): T` and
+`validateMessage(message: MessageProtocol): boolean`.
+
+How they are used (since 1.1.0):
+
+- `validateOrigin()` runs on **every** inbound message (after the channel's own
+  exact-match origin check, so it can only narrow, not widen, the allowed
+  origins). A rejection emits `system:error` with
+  `ERR_SECURITY_ORIGIN_MISMATCH`.
+- `validateMessage()` runs on every inbound request (not responses). A rejection
+  emits `system:error` with `ERR_VALIDATION_INVALID_PROTOCOL`.
+- `sanitizePayload()` runs on every outgoing payload and response.
 
 ## Common Vulnerabilities and Mitigations
 
 ### 1. Prototype Pollution
 
 ```typescript
-// Vulnerable: Direct property access
+// Vulnerable: Copying arbitrary keys
 function processPayload(payload: any) {
     for (const key in payload) {
         this.config[key] = payload[key]; // Prototype pollution!
     }
 }
 
-// Safe: Validate properties
+// Safe: Copy known keys only
 function processPayload(payload: unknown) {
     if (!isPlainObject(payload)) return;
 
     const allowedKeys = ['name', 'value'];
     for (const key of allowedKeys) {
-        if (key in payload) {
+        if (Object.prototype.hasOwnProperty.call(payload, key)) {
             this.config[key] = (payload as any)[key];
         }
     }
 }
+```
+
+### 2. eval() and Function()
+
+```typescript
+// NEVER: Execute code from messages
+parley.on('execute', (payload) => {
+    eval(payload.code); // Remote code execution!
+});
+
+// NEVER: Dynamic function creation
+parley.on('run', (payload) => {
+    new Function(payload.body)(); // Remote code execution!
+});
+```
+
+### 3. innerHTML
+
+```typescript
+// Vulnerable: XSS (Parley does not escape HTML)
+parley.on('update-ui', (payload) => {
+    document.getElementById('output').innerHTML = payload.html;
+});
+
+// Safe: Use textContent
+parley.on('update-ui', (payload) => {
+    document.getElementById('output').textContent = payload.text;
+});
+
+// Safe: Sanitize HTML
+parley.on('update-ui', (payload) => {
+    const sanitized = DOMPurify.sanitize(payload.html);
+    document.getElementById('output').innerHTML = sanitized;
+});
 ```
 
 ---
@@ -596,20 +732,38 @@ We will respond within 48 hours and work with you to address the issue.
 
 ---
 
-## Security Checklist
+## Incident Response
 
-Before deploying to production:
+If you detect a security incident:
 
-- [ ] **Origin validation** configured with explicit allowlist
-- [ ] **HTTPS only** for all communication
-- [ ] **Schema validation** for sensitive message types
-- [ ] **Size limits** configured appropriately
-- [ ] **Error handling** does not expose sensitive information
-- [ ] **CSP headers** configured to restrict iframe sources
-- [ ] **X-Frame-Options** set if embedding not allowed
-- [ ] **Security tests** passing with 95%+ coverage
-- [ ] **Logging/monitoring** configured for security events
-- [ ] **Regular updates** to latest Parley-js version
+1. **Log the details** - Capture origin, payload, timestamp
+2. **Block the origin** - Remove it from `allowedOrigins` or block it in a
+   custom security layer
+3. **Alert the team** - Notify security team
+4. **Investigate** - Determine the scope
+5. **Remediate** - Fix vulnerabilities
+6. **Review** - Update security policies
+
+```typescript
+parley.onSystem(SYSTEM_EVENTS.ERROR, async (data) => {
+    const event = data as { code: string; message: string; targetId?: string };
+    if (!event.code.startsWith('ERR_SECURITY_')) return;
+
+    // 1. Log
+    logger.error('Security violation', event);
+
+    // 2. Alert
+    alertService.notify('security-team', {
+        type: 'cross-origin-attack',
+        details: event,
+    });
+
+    // 3. Disconnect
+    if (event.targetId && parley.isConnected(event.targetId)) {
+        await parley.disconnect(event.targetId);
+    }
+});
+```
 
 ---
 
@@ -619,91 +773,14 @@ Before deploying to production:
   postMessage Security</a>
 - <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage" target="_blank">MDN:
   Window.postMessage()</a>
-- <a href="https://content-security-policy.com/" target="_blank">Content
-  Security Policy Reference</a>
+- <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP" target="_blank">Content
+  Security Policy</a>
+- <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options" target="_blank">X-Frame-Options</a>
 - [Testing Guide](./TESTING.md) - Security testing documentation
 
 ---
 
 **Questions?** Open an issue or contact us at security@igniteworks.com
-
-### 2. eval() and Function()
-
-```typescript
-// NEVER: Execute code from messages
-parley.register('execute', (payload) => {
-    eval(payload.code); // Remote code execution!
-});
-
-// NEVER: Dynamic function creation
-parley.register('run', (payload) => {
-    new Function(payload.body)(); // Remote code execution!
-});
-```
-
-### 3. innerHTML
-
-```typescript
-// Vulnerable: XSS
-parley.register('update-ui', (payload) => {
-    document.getElementById('output').innerHTML = payload.html;
-});
-
-// Safe: Use textContent or sanitize
-parley.register('update-ui', (payload) => {
-    document.getElementById('output').textContent = payload.text;
-});
-
-// Safe: Sanitize HTML
-parley.register('update-ui', (payload) => {
-    const sanitized = DOMPurify.sanitize(payload.html);
-    document.getElementById('output').innerHTML = sanitized;
-});
-```
-
-## Incident Response
-
-If you detect a security incident:
-
-1. **Log the details** - Capture origin, payload, timestamp
-2. **Block the origin** - Add to blocklist immediately
-3. **Alert the team** - Notify security team
-4. **Investigate** - Determine the scope
-5. **Remediate** - Fix vulnerabilities
-6. **Review** - Update security policies
-
-```typescript
-class IncidentHandler {
-    onSecurityViolation(event: SecurityEvent) {
-        // 1. Log
-        this.logger.error('Security violation', event);
-
-        // 2. Block
-        this.securityLayer.blockOrigin(event.origin);
-
-        // 3. Alert
-        this.alertService.notify('security-team', {
-            type: 'cross-origin-attack',
-            details: event,
-        });
-
-        // 4. Disconnect
-        parley.disconnect(event.targetId);
-    }
-}
-```
-
-## Further Reading
-
-- <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage" target="_blank">MDN:
-  Window.postMessage()</a>
-- <a href="https://owasp.org/www-community/controls/Cross_Origin_Communication" target="_blank">OWASP:
-  Cross-Origin Communication Security</a>
-- <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP" target="_blank">Content
-  Security Policy</a>
-- <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options" target="_blank">X-Frame-Options</a>
-
----
 
 ## Navigation
 
@@ -713,6 +790,8 @@ class IncidentHandler {
 - [Code Patterns](./CODE_PATTERNS.md) - Secure coding patterns
 - [Testing Guide](./TESTING.md) - Security testing strategies
 - [Examples](./EXAMPLES.md) - Secure implementation examples
+- [Origin Validation](./security/origin-validation.md) - Origin rules in depth
+- [Message Validation](./security/message-validation.md) - Schema validation
 
 ### See Also
 

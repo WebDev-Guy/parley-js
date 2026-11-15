@@ -1,4 +1,4 @@
-[Home](../../index.md) > [Getting Started](./index.md) > Core Concepts
+[Home](../index.md) > [Getting Started](./index.md) > Core Concepts
 
 # Core Concepts
 
@@ -66,31 +66,50 @@ A channel represents a bidirectional communication link between two windows.
 ### Creating a Channel
 
 ```javascript
-import { Parley } from 'parley-js';
+import { Parley } from 'ignite-parleyjs';
 
 const parley = Parley.create({
+    targetType: 'iframe', // 'iframe' for iframes, 'window' for popups/new windows
     allowedOrigins: ['https://trusted-domain.com'],
     timeout: 5000,
 });
 ```
 
+Each instance talks to one kind of target, set by `targetType`. If a page needs
+to talk to both iframes and popups, create one instance for each.
+
 ### Connecting to a Target
 
 ```javascript
-// Connect to an iframe
+// Parent page: connect to an iframe (pass the iframe ELEMENT)
 const iframe = document.querySelector('#my-iframe');
-await parley.connect(iframe.contentWindow, 'child-frame');
+await parley.connect(iframe, 'child-frame');
 
-// Connect to a popup
-const popup = window.open('/popup.html');
-await parley.connect(popup, 'popup-window');
-
-// Connect to parent (from within iframe)
+// Inside the iframe (its own instance with targetType: 'iframe')
 await parley.connect(window.parent, 'parent-window');
 ```
 
-Each connection is identified by a unique `targetId` that you provide. Use this
-ID when sending messages to specific targets.
+```javascript
+// Opener page: a separate instance for popups
+const popupParley = Parley.create({
+    targetType: 'window',
+    allowedOrigins: ['https://trusted-domain.com'],
+});
+const popup = window.open('https://trusted-domain.com/popup.html');
+await popupParley.connect(popup, 'popup-window');
+
+// Inside the popup (its own instance with targetType: 'window')
+await popupParley.connect(window.opener, 'opener');
+```
+
+Both sides call `connect()`. You do not need to wait for the iframe or popup to
+load first: the child side keeps re-sending its handshake until the other side
+answers, and `connect()` resolves once the handshake completes (or rejects with
+`ERR_CONNECTION_HANDSHAKE_FAILED` after `timeout`).
+
+Each connection is identified by a `targetId`. You can pass one as the second
+argument to `connect()`; otherwise it defaults to the iframe's `id` attribute or
+a generated ID. Use this ID when sending messages to specific targets.
 
 For detailed connection examples, see
 [iFrame Communication Guide](../guides/iframe-communication.md) and
@@ -105,22 +124,25 @@ types with typed payloads.
 
 ### Registering Message Handlers
 
-```javascript
-parley.on <
-    PayloadType >
-    ('message-type',
-    (payload, respond, metadata) => {
-        // Process the message
-        console.log('Received:', payload);
+```typescript
+parley.on<PayloadType>('message-type', (payload, respond, metadata) => {
+    // Process the message
+    console.log('Received:', payload, 'from', metadata.senderId);
 
-        // Optionally send a response
-        respond({ success: true });
-    });
+    // Optionally send a response
+    respond({ success: true });
+});
 ```
+
+A handler replies by calling `respond()` once; its return value is ignored. If
+no handler is registered for a type, the sender's `send()` rejects with
+`ERR_NO_HANDLER`. If the handler throws, the sender's `send()` rejects with
+`ERR_HANDLER_ERROR` (message `'Handler error'` unless the receiver enables
+`exposeHandlerErrors`).
 
 ### Sending Messages
 
-```javascript
+```typescript
 // Request-response (waits for reply)
 const response = await parley.send<RequestType, ResponseType>(
     'get-data',
@@ -135,6 +157,10 @@ await parley.send(
     { targetId: 'child-frame', expectsResponse: false }
 );
 ```
+
+To notify every connected target without waiting for replies, use
+`parley.broadcast('type', payload)`. It returns nothing (do not `await` it) and
+never receives responses.
 
 The message type name (like `'get-data'`) is arbitrary. Choose names that
 clearly describe the message purpose.
@@ -153,6 +179,7 @@ ParleyJS validates that every message comes from an allowed origin.
 
 ```javascript
 const parley = Parley.create({
+    targetType: 'iframe',
     allowedOrigins: ['https://trusted-domain.com', 'https://api.example.com'],
 });
 ```
@@ -169,8 +196,10 @@ and potentially:
 ParleyJS rejects messages from origins not in your `allowedOrigins` list. This
 happens automatically before any of your handlers are called.
 
-**Important**: Never use wildcard origins (`['*']`) in production. Always
-specify exact origins including protocol and port.
+**Important**: Wildcard origins are not supported: `Parley.create()` throws if
+`allowedOrigins` contains `'*'` or `'null'`. Always specify exact origins
+including protocol and port. If you omit `allowedOrigins`, it defaults to the
+current page's origin.
 
 For comprehensive security guidelines, see
 [Origin Validation Guide](../security/origin-validation.md).
@@ -198,7 +227,7 @@ try {
     const response = await parley.send(
         'calculate',
         { numbers: [1, 2, 3] },
-        { targetId: 'worker', timeout: 3000 }
+        { targetId: 'child-frame', timeout: 3000 }
     );
     console.log('Result:', response.sum);
 } catch (error) {
@@ -230,7 +259,7 @@ them for monitoring, logging, and analytics.
 ### Available System Events
 
 ```javascript
-import { SYSTEM_EVENTS } from 'parley-js';
+import { SYSTEM_EVENTS } from 'ignite-parleyjs';
 
 // Connection lifecycle
 parley.onSystem(SYSTEM_EVENTS.CONNECTED, (event) => {
@@ -278,8 +307,9 @@ Understanding these terms will help you work effectively with ParleyJS:
 
 ### Channel
 
-A bidirectional communication link between two windows. Created with
-`Parley.create()`.
+A bidirectional communication link between two windows. A Parley instance
+(created with `Parley.create()`) opens one channel per target each time you call
+`connect()`.
 
 ### Target
 

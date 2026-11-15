@@ -86,7 +86,7 @@ describe('isInternalMessage()', () => {
     it('recognizes internal types only', () => {
         const msg = (type: string) => createMessage({ type, payload: null });
         expect(isInternalMessage(msg('__parley_handshake_init__'))).toBe(true);
-        expect(isInternalMessage(msg('__parley_pong__'))).toBe(true);
+        expect(isInternalMessage(msg('__parley_handshake_ack__'))).toBe(true);
         expect(isInternalMessage(msg('user:update'))).toBe(false);
     });
 });
