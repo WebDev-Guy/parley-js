@@ -729,8 +729,13 @@ Releases are automated with
 3. **Publish** - merging the `chore: version packages` PR publishes to npm
    automatically with provenance attestation.
 
-Maintainer setup: the release workflow needs an `NPM_TOKEN` repository secret (a
-granular npm automation token with publish rights for `ignite-parleyjs`).
+Maintainer setup: the release workflow publishes with
+[npm trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so
+no npm token or `NPM_TOKEN` secret is used. On npmjs.com, `ignite-parleyjs` →
+Settings → Trusted Publisher must list GitHub Actions with user `WebDev-Guy`,
+repository `parley-js`, and workflow `release.yml`, with **Allow npm publish**
+enabled (dist-tag is not needed). The workflow needs `id-token: write` and npm
+11.5.1 or newer, both of which `release.yml` provides.
 
 ---
 
