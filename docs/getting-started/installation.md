@@ -21,7 +21,7 @@ Learn how to install and set up ParleyJS in your project.
 
 Before installing ParleyJS, ensure your environment meets these requirements:
 
-- **Node.js**: Version 20.19 or higher (for installing and bundling; ParleyJS
+- **Node.js**: Version 22.19 or higher (for installing and bundling; ParleyJS
   itself runs in the browser)
 - **Package Manager**: npm, yarn, or pnpm
 - **Browser Support**: Chrome 80+, Firefox 80+, Safari 13.1+, Edge 80+

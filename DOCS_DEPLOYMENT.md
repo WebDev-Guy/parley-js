@@ -11,7 +11,7 @@ Pages via GitHub Actions. The site is generated from markdown files in the
 
 ## Prerequisites
 
-- Node.js 20 or higher
+- Node.js 22.19 or higher
 - npm (comes with Node.js)
 - Git
 - GitHub repository with push access
@@ -221,7 +221,7 @@ workflow that deploys GitHub Pages. It automatically:
 
 2. Build process:
     - Checks out repository
-    - Sets up Node.js 20
+    - Sets up Node.js 24
     - Installs dependencies (`npm ci`)
     - Builds the library (`npm run build`) so a broken build stops the deploy
     - Builds documentation (`npm run docs:build`, which fails on dead links)
