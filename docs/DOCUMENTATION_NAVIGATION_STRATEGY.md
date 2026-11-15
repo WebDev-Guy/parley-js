@@ -176,6 +176,7 @@ Explicit "return" links help users get back to where they came from.
 
 At the bottom of pages, provide context-aware back navigation:
 
+<!-- prettier-ignore -->
 ```markdown
 ---
 
@@ -365,6 +366,7 @@ Every documentation page should include appropriate footer navigation:
 
 ### For Sequential Pages (tutorials, guides)
 
+<!-- prettier-ignore -->
 ```markdown
 ---
 
@@ -378,6 +380,7 @@ Every documentation page should include appropriate footer navigation:
 
 ### For Reference Pages (API docs)
 
+<!-- prettier-ignore -->
 ```markdown
 ---
 
@@ -392,6 +395,7 @@ Every documentation page should include appropriate footer navigation:
 
 ### For Pattern Pages
 
+<!-- prettier-ignore -->
 ```markdown
 ---
 
@@ -410,6 +414,7 @@ Every documentation page should include appropriate footer navigation:
 
 ### For How-To Guides
 
+<!-- prettier-ignore -->
 ```markdown
 ---
 

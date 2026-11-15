@@ -289,8 +289,8 @@ Guide readers toward success, especially in error situations.
 
 **Wrong**: "Invalid origin format" **Better**: "Origin must include the protocol
 and host (e.g., 'https://example.com')" **Best**: "Origin must include the
-protocol and host. You provided
-'${provided}' but the current window is '${actual}'."
+protocol and host. You provided '${provided}' but the current window is
+'${actual}'."
 
 ### Avoid Sales Language
 
