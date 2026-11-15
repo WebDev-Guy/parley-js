@@ -40,7 +40,7 @@ function isPrivate(node: ts.Node): boolean {
 function externallyVisibleUnderscoreNames(): Map<string, string> {
     const found = new Map<string, string>();
 
-    for (const file of sourceFiles(join(__dirname, '../../src'))) {
+    for (const file of sourceFiles(join(import.meta.dirname, '../../src'))) {
         const source = ts.createSourceFile(
             file,
             readFileSync(file, 'utf8'),
