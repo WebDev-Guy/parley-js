@@ -532,6 +532,24 @@
             font-size: 0.95rem;
         }
 
+        .footer-brand .built-by {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+            font-size: 0.875rem;
+        }
+
+        .built-by a {
+            display: inline-flex;
+            line-height: 0;
+        }
+
+        .built-by img {
+            height: 40px;
+            width: auto;
+        }
+
         .footer-links h4 {
             font-size: 0.875rem;
             text-transform: uppercase;
@@ -1102,6 +1120,12 @@ parley.<span class="function">register</span>(<span class="string">'user:create'
                     Parley-js
                 </a>
                 <p>Type-safe, robust framework for window, tab, and iframe communication using postMessage.</p>
+                <p class="built-by">
+                    Built by
+                    <a href="https://www.igniteworks.co" target="_blank" rel="noopener">
+                        <img src="/docs/igniteworks-logo.svg" alt="Ignite Works" width="111" height="40">
+                    </a>
+                </p>
             </div>
             <div class="footer-links">
                 <h4>Documentation</h4>
