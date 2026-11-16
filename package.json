@@ -111,7 +111,7 @@
     },
     "homepage": "https://www.parleyjs.com",
     "devDependencies": {
-        "@changesets/cli": "^2.31.0",
+        "@changesets/cli": "^3.0.3",
         "@eslint/js": "^10.0.1",
         "@playwright/test": "^1.60.0",
         "@size-limit/file": "^14.3.0",
